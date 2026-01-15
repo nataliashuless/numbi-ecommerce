@@ -41,7 +41,7 @@ export async function GET(request: Request) {
     let nextUrl: string | null = `https://${shop}/admin/api/2024-01/orders.json?${baseParams}`
 
     while (nextUrl) {
-      const ordersResponse = await fetch(nextUrl, {
+      const ordersResponse: Response = await fetch(nextUrl, {
         headers: {
           'X-Shopify-Access-Token': accessToken,
           'Content-Type': 'application/json',
