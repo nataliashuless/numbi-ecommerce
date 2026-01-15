@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { DateRange } from 'react-day-picker'
+import { format, subDays, startOfMonth } from 'date-fns'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -20,8 +22,10 @@ import {
   Clock,
   Store,
   Loader2,
-  LogOut
+  LogOut,
+  RefreshCw
 } from 'lucide-react'
+import { DateRangePicker } from '@/components/ui/date-range-picker'
 
 interface Order {
   id: number
@@ -97,28 +101,40 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: startOfMonth(new Date()),
+    to: new Date(),
+  })
+
+  async function fetchData() {
+    setLoading(true)
+    try {
+      let url = '/api/shopify/orders'
+      if (dateRange?.from && dateRange?.to) {
+        const startDate = format(dateRange.from, 'yyyy-MM-dd')
+        const endDate = format(dateRange.to, 'yyyy-MM-dd')
+        url += `?start_date=${startDate}&end_date=${endDate}`
+      }
+      const res = await fetch(url)
+      if (res.status === 401) {
+        window.location.href = '/api/auth/shopify'
+        return
+      }
+      if (!res.ok) {
+        throw new Error('Error al cargar datos')
+      }
+      const json = await res.json()
+      setData(json)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const res = await fetch('/api/shopify/orders')
-        if (res.status === 401) {
-          window.location.href = '/api/auth/shopify'
-          return
-        }
-        if (!res.ok) {
-          throw new Error('Error al cargar datos')
-        }
-        const json = await res.json()
-        setData(json)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error desconocido')
-      } finally {
-        setLoading(false)
-      }
-    }
     fetchData()
-  }, [])
+  }, [dateRange])
 
   if (loading) {
     return (
@@ -174,8 +190,26 @@ export default function DashboardPage() {
 
       {/* Main */}
       <main className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-[#233037] mb-2">Dashboard</h1>
-        <p className="text-[#71828A] mb-8">Resumen de ventas de tu tienda Shopify</p>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-[#233037] mb-2">Dashboard</h1>
+            <p className="text-[#71828A]">Resumen de ventas de tu tienda Shopify</p>
+          </div>
+          <div className="flex items-center gap-2 mt-4 md:mt-0">
+            <DateRangePicker
+              date={dateRange}
+              onDateChange={setDateRange}
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => fetchData()}
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
+        </div>
 
         {/* KPIs */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">

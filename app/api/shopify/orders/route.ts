@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const startDate = searchParams.get('start_date')
+  const endDate = searchParams.get('end_date')
+
   const cookieStore = await cookies()
   const shop = cookieStore.get('shopify_shop')?.value
   const accessToken = cookieStore.get('shopify_token')?.value
@@ -11,9 +15,18 @@ export async function GET() {
   }
 
   try {
+    // Build query params
+    let queryParams = 'status=any&limit=250'
+    if (startDate) {
+      queryParams += `&created_at_min=${startDate}T00:00:00-05:00`
+    }
+    if (endDate) {
+      queryParams += `&created_at_max=${endDate}T23:59:59-05:00`
+    }
+
     // Fetch orders from Shopify
     const ordersResponse = await fetch(
-      `https://${shop}/admin/api/2024-01/orders.json?status=any&limit=50`,
+      `https://${shop}/admin/api/2024-01/orders.json?${queryParams}`,
       {
         headers: {
           'X-Shopify-Access-Token': accessToken,
