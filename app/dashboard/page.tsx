@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { DateRange } from 'react-day-picker'
-import { format, subDays, startOfMonth } from 'date-fns'
+import { format, subDays, startOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -120,14 +120,41 @@ function getFulfillmentBadge(status: string | null) {
   return <Badge className={config.className}>{config.label}</Badge>
 }
 
+type DatePreset = 'today' | 'week' | 'month' | 'custom'
+
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [activePreset, setActivePreset] = useState<DatePreset>('month')
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
     to: new Date(),
   })
+
+  const setPreset = (preset: DatePreset) => {
+    const today = new Date()
+    setActivePreset(preset)
+    switch (preset) {
+      case 'today':
+        setDateRange({ from: startOfDay(today), to: endOfDay(today) })
+        break
+      case 'week':
+        setDateRange({
+          from: startOfWeek(today, { weekStartsOn: 1 }),
+          to: today
+        })
+        break
+      case 'month':
+        setDateRange({ from: startOfMonth(today), to: today })
+        break
+    }
+  }
+
+  const handleDateChange = (range: DateRange | undefined) => {
+    setActivePreset('custom')
+    setDateRange(range)
+  }
 
   async function fetchData() {
     setLoading(true)
@@ -225,10 +252,36 @@ export default function DashboardPage() {
             <h1 className="text-3xl font-bold text-[#233037] mb-2">Dashboard</h1>
             <p className="text-[#71828A]">Resumen de ventas de tu tienda Shopify</p>
           </div>
-          <div className="flex items-center gap-2 mt-4 md:mt-0">
+          <div className="flex flex-wrap items-center gap-2 mt-4 md:mt-0">
+            <div className="flex gap-1">
+              <Button
+                variant={activePreset === 'today' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setPreset('today')}
+                className={activePreset === 'today' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
+              >
+                Hoy
+              </Button>
+              <Button
+                variant={activePreset === 'week' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setPreset('week')}
+                className={activePreset === 'week' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
+              >
+                Semana
+              </Button>
+              <Button
+                variant={activePreset === 'month' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setPreset('month')}
+                className={activePreset === 'month' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
+              >
+                Mes
+              </Button>
+            </div>
             <DateRangePicker
               date={dateRange}
-              onDateChange={setDateRange}
+              onDateChange={handleDateChange}
             />
             <Button
               variant="outline"
