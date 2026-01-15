@@ -51,6 +51,34 @@ export async function GET(request: Request) {
       o.financial_status === 'paid').length
     const pendingOrders = orders.filter((o: { financial_status: string }) =>
       o.financial_status === 'pending').length
+    const totalUnits = orders.reduce((sum: number, order: { line_items: { quantity: number }[] }) =>
+      sum + order.line_items.reduce((s: number, item: { quantity: number }) => s + item.quantity, 0), 0)
+
+    // Aggregate data by date for charts
+    const dailyData: Record<string, { sales: number; orders: number; units: number }> = {}
+    orders.forEach((order: {
+      created_at: string
+      total_price: string
+      line_items: { quantity: number }[]
+    }) => {
+      const date = order.created_at.split('T')[0]
+      if (!dailyData[date]) {
+        dailyData[date] = { sales: 0, orders: 0, units: 0 }
+      }
+      dailyData[date].sales += parseFloat(order.total_price || '0')
+      dailyData[date].orders += 1
+      dailyData[date].units += order.line_items.reduce((s: number, item: { quantity: number }) => s + item.quantity, 0)
+    })
+
+    // Convert to sorted array for charts
+    const chartData = Object.entries(dailyData)
+      .map(([date, data]) => ({
+        date,
+        sales: Math.round(data.sales),
+        orders: data.orders,
+        units: data.units,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date))
 
     return NextResponse.json({
       orders: orders.map((order: {
@@ -84,8 +112,10 @@ export async function GET(request: Request) {
         totalOrders,
         paidOrders,
         pendingOrders,
+        totalUnits,
         averageOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
       },
+      chartData,
       shop,
     })
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { DateRange } from 'react-day-picker'
 import { format, subDays, startOfMonth } from 'date-fns'
+import { es } from 'date-fns/locale'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -23,9 +24,22 @@ import {
   Store,
   Loader2,
   LogOut,
-  RefreshCw
+  RefreshCw,
+  Box
 } from 'lucide-react'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend
+} from 'recharts'
 
 interface Order {
   id: number
@@ -46,12 +60,21 @@ interface Stats {
   totalOrders: number
   paidOrders: number
   pendingOrders: number
+  totalUnits: number
   averageOrderValue: number
+}
+
+interface ChartDataPoint {
+  date: string
+  sales: number
+  orders: number
+  units: number
 }
 
 interface DashboardData {
   orders: Order[]
   stats: Stats
+  chartData: ChartDataPoint[]
   shop: string
 }
 
@@ -160,9 +183,16 @@ export default function DashboardPage() {
     )
   }
 
-  const stats = data?.stats || { totalRevenue: 0, totalOrders: 0, paidOrders: 0, pendingOrders: 0, averageOrderValue: 0 }
+  const stats = data?.stats || { totalRevenue: 0, totalOrders: 0, paidOrders: 0, pendingOrders: 0, totalUnits: 0, averageOrderValue: 0 }
   const orders = data?.orders || []
+  const chartData = data?.chartData || []
   const shop = data?.shop || ''
+
+  // Format date for chart display
+  const formattedChartData = chartData.map(d => ({
+    ...d,
+    displayDate: format(new Date(d.date), 'dd MMM', { locale: es })
+  }))
 
   return (
     <div className="min-h-screen bg-[#F5F7F4]">
@@ -212,7 +242,7 @@ export default function DashboardPage() {
         </div>
 
         {/* KPIs */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-[#71828A]">Ventas Totales</CardTitle>
@@ -235,6 +265,16 @@ export default function DashboardPage() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-[#71828A]">Unidades</CardTitle>
+              <Box className="h-4 w-4 text-[#71828A]" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-[#233037]">{stats.totalUnits}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-[#71828A]">Pagadas</CardTitle>
               <Package className="h-4 w-4 text-[#71828A]" />
             </CardHeader>
@@ -250,6 +290,127 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-yellow-500">{stats.pendingOrders}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Charts */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-8">
+          {/* Sales Bar Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Ventas por Día</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[250px]">
+                {formattedChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={formattedChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis
+                        dataKey="displayDate"
+                        tick={{ fontSize: 12 }}
+                        stroke="#71828A"
+                      />
+                      <YAxis
+                        tick={{ fontSize: 12 }}
+                        stroke="#71828A"
+                        tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                      />
+                      <Tooltip
+                        formatter={(value: number) => [formatCurrency(value), 'Ventas']}
+                        labelStyle={{ color: '#233037' }}
+                        contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                      />
+                      <Bar dataKey="sales" fill="#00D47F" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-[#71828A]">
+                    No hay datos para mostrar
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Orders Line Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Órdenes por Día</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[250px]">
+                {formattedChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={formattedChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis
+                        dataKey="displayDate"
+                        tick={{ fontSize: 12 }}
+                        stroke="#71828A"
+                      />
+                      <YAxis
+                        tick={{ fontSize: 12 }}
+                        stroke="#71828A"
+                      />
+                      <Tooltip
+                        formatter={(value: number) => [value, 'Órdenes']}
+                        labelStyle={{ color: '#233037' }}
+                        contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="orders"
+                        stroke="#233037"
+                        strokeWidth={2}
+                        dot={{ fill: '#233037', strokeWidth: 2 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-[#71828A]">
+                    No hay datos para mostrar
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Units Bar Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Unidades por Día</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[250px]">
+                {formattedChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={formattedChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis
+                        dataKey="displayDate"
+                        tick={{ fontSize: 12 }}
+                        stroke="#71828A"
+                      />
+                      <YAxis
+                        tick={{ fontSize: 12 }}
+                        stroke="#71828A"
+                      />
+                      <Tooltip
+                        formatter={(value: number) => [value, 'Unidades']}
+                        labelStyle={{ color: '#233037' }}
+                        contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                      />
+                      <Bar dataKey="units" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-[#71828A]">
+                    No hay datos para mostrar
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
