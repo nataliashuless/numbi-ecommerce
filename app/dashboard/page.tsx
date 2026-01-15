@@ -25,7 +25,8 @@ import {
   Loader2,
   LogOut,
   RefreshCw,
-  Box
+  Box,
+  BarChart3
 } from 'lucide-react'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 import {
@@ -241,6 +242,24 @@ export default function DashboardPage() {
           </Link>
         </div>
       </header>
+
+      {/* Navigation Tabs */}
+      <div className="bg-white border-b">
+        <div className="container mx-auto px-4">
+          <nav className="flex gap-4">
+            <Button variant="ghost" className="rounded-none border-b-2 border-[#00D47F] text-[#00D47F] py-4">
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Ventas
+            </Button>
+            <Link href="/dashboard/productos">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+                <Package className="h-4 w-4 mr-2" />
+                Productos
+              </Button>
+            </Link>
+          </nav>
+        </div>
+      </div>
 
       {/* Main */}
       <main className="container mx-auto px-4 py-8">
