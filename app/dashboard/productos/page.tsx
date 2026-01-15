@@ -25,7 +25,9 @@ import {
   BarChart3,
   ChevronDown,
   ChevronRight,
-  FolderOpen
+  FolderOpen,
+  MessageCircle,
+  ShoppingCart,
 } from 'lucide-react'
 
 interface Variant {
@@ -252,6 +254,24 @@ export default function ProductsPage() {
               <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Ventas
+              </Button>
+            </Link>
+            <Link href="/dashboard/shopify">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+                <ShoppingCart className="h-4 w-4 mr-2" />
+                Shopify
+              </Button>
+            </Link>
+            <Link href="/dashboard/whatsapp">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+                <MessageCircle className="h-4 w-4 mr-2" />
+                WhatsApp
+              </Button>
+            </Link>
+            <Link href="/dashboard/tiendas">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+                <Store className="h-4 w-4 mr-2" />
+                Tiendas
               </Button>
             </Link>
             <Button variant="ghost" className="rounded-none border-b-2 border-[#00D47F] text-[#00D47F] py-4">

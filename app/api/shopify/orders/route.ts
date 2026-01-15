@@ -16,13 +16,17 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Build base query params - order by created_at ascending to get oldest first
-    let baseParams = 'status=any&limit=250&order=created_at asc'
-    if (startDate) {
-      baseParams += `&created_at_min=${startDate}T00:00:00-05:00`
-    }
+    // Build URL with properly encoded parameters
+    const params = new URLSearchParams()
+    params.set('status', 'any')
+    params.set('limit', '250')
+
+    // Set date range - if no start date, use a very old date to get all orders
+    const effectiveStartDate = startDate || '2020-01-01'
+    params.set('created_at_min', `${effectiveStartDate}T00:00:00-05:00`)
+
     if (endDate) {
-      baseParams += `&created_at_max=${endDate}T23:59:59-05:00`
+      params.set('created_at_max', `${endDate}T23:59:59-05:00`)
     }
 
     // Fetch all orders with pagination
@@ -40,16 +44,17 @@ export async function GET(request: Request) {
     }> = []
 
     // Use API version 2024-10 for better support
-    let nextUrl: string | null = `https://${shop}/admin/api/2024-10/orders.json?${baseParams}`
+    let nextUrl: string | null = `https://${shop}/admin/api/2024-10/orders.json?${params.toString()}`
     let pageCount = 0
 
-    while (nextUrl && pageCount < 50) { // Safety limit of 50 pages
+    while (nextUrl && pageCount < 100) { // Safety limit of 100 pages (25000 orders max)
       pageCount++
       const ordersResponse: Response = await fetch(nextUrl, {
         headers: {
           'X-Shopify-Access-Token': accessToken,
           'Content-Type': 'application/json',
         },
+        cache: 'no-store',
       })
 
       if (!ordersResponse.ok) {
