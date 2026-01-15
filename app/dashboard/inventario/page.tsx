@@ -140,6 +140,7 @@ export default function InventarioPage() {
   const [forecastLoading, setForecastLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [forecastSearchTerm, setForecastSearchTerm] = useState('')
   const [filter, setFilter] = useState<'all' | 'low' | 'out'>('all')
   const [forecastFilter, setForecastFilter] = useState<'all' | 'critica' | 'alta' | 'media'>('all')
   const [activeTab, setActiveTab] = useState('inventario')
@@ -248,10 +249,12 @@ export default function InventarioPage() {
 
   // Filter forecast
   let filteredForecast = forecastData?.forecast || []
-  if (searchTerm) {
+  if (forecastSearchTerm) {
+    const searchLower = forecastSearchTerm.toLowerCase()
     filteredForecast = filteredForecast.filter(item =>
-      item.producto.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.sku.toLowerCase().includes(searchTerm.toLowerCase())
+      item.producto.toLowerCase().includes(searchLower) ||
+      item.sku.toLowerCase().includes(searchLower) ||
+      item.variante.toLowerCase().includes(searchLower)
     )
   }
   if (forecastFilter !== 'all') {
@@ -640,9 +643,9 @@ export default function InventarioPage() {
                       <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#71828A]" />
                         <Input
-                          placeholder="Buscar por producto o SKU..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
+                          placeholder="Buscar por producto, SKU o variante..."
+                          value={forecastSearchTerm}
+                          onChange={(e) => setForecastSearchTerm(e.target.value)}
                           className="pl-10"
                         />
                       </div>
