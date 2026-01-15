@@ -5,6 +5,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const startDate = searchParams.get('start_date')
   const endDate = searchParams.get('end_date')
+  const groupBy = searchParams.get('group_by') || 'day' // day, week, month
 
   const cookieStore = await cookies()
   const shop = cookieStore.get('shopify_shop')?.value
@@ -80,24 +81,41 @@ export async function GET(request: Request) {
     const totalUnits = orders.reduce((sum: number, order: { line_items: { quantity: number }[] }) =>
       sum + order.line_items.reduce((s: number, item: { quantity: number }) => s + item.quantity, 0), 0)
 
-    // Aggregate data by date for charts
-    const dailyData: Record<string, { sales: number; orders: number; units: number }> = {}
+    // Helper function to get group key based on groupBy parameter
+    const getGroupKey = (dateStr: string): string => {
+      const date = new Date(dateStr)
+      if (groupBy === 'month') {
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      } else if (groupBy === 'week') {
+        // Get ISO week number
+        const tempDate = new Date(date.getTime())
+        tempDate.setHours(0, 0, 0, 0)
+        tempDate.setDate(tempDate.getDate() + 3 - (tempDate.getDay() + 6) % 7)
+        const week1 = new Date(tempDate.getFullYear(), 0, 4)
+        const weekNum = 1 + Math.round(((tempDate.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7)
+        return `${tempDate.getFullYear()}-W${String(weekNum).padStart(2, '0')}`
+      }
+      return dateStr.split('T')[0] // day
+    }
+
+    // Aggregate data for charts
+    const aggregatedData: Record<string, { sales: number; orders: number; units: number }> = {}
     orders.forEach((order: {
       created_at: string
       total_price: string
       line_items: { quantity: number }[]
     }) => {
-      const date = order.created_at.split('T')[0]
-      if (!dailyData[date]) {
-        dailyData[date] = { sales: 0, orders: 0, units: 0 }
+      const key = getGroupKey(order.created_at)
+      if (!aggregatedData[key]) {
+        aggregatedData[key] = { sales: 0, orders: 0, units: 0 }
       }
-      dailyData[date].sales += parseFloat(order.total_price || '0')
-      dailyData[date].orders += 1
-      dailyData[date].units += order.line_items.reduce((s: number, item: { quantity: number }) => s + item.quantity, 0)
+      aggregatedData[key].sales += parseFloat(order.total_price || '0')
+      aggregatedData[key].orders += 1
+      aggregatedData[key].units += order.line_items.reduce((s: number, item: { quantity: number }) => s + item.quantity, 0)
     })
 
     // Convert to sorted array for charts
-    const chartData = Object.entries(dailyData)
+    const chartData = Object.entries(aggregatedData)
       .map(([date, data]) => ({
         date,
         sales: Math.round(data.sales),

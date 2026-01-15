@@ -120,51 +120,29 @@ function getFulfillmentBadge(status: string | null) {
   return <Badge className={config.className}>{config.label}</Badge>
 }
 
-type DatePreset = 'today' | 'week' | 'month' | 'custom'
+type GroupBy = 'day' | 'week' | 'month'
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activePreset, setActivePreset] = useState<DatePreset>('month')
+  const [groupBy, setGroupBy] = useState<GroupBy>('day')
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: startOfMonth(new Date()),
+    from: subDays(new Date(), 30),
     to: new Date(),
   })
-
-  const setPreset = (preset: DatePreset) => {
-    const today = new Date()
-    setActivePreset(preset)
-    switch (preset) {
-      case 'today':
-        setDateRange({ from: startOfDay(today), to: endOfDay(today) })
-        break
-      case 'week':
-        setDateRange({
-          from: startOfWeek(today, { weekStartsOn: 1 }),
-          to: today
-        })
-        break
-      case 'month':
-        setDateRange({ from: startOfMonth(today), to: today })
-        break
-    }
-  }
-
-  const handleDateChange = (range: DateRange | undefined) => {
-    setActivePreset('custom')
-    setDateRange(range)
-  }
 
   async function fetchData() {
     setLoading(true)
     try {
       let url = '/api/shopify/orders'
+      const params = new URLSearchParams()
       if (dateRange?.from && dateRange?.to) {
-        const startDate = format(dateRange.from, 'yyyy-MM-dd')
-        const endDate = format(dateRange.to, 'yyyy-MM-dd')
-        url += `?start_date=${startDate}&end_date=${endDate}`
+        params.set('start_date', format(dateRange.from, 'yyyy-MM-dd'))
+        params.set('end_date', format(dateRange.to, 'yyyy-MM-dd'))
       }
+      params.set('group_by', groupBy)
+      url += `?${params.toString()}`
       const res = await fetch(url)
       if (res.status === 401) {
         window.location.href = '/api/auth/shopify'
@@ -187,7 +165,7 @@ export default function DashboardPage() {
     if (dateRange?.from && dateRange?.to) {
       fetchData()
     }
-  }, [dateRange])
+  }, [dateRange, groupBy])
 
   if (loading) {
     return (
@@ -218,10 +196,25 @@ export default function DashboardPage() {
   const chartData = data?.chartData || []
   const shop = data?.shop || ''
 
-  // Format date for chart display
+  // Format date for chart display based on groupBy
+  const formatChartLabel = (dateStr: string): string => {
+    if (groupBy === 'month') {
+      // Format: 2024-01 -> "Ene 2024"
+      const [year, month] = dateStr.split('-')
+      const date = new Date(parseInt(year), parseInt(month) - 1, 1)
+      return format(date, 'MMM yyyy', { locale: es })
+    } else if (groupBy === 'week') {
+      // Format: 2024-W01 -> "Sem 1"
+      const weekNum = dateStr.split('-W')[1]
+      return `Sem ${parseInt(weekNum)}`
+    }
+    // Day format: 2024-01-15 -> "15 Ene"
+    return format(new Date(dateStr), 'dd MMM', { locale: es })
+  }
+
   const formattedChartData = chartData.map(d => ({
     ...d,
-    displayDate: format(new Date(d.date), 'dd MMM', { locale: es })
+    displayDate: formatChartLabel(d.date)
   }))
 
   return (
@@ -256,35 +249,35 @@ export default function DashboardPage() {
             <p className="text-[#71828A]">Resumen de ventas de tu tienda Shopify</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 mt-4 md:mt-0">
-            <div className="flex gap-1">
+            <div className="flex gap-1 border rounded-md p-1">
               <Button
-                variant={activePreset === 'today' ? 'default' : 'outline'}
+                variant={groupBy === 'day' ? 'default' : 'ghost'}
                 size="sm"
-                onClick={() => setPreset('today')}
-                className={activePreset === 'today' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
+                onClick={() => setGroupBy('day')}
+                className={groupBy === 'day' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
               >
-                Hoy
+                Día
               </Button>
               <Button
-                variant={activePreset === 'week' ? 'default' : 'outline'}
+                variant={groupBy === 'week' ? 'default' : 'ghost'}
                 size="sm"
-                onClick={() => setPreset('week')}
-                className={activePreset === 'week' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
+                onClick={() => setGroupBy('week')}
+                className={groupBy === 'week' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
               >
                 Semana
               </Button>
               <Button
-                variant={activePreset === 'month' ? 'default' : 'outline'}
+                variant={groupBy === 'month' ? 'default' : 'ghost'}
                 size="sm"
-                onClick={() => setPreset('month')}
-                className={activePreset === 'month' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
+                onClick={() => setGroupBy('month')}
+                className={groupBy === 'month' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
               >
                 Mes
               </Button>
             </div>
             <DateRangePicker
               date={dateRange}
-              onDateChange={handleDateChange}
+              onDateChange={setDateRange}
             />
             <Button
               variant="outline"
