@@ -129,6 +129,10 @@ export default function WhatsAppPage() {
     fecha: format(new Date(), 'yyyy-MM-dd'),
     cliente_nombre: '',
     cliente_telefono: '',
+    cliente_cedula: '',
+    cliente_email: '',
+    cliente_direccion: '',
+    cliente_ciudad: '',
     producto_nombre: '',
     producto_variante: '',
     producto_sku: '',
@@ -244,6 +248,10 @@ export default function WhatsAppPage() {
           fecha: format(new Date(), 'yyyy-MM-dd'),
           cliente_nombre: '',
           cliente_telefono: '',
+          cliente_cedula: '',
+          cliente_email: '',
+          cliente_direccion: '',
+          cliente_ciudad: '',
           producto_nombre: '',
           producto_variante: '',
           producto_sku: '',
@@ -347,7 +355,7 @@ export default function WhatsAppPage() {
                   Nueva Venta
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Registrar Venta WhatsApp</DialogTitle>
                 </DialogHeader>
@@ -444,6 +452,47 @@ export default function WhatsAppPage() {
                         value={formData.cliente_telefono}
                         onChange={e => setFormData({ ...formData, cliente_telefono: e.target.value })}
                         placeholder="+57..."
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="cliente_cedula">Cédula</Label>
+                      <Input
+                        id="cliente_cedula"
+                        value={formData.cliente_cedula}
+                        onChange={e => setFormData({ ...formData, cliente_cedula: e.target.value })}
+                        placeholder="123456789"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="cliente_email">Email</Label>
+                      <Input
+                        id="cliente_email"
+                        type="email"
+                        value={formData.cliente_email}
+                        onChange={e => setFormData({ ...formData, cliente_email: e.target.value })}
+                        placeholder="cliente@email.com"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="cliente_ciudad">Ciudad</Label>
+                      <Input
+                        id="cliente_ciudad"
+                        value={formData.cliente_ciudad}
+                        onChange={e => setFormData({ ...formData, cliente_ciudad: e.target.value })}
+                        placeholder="Bogotá"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="cliente_direccion">Dirección</Label>
+                      <Input
+                        id="cliente_direccion"
+                        value={formData.cliente_direccion}
+                        onChange={e => setFormData({ ...formData, cliente_direccion: e.target.value })}
+                        placeholder="Calle 123 #45-67"
                       />
                     </div>
                   </div>
