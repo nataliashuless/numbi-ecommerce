@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { DateRange } from 'react-day-picker'
+import { format, subDays } from 'date-fns'
+import { es } from 'date-fns/locale'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -34,7 +37,19 @@ import {
   Building2,
   ShoppingCart,
   Boxes,
+  TrendingUp,
 } from 'lucide-react'
+import { DateRangePicker } from '@/components/ui/date-range-picker'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts'
 
 interface TiendaConStats {
   id: string
@@ -58,6 +73,22 @@ interface Stats {
   tiendasActivas: number
   inventarioTotal: number
   montoPendienteTotal: number
+}
+
+interface ChartDataItem {
+  date: string
+  ventas: number
+  neto: number
+  comision: number
+  unidades: number
+}
+
+interface VentasStats {
+  totalVentas: number
+  totalNeto: number
+  totalComision: number
+  totalUnidades: number
+  totalTransacciones: number
 }
 
 function formatCurrency(value: number): string {
@@ -85,11 +116,33 @@ function formatComision(tienda: TiendaConStats): string {
   return '-'
 }
 
+function formatDisplayDate(dateStr: string, groupBy: string): string {
+  if (groupBy === 'month') {
+    const [year, month] = dateStr.split('-')
+    const date = new Date(parseInt(year), parseInt(month) - 1, 1)
+    return format(date, 'MMM yyyy', { locale: es })
+  }
+  if (groupBy === 'week') {
+    return dateStr.replace('-W', ' Sem ')
+  }
+  return format(new Date(dateStr + 'T12:00:00'), 'dd MMM', { locale: es })
+}
+
 export default function TiendasPage() {
   const [tiendas, setTiendas] = useState<TiendaConStats[]>([])
   const [stats, setStats] = useState<Stats>({ totalTiendas: 0, tiendasActivas: 0, inventarioTotal: 0, montoPendienteTotal: 0 })
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
+
+  // Chart state
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 30),
+    to: new Date(),
+  })
+  const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month'>('day')
+  const [chartData, setChartData] = useState<ChartDataItem[]>([])
+  const [ventasStats, setVentasStats] = useState<VentasStats | null>(null)
+  const [chartLoading, setChartLoading] = useState(false)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -120,9 +173,36 @@ export default function TiendasPage() {
     }
   }
 
+  async function fetchChartData() {
+    if (!dateRange?.from || !dateRange?.to) return
+
+    setChartLoading(true)
+    try {
+      const startDate = format(dateRange.from, 'yyyy-MM-dd')
+      const endDate = format(dateRange.to, 'yyyy-MM-dd')
+
+      const res = await fetch(`/api/tiendas/ventas?start_date=${startDate}&end_date=${endDate}&group_by=${groupBy}`)
+      if (res.ok) {
+        const data = await res.json()
+        setChartData(data.chartData)
+        setVentasStats(data.stats)
+      }
+    } catch (error) {
+      console.error('Error fetching chart data:', error)
+    } finally {
+      setChartLoading(false)
+    }
+  }
+
   useEffect(() => {
     fetchData()
   }, [])
+
+  useEffect(() => {
+    if (dateRange?.from && dateRange?.to) {
+      fetchChartData()
+    }
+  }, [dateRange, groupBy])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -155,6 +235,11 @@ export default function TiendasPage() {
       console.error('Error creating store:', error)
     }
   }
+
+  const formattedChartData = chartData.map(d => ({
+    ...d,
+    displayDate: formatDisplayDate(d.date, groupBy),
+  }))
 
   return (
     <div className="min-h-screen bg-[#F5F7F4]">
@@ -252,7 +337,7 @@ export default function TiendasPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="contacto_telefono">Teléfono</Label>
+                    <Label htmlFor="contacto_telefono">Telefono</Label>
                     <Input
                       id="contacto_telefono"
                       value={formData.contacto_telefono}
@@ -272,20 +357,20 @@ export default function TiendasPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="direccion">Dirección</Label>
+                  <Label htmlFor="direccion">Direccion</Label>
                   <Input
                     id="direccion"
                     value={formData.direccion}
                     onChange={e => setFormData({ ...formData, direccion: e.target.value })}
-                    placeholder="Dirección de la tienda"
+                    placeholder="Direccion de la tienda"
                   />
                 </div>
 
                 <div className="border-t pt-4">
-                  <Label className="text-base font-semibold">Configuración de Comisión</Label>
+                  <Label className="text-base font-semibold">Configuracion de Comision</Label>
                   <div className="mt-2 space-y-4">
                     <div>
-                      <Label htmlFor="comision_tipo">Tipo de Comisión</Label>
+                      <Label htmlFor="comision_tipo">Tipo de Comision</Label>
                       <Select
                         value={formData.comision_tipo}
                         onValueChange={(value: 'porcentaje' | 'fijo' | 'mixto') =>
@@ -394,20 +479,103 @@ export default function TiendasPage() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-[#233037] text-white">
+              <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#99C3D2]">Acciones Rápidas</CardTitle>
+                  <CardTitle className="text-sm font-medium text-[#71828A]">Ventas (Periodo)</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-[#71828A]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
-                    <Button variant="secondary" size="sm" className="w-full justify-start" disabled>
-                      <Package className="h-4 w-4 mr-2" />
-                      Registrar Consignación
-                    </Button>
+                  <div className="text-2xl font-bold text-[#233037]">
+                    {ventasStats ? formatCurrency(ventasStats.totalNeto) : '-'}
                   </div>
+                  <p className="text-xs text-[#71828A]">
+                    {ventasStats ? `${ventasStats.totalUnidades} unidades` : 'neto a recibir'}
+                  </p>
                 </CardContent>
               </Card>
             </div>
+
+            {/* Chart Section */}
+            <Card className="mb-8">
+              <CardHeader>
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <CardTitle className="text-lg">Ventas por Periodo</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <DateRangePicker date={dateRange} onDateChange={setDateRange} />
+                    <div className="flex gap-1 border rounded-md p-1 bg-white">
+                      <Button
+                        variant={groupBy === 'day' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setGroupBy('day')}
+                        className={groupBy === 'day' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
+                      >
+                        Dia
+                      </Button>
+                      <Button
+                        variant={groupBy === 'week' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setGroupBy('week')}
+                        className={groupBy === 'week' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
+                      >
+                        Semana
+                      </Button>
+                      <Button
+                        variant={groupBy === 'month' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setGroupBy('month')}
+                        className={groupBy === 'month' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
+                      >
+                        Mes
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px]">
+                  {chartLoading ? (
+                    <div className="flex items-center justify-center h-full">
+                      <Loader2 className="h-8 w-8 animate-spin text-[#00D47F]" />
+                    </div>
+                  ) : formattedChartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={formattedChartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis dataKey="displayDate" tick={{ fontSize: 12 }} stroke="#71828A" />
+                        <YAxis tick={{ fontSize: 12 }} stroke="#71828A" tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
+                        <Tooltip
+                          formatter={(value) => [formatCurrency(Number(value)), '']}
+                          contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                        />
+                        <Legend />
+                        <Bar dataKey="neto" name="Neto" fill="#00D47F" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="comision" name="Comision" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-[#71828A]">
+                      No hay ventas en este periodo
+                    </div>
+                  )}
+                </div>
+                {ventasStats && ventasStats.totalTransacciones > 0 && (
+                  <div className="mt-4 pt-4 border-t flex justify-end gap-8 text-sm">
+                    <div>
+                      <span className="text-[#71828A]">Ventas brutas: </span>
+                      <span className="font-bold">{formatCurrency(ventasStats.totalVentas)}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#71828A]">Comision: </span>
+                      <span className="font-bold text-purple-600">{formatCurrency(ventasStats.totalComision)}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#71828A]">Neto: </span>
+                      <span className="font-bold text-[#00D47F]">{formatCurrency(ventasStats.totalNeto)}</span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Store List */}
             <Card>
@@ -445,7 +613,7 @@ export default function TiendasPage() {
                                   )}
                                 </div>
                                 <div className="text-sm text-[#71828A]">
-                                  Comisión: {formatComision(tienda)}
+                                  Comision: {formatComision(tienda)}
                                 </div>
                               </div>
                             </div>
