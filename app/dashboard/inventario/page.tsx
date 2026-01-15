@@ -605,32 +605,26 @@ export default function InventarioPage() {
                         </Select>
                       </div>
                       <div className="flex-1">
-                        <Label htmlFor="leadtime">Lead time produccion</Label>
-                        <Select value={leadTime} onValueChange={setLeadTime}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="7">7 dias</SelectItem>
-                            <SelectItem value="14">14 dias</SelectItem>
-                            <SelectItem value="21">21 dias</SelectItem>
-                            <SelectItem value="30">30 dias</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Label htmlFor="leadtime">Lead time produccion (dias)</Label>
+                        <Input
+                          id="leadtime"
+                          type="number"
+                          min="1"
+                          value={leadTime}
+                          onChange={(e) => setLeadTime(e.target.value)}
+                          placeholder="14"
+                        />
                       </div>
                       <div className="flex-1">
-                        <Label htmlFor="seguridad">Stock de seguridad</Label>
-                        <Select value={stockSeguridad} onValueChange={setStockSeguridad}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="3">3 dias</SelectItem>
-                            <SelectItem value="7">7 dias</SelectItem>
-                            <SelectItem value="14">14 dias</SelectItem>
-                            <SelectItem value="21">21 dias</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Label htmlFor="seguridad">Stock de seguridad (dias)</Label>
+                        <Input
+                          id="seguridad"
+                          type="number"
+                          min="0"
+                          value={stockSeguridad}
+                          onChange={(e) => setStockSeguridad(e.target.value)}
+                          placeholder="7"
+                        />
                       </div>
                       <Button onClick={fetchForecast} className="bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]">
                         Recalcular
