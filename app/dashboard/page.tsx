@@ -183,7 +183,10 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    fetchData()
+    // Only fetch when both dates are selected
+    if (dateRange?.from && dateRange?.to) {
+      fetchData()
+    }
   }, [dateRange])
 
   if (loading) {
