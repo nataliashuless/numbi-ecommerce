@@ -318,7 +318,7 @@ export default function DashboardPage() {
                         tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
                       />
                       <Tooltip
-                        formatter={(value: number) => [formatCurrency(value), 'Ventas']}
+                        formatter={(value) => [formatCurrency(Number(value)), 'Ventas']}
                         labelStyle={{ color: '#233037' }}
                         contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
                       />
@@ -355,7 +355,7 @@ export default function DashboardPage() {
                         stroke="#71828A"
                       />
                       <Tooltip
-                        formatter={(value: number) => [value, 'Órdenes']}
+                        formatter={(value) => [Number(value), 'Órdenes']}
                         labelStyle={{ color: '#233037' }}
                         contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
                       />
@@ -398,7 +398,7 @@ export default function DashboardPage() {
                         stroke="#71828A"
                       />
                       <Tooltip
-                        formatter={(value: number) => [value, 'Unidades']}
+                        formatter={(value) => [Number(value), 'Unidades']}
                         labelStyle={{ color: '#233037' }}
                         contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
                       />
