@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -23,7 +22,10 @@ import {
   PackageX,
   Boxes,
   ShoppingBag,
-  BarChart3
+  BarChart3,
+  ChevronDown,
+  ChevronRight,
+  FolderOpen
 } from 'lucide-react'
 
 interface Variant {
@@ -83,7 +85,20 @@ function getStatusBadge(status: string) {
   return <Badge className={config.className}>{config.label}</Badge>
 }
 
-function getInventoryBadge(product: Product) {
+function getInventoryBadge(inventory: number, tracked: boolean) {
+  if (!tracked) {
+    return <Badge variant="secondary">Sin seguimiento</Badge>
+  }
+  if (inventory === 0) {
+    return <Badge className="bg-red-500">Agotado</Badge>
+  }
+  if (inventory <= 5) {
+    return <Badge className="bg-yellow-500">{inventory} uds</Badge>
+  }
+  return <Badge className="bg-green-500">{inventory} uds</Badge>
+}
+
+function getProductInventoryBadge(product: Product) {
   if (!product.hasInventoryTracking) {
     return <Badge variant="secondary">Sin seguimiento</Badge>
   }
@@ -101,6 +116,8 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'low' | 'out'>('all')
+  const [expandedProducts, setExpandedProducts] = useState<Set<number>>(new Set())
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     async function fetchData() {
@@ -115,6 +132,9 @@ export default function ProductsPage() {
         }
         const json = await res.json()
         setData(json)
+        // Expand all categories by default
+        const categories = new Set(json.products.map((p: Product) => p.productType || 'Sin categoría'))
+        setExpandedCategories(categories as Set<string>)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error desconocido')
       } finally {
@@ -123,6 +143,30 @@ export default function ProductsPage() {
     }
     fetchData()
   }, [])
+
+  const toggleProduct = (productId: number) => {
+    setExpandedProducts(prev => {
+      const next = new Set(prev)
+      if (next.has(productId)) {
+        next.delete(productId)
+      } else {
+        next.add(productId)
+      }
+      return next
+    })
+  }
+
+  const toggleCategory = (category: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev)
+      if (next.has(category)) {
+        next.delete(category)
+      } else {
+        next.add(category)
+      }
+      return next
+    })
+  }
 
   if (loading) {
     return (
@@ -157,6 +201,23 @@ export default function ProductsPage() {
     if (filter === 'low') return p.hasInventoryTracking && p.totalInventory > 0 && p.totalInventory <= 5
     if (filter === 'out') return p.hasInventoryTracking && p.totalInventory === 0
     return true
+  })
+
+  // Group products by category
+  const productsByCategory: Record<string, Product[]> = {}
+  filteredProducts.forEach(product => {
+    const category = product.productType || 'Sin categoría'
+    if (!productsByCategory[category]) {
+      productsByCategory[category] = []
+    }
+    productsByCategory[category].push(product)
+  })
+
+  // Sort categories alphabetically
+  const sortedCategories = Object.keys(productsByCategory).sort((a, b) => {
+    if (a === 'Sin categoría') return 1
+    if (b === 'Sin categoría') return -1
+    return a.localeCompare(b)
   })
 
   return (
@@ -208,7 +269,7 @@ export default function ProductsPage() {
             <h1 className="text-3xl font-bold text-[#233037] mb-2">Productos</h1>
             <p className="text-[#71828A]">Inventario de tu tienda Shopify</p>
           </div>
-          <div className="flex gap-1 mt-4 md:mt-0 border rounded-md p-1">
+          <div className="flex gap-1 mt-4 md:mt-0 border rounded-md p-1 bg-white">
             <Button
               variant={filter === 'all' ? 'default' : 'ghost'}
               size="sm"
@@ -289,76 +350,142 @@ export default function ProductsPage() {
           </Card>
         </div>
 
-        {/* Products Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {filter === 'all' && 'Todos los Productos'}
-              {filter === 'low' && 'Productos con Stock Bajo'}
-              {filter === 'out' && 'Productos Agotados'}
-              <span className="text-sm font-normal text-[#71828A] ml-2">({filteredProducts.length})</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {filteredProducts.length === 0 ? (
-              <p className="text-[#71828A] text-center py-8">No hay productos en esta categoría</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Producto</TableHead>
-                    <TableHead>SKU</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Inventario</TableHead>
-                    <TableHead>Variantes</TableHead>
-                    <TableHead className="text-right">Precio</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredProducts.map((product) => (
-                    <TableRow key={product.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          {product.image ? (
-                            <img
-                              src={product.image}
-                              alt={product.title}
-                              className="w-10 h-10 object-cover rounded"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center">
-                              <Package className="h-5 w-5 text-gray-400" />
-                            </div>
-                          )}
-                          <div>
-                            <div className="font-medium">{product.title}</div>
-                            {product.vendor && (
-                              <div className="text-xs text-[#71828A]">{product.vendor}</div>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-[#71828A]">
-                        {product.variants[0]?.sku || '-'}
-                      </TableCell>
-                      <TableCell>{getStatusBadge(product.status)}</TableCell>
-                      <TableCell>{getInventoryBadge(product)}</TableCell>
-                      <TableCell className="text-[#71828A]">
-                        {product.variantCount} {product.variantCount === 1 ? 'variante' : 'variantes'}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {product.minPrice === product.maxPrice
-                          ? formatCurrency(product.minPrice)
-                          : `${formatCurrency(product.minPrice)} - ${formatCurrency(product.maxPrice)}`
-                        }
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+        {/* Products by Category */}
+        {filteredProducts.length === 0 ? (
+          <Card>
+            <CardContent className="py-8">
+              <p className="text-[#71828A] text-center">No hay productos en esta categoría</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {sortedCategories.map(category => (
+              <Card key={category}>
+                <CardHeader
+                  className="cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={() => toggleCategory(category)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {expandedCategories.has(category) ? (
+                        <ChevronDown className="h-5 w-5 text-[#71828A]" />
+                      ) : (
+                        <ChevronRight className="h-5 w-5 text-[#71828A]" />
+                      )}
+                      <FolderOpen className="h-5 w-5 text-[#00D47F]" />
+                      <CardTitle className="text-lg">{category}</CardTitle>
+                      <Badge variant="secondary" className="ml-2">
+                        {productsByCategory[category].length} productos
+                      </Badge>
+                    </div>
+                    <div className="text-sm text-[#71828A]">
+                      {productsByCategory[category].reduce((sum, p) => sum + p.totalInventory, 0).toLocaleString()} uds en stock
+                    </div>
+                  </div>
+                </CardHeader>
+
+                {expandedCategories.has(category) && (
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-8"></TableHead>
+                          <TableHead>Producto</TableHead>
+                          <TableHead>SKU</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead>Inventario</TableHead>
+                          <TableHead className="text-right">Precio</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {productsByCategory[category].map((product) => (
+                          <>
+                            <TableRow
+                              key={product.id}
+                              className={`cursor-pointer hover:bg-gray-50 ${expandedProducts.has(product.id) ? 'bg-gray-50' : ''}`}
+                              onClick={() => toggleProduct(product.id)}
+                            >
+                              <TableCell className="w-8">
+                                {product.variantCount > 1 && (
+                                  expandedProducts.has(product.id) ? (
+                                    <ChevronDown className="h-4 w-4 text-[#71828A]" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4 text-[#71828A]" />
+                                  )
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-3">
+                                  {product.image ? (
+                                    <img
+                                      src={product.image}
+                                      alt={product.title}
+                                      className="w-10 h-10 object-cover rounded"
+                                    />
+                                  ) : (
+                                    <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center">
+                                      <Package className="h-5 w-5 text-gray-400" />
+                                    </div>
+                                  )}
+                                  <div>
+                                    <div className="font-medium">{product.title}</div>
+                                    {product.variantCount > 1 && (
+                                      <div className="text-xs text-[#71828A]">
+                                        {product.variantCount} variantes
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-[#71828A]">
+                                {product.variants[0]?.sku || '-'}
+                              </TableCell>
+                              <TableCell>{getStatusBadge(product.status)}</TableCell>
+                              <TableCell>{getProductInventoryBadge(product)}</TableCell>
+                              <TableCell className="text-right font-medium">
+                                {product.minPrice === product.maxPrice
+                                  ? formatCurrency(product.minPrice)
+                                  : `${formatCurrency(product.minPrice)} - ${formatCurrency(product.maxPrice)}`
+                                }
+                              </TableCell>
+                            </TableRow>
+
+                            {/* Variants rows */}
+                            {expandedProducts.has(product.id) && product.variants.map((variant, idx) => (
+                              <TableRow key={`${product.id}-${variant.id}`} className="bg-gray-50/50">
+                                <TableCell></TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-3 pl-6">
+                                    <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center text-xs text-gray-500">
+                                      {idx + 1}
+                                    </div>
+                                    <div>
+                                      <div className="text-sm">{variant.title === 'Default Title' ? 'Variante única' : variant.title}</div>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-[#71828A] text-sm">
+                                  {variant.sku || '-'}
+                                </TableCell>
+                                <TableCell></TableCell>
+                                <TableCell>
+                                  {getInventoryBadge(variant.inventory, variant.tracked)}
+                                </TableCell>
+                                <TableCell className="text-right text-sm">
+                                  {formatCurrency(variant.price)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                )}
+              </Card>
+            ))}
+          </div>
+        )}
       </main>
     </div>
   )
