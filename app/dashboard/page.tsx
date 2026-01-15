@@ -152,6 +152,7 @@ export default function DashboardPage() {
         throw new Error('Error al cargar datos')
       }
       const json = await res.json()
+      console.log('API Response debug:', json.debug)
       setData(json)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido')

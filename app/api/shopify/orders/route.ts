@@ -16,8 +16,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Build base query params
-    let baseParams = 'status=any&limit=250'
+    // Build base query params - order by created_at ascending to get oldest first
+    let baseParams = 'status=any&limit=250&order=created_at asc'
     if (startDate) {
       baseParams += `&created_at_min=${startDate}T00:00:00-05:00`
     }
@@ -39,9 +39,12 @@ export async function GET(request: Request) {
       line_items: { quantity: number }[]
     }> = []
 
-    let nextUrl: string | null = `https://${shop}/admin/api/2024-01/orders.json?${baseParams}`
+    // Use API version 2024-10 for better support
+    let nextUrl: string | null = `https://${shop}/admin/api/2024-10/orders.json?${baseParams}`
+    let pageCount = 0
 
-    while (nextUrl) {
+    while (nextUrl && pageCount < 50) { // Safety limit of 50 pages
+      pageCount++
       const ordersResponse: Response = await fetch(nextUrl, {
         headers: {
           'X-Shopify-Access-Token': accessToken,
@@ -69,6 +72,11 @@ export async function GET(request: Request) {
     }
 
     const orders = allOrders
+
+    // Get date range of fetched orders for debugging
+    const orderDates = orders.map(o => o.created_at).sort()
+    const oldestOrder = orderDates[0] || null
+    const newestOrder = orderDates[orderDates.length - 1] || null
 
     // Calculate stats
     const totalRevenue = orders.reduce((sum: number, order: { total_price: string }) =>
@@ -158,6 +166,13 @@ export async function GET(request: Request) {
         pendingOrders,
         totalUnits,
         averageOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
+      },
+      debug: {
+        pagesFetched: pageCount,
+        oldestOrder,
+        newestOrder,
+        requestedStartDate: startDate,
+        requestedEndDate: endDate,
       },
       chartData,
       shop,
