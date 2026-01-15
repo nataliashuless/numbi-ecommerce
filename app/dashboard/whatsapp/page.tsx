@@ -43,6 +43,7 @@ import {
   MessageCircle,
   BarChart3,
   Store,
+  Boxes,
 } from 'lucide-react'
 // ShoppingCart already imported
 import { DateRangePicker } from '@/components/ui/date-range-picker'
@@ -318,6 +319,12 @@ export default function WhatsAppPage() {
               <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
                 <Package className="h-4 w-4 mr-2" />
                 Productos
+              </Button>
+            </Link>
+            <Link href="/dashboard/inventario">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+                <Boxes className="h-4 w-4 mr-2" />
+                Inventario
               </Button>
             </Link>
           </nav>

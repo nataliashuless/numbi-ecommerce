@@ -26,6 +26,7 @@ import {
   LogOut,
   RefreshCw,
   Box,
+  Boxes,
   BarChart3,
   MessageCircle,
 } from 'lucide-react'
@@ -274,6 +275,12 @@ export default function DashboardPage() {
               <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
                 <Package className="h-4 w-4 mr-2" />
                 Productos
+              </Button>
+            </Link>
+            <Link href="/dashboard/inventario">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+                <Boxes className="h-4 w-4 mr-2" />
+                Inventario
               </Button>
             </Link>
           </nav>
