@@ -15,33 +15,59 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Build query params
-    let queryParams = 'status=any&limit=250'
+    // Build base query params
+    let baseParams = 'status=any&limit=250'
     if (startDate) {
-      queryParams += `&created_at_min=${startDate}T00:00:00-05:00`
+      baseParams += `&created_at_min=${startDate}T00:00:00-05:00`
     }
     if (endDate) {
-      queryParams += `&created_at_max=${endDate}T23:59:59-05:00`
+      baseParams += `&created_at_max=${endDate}T23:59:59-05:00`
     }
 
-    // Fetch orders from Shopify
-    const ordersResponse = await fetch(
-      `https://${shop}/admin/api/2024-01/orders.json?${queryParams}`,
-      {
+    // Fetch all orders with pagination
+    let allOrders: Array<{
+      id: number
+      order_number: number
+      name: string
+      created_at: string
+      total_price: string
+      currency: string
+      financial_status: string
+      fulfillment_status: string | null
+      customer: { first_name?: string; last_name?: string; email?: string } | null
+      line_items: { quantity: number }[]
+    }> = []
+
+    let nextUrl: string | null = `https://${shop}/admin/api/2024-01/orders.json?${baseParams}`
+
+    while (nextUrl) {
+      const ordersResponse = await fetch(nextUrl, {
         headers: {
           'X-Shopify-Access-Token': accessToken,
           'Content-Type': 'application/json',
         },
-      }
-    )
+      })
 
-    if (!ordersResponse.ok) {
-      const error = await ordersResponse.json()
-      return NextResponse.json({ error: error.errors || 'Failed to fetch orders' }, { status: ordersResponse.status })
+      if (!ordersResponse.ok) {
+        const error = await ordersResponse.json()
+        return NextResponse.json({ error: error.errors || 'Failed to fetch orders' }, { status: ordersResponse.status })
+      }
+
+      const ordersData = await ordersResponse.json()
+      allOrders = allOrders.concat(ordersData.orders || [])
+
+      // Check for next page in Link header
+      const linkHeader = ordersResponse.headers.get('Link')
+      nextUrl = null
+      if (linkHeader) {
+        const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/)
+        if (nextMatch) {
+          nextUrl = nextMatch[1]
+        }
+      }
     }
 
-    const ordersData = await ordersResponse.json()
-    const orders = ordersData.orders || []
+    const orders = allOrders
 
     // Calculate stats
     const totalRevenue = orders.reduce((sum: number, order: { total_price: string }) =>
