@@ -1,9 +1,17 @@
-import { createClient } from '@/lib/supabase-server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Users, Store, ShoppingCart, DollarSign } from 'lucide-react'
 
+// Service client to bypass RLS
+function getServiceClient() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
+
 export default async function AdminDashboard() {
-  const supabase = await createClient()
+  const supabase = getServiceClient()
 
   // Get stats
   const { count: usersCount } = await supabase
