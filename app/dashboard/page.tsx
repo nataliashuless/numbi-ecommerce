@@ -98,16 +98,18 @@ export default function DashboardPage() {
       const endDate = format(dateRange.to, 'yyyy-MM-dd')
 
       // Fetch all channels in parallel
-      const [shopifyRes, whatsappRes, tiendasRes] = await Promise.all([
+      const [shopifyRes, whatsappRes, tiendasRes, tiendasVentasRes] = await Promise.all([
         fetch(`/api/shopify/orders?start_date=${startDate}&end_date=${endDate}&group_by=day`),
         fetch(`/api/whatsapp?start_date=${startDate}&end_date=${endDate}`),
         fetch('/api/tiendas'),
+        fetch(`/api/tiendas/ventas?start_date=${startDate}&end_date=${endDate}&group_by=day`),
       ])
 
       // Parse responses
       const shopifyData = shopifyRes.ok ? await shopifyRes.json() : null
       const whatsappData = whatsappRes.ok ? await whatsappRes.json() : null
       const tiendasData = tiendasRes.ok ? await tiendasRes.json() : null
+      const tiendasVentasData = tiendasVentasRes.ok ? await tiendasVentasRes.json() : null
 
       if (shopifyData?.shop) {
         setShop(shopifyData.shop)
@@ -126,12 +128,11 @@ export default function DashboardPage() {
         unidades: whatsappData?.stats?.totalUnidades || 0,
       }
 
-      // For tiendas, we need to calculate from ventas_terceros
-      // For now, use the pending amount as an approximation
+      // For tiendas, use the ventas data
       const tiendasStats: ChannelStats = {
-        ventas: tiendasData?.stats?.montoPendienteTotal || 0,
-        ordenes: tiendasData?.tiendas?.reduce((sum: number, t: { ventasPendientes: number }) => sum + t.ventasPendientes, 0) || 0,
-        unidades: 0, // Would need separate query
+        ventas: tiendasVentasData?.stats?.totalNeto || 0,
+        ordenes: tiendasVentasData?.stats?.totalTransacciones || 0,
+        unidades: tiendasVentasData?.stats?.totalUnidades || 0,
       }
 
       const totalStats: ChannelStats = {
@@ -159,6 +160,15 @@ export default function DashboardPage() {
           chartDataMap[key] = { shopify: 0, whatsapp: 0, tiendas: 0 }
         }
         chartDataMap[key].whatsapp += d.sales
+      })
+
+      // Add Tiendas data
+      tiendasVentasData?.chartData?.forEach((d: { date: string; neto: number }) => {
+        const key = getGroupKey(d.date, groupBy)
+        if (!chartDataMap[key]) {
+          chartDataMap[key] = { shopify: 0, whatsapp: 0, tiendas: 0 }
+        }
+        chartDataMap[key].tiendas += d.neto
       })
 
       const chartData = Object.entries(chartDataMap)
