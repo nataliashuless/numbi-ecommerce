@@ -65,22 +65,20 @@ export default function UsersPage() {
 
   async function fetchUsers() {
     setLoading(true)
-    const { data: users } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false })
 
-    const { data: integrationsData } = await supabase
-      .from('user_integrations')
-      .select('*')
-
-    if (users) {
+    // Use API to fetch profiles (bypasses RLS)
+    const profilesRes = await fetch('/api/admin/profiles')
+    if (profilesRes.ok) {
+      const users = await profilesRes.json()
       setUsers(users)
     }
 
-    if (integrationsData) {
+    // Use API to fetch integrations
+    const integrationsRes = await fetch('/api/admin/integrations')
+    if (integrationsRes.ok) {
+      const integrationsData = await integrationsRes.json()
       const integrationsMap: Record<string, Integration> = {}
-      integrationsData.forEach(i => {
+      integrationsData.forEach((i: Integration) => {
         integrationsMap[i.user_id] = i
       })
       setIntegrations(integrationsMap)

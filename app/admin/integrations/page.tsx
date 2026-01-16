@@ -27,20 +27,27 @@ export default function IntegrationsPage() {
 
   useEffect(() => {
     async function fetchIntegrations() {
-      const { data } = await supabase
-        .from('user_integrations')
-        .select(`
-          *,
-          profiles (
-            email,
-            full_name,
-            company_name
-          )
-        `)
-        .order('created_at', { ascending: false })
+      // Fetch integrations via API (bypasses RLS)
+      const integrationsRes = await fetch('/api/admin/integrations')
+      const profilesRes = await fetch('/api/admin/profiles')
 
-      if (data) {
-        setIntegrations(data as Integration[])
+      if (integrationsRes.ok && profilesRes.ok) {
+        const integrationsData = await integrationsRes.json()
+        const profilesData = await profilesRes.json()
+
+        // Map profiles by user_id
+        const profilesMap: Record<string, any> = {}
+        profilesData.forEach((p: any) => {
+          profilesMap[p.id] = p
+        })
+
+        // Join integrations with profiles
+        const integrationsWithProfiles = integrationsData.map((i: any) => ({
+          ...i,
+          profiles: profilesMap[i.user_id] || null
+        }))
+
+        setIntegrations(integrationsWithProfiles as Integration[])
       }
       setLoading(false)
     }
