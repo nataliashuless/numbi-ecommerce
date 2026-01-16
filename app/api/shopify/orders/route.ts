@@ -1,5 +1,41 @@
 import { NextResponse } from 'next/server'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+
+async function getUserShopifyCredentials() {
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll() },
+        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+          } catch { }
+        },
+      },
+    }
+  )
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const serviceClient = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
+  const { data: integration } = await serviceClient
+    .from('user_integrations')
+    .select('shopify_shop, shopify_access_token')
+    .eq('user_id', user.id)
+    .single()
+
+  return integration
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -7,12 +43,12 @@ export async function GET(request: Request) {
   const endDate = searchParams.get('end_date')
   const groupBy = searchParams.get('group_by') || 'day' // day, week, month
 
-  const cookieStore = await cookies()
-  const shop = cookieStore.get('shopify_shop')?.value
-  const accessToken = cookieStore.get('shopify_token')?.value
+  const credentials = await getUserShopifyCredentials()
+  const shop = credentials?.shopify_shop
+  const accessToken = credentials?.shopify_access_token
 
   if (!shop || !accessToken) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    return NextResponse.json({ error: 'Shopify not connected' }, { status: 401 })
   }
 
   try {

@@ -1,5 +1,14 @@
 import { NextResponse } from 'next/server'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+
+function getServiceClient() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -15,6 +24,36 @@ export async function GET(request: Request) {
 
   if (!apiKey || !apiSecret) {
     return NextResponse.json({ error: 'Shopify credentials not configured' }, { status: 500 })
+  }
+
+  // Get current user from Supabase session
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            )
+          } catch {
+            // Ignore
+          }
+        },
+      },
+    }
+  )
+
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    const host = process.env.SHOPIFY_HOST || 'http://localhost:3000'
+    return NextResponse.redirect(`${host}/login?error=not_authenticated`)
   }
 
   try {
@@ -39,20 +78,43 @@ export async function GET(request: Request) {
 
     const accessToken = tokenData.access_token
 
-    // Store in cookies (in production, use a database)
-    const cookieStore = await cookies()
-    cookieStore.set('shopify_shop', shop, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 30, // 30 days
-    })
-    cookieStore.set('shopify_token', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 30, // 30 days
-    })
+    // Save to database using service client
+    const serviceClient = getServiceClient()
+
+    // Check if user_integrations record exists
+    const { data: existing } = await serviceClient
+      .from('user_integrations')
+      .select('id')
+      .eq('user_id', user.id)
+      .single()
+
+    if (existing) {
+      // Update existing record
+      await serviceClient
+        .from('user_integrations')
+        .update({
+          shopify_shop: shop,
+          shopify_access_token: accessToken,
+          shopify_connected_at: new Date().toISOString(),
+        })
+        .eq('user_id', user.id)
+    } else {
+      // Insert new record
+      await serviceClient
+        .from('user_integrations')
+        .insert({
+          user_id: user.id,
+          shopify_shop: shop,
+          shopify_access_token: accessToken,
+          shopify_connected_at: new Date().toISOString(),
+        })
+    }
+
+    // Mark onboarding as completed
+    await serviceClient
+      .from('profiles')
+      .update({ onboarding_completed: true })
+      .eq('id', user.id)
 
     // Redirect to dashboard
     const host = process.env.SHOPIFY_HOST || 'http://localhost:3000'
