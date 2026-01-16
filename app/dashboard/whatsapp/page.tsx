@@ -668,7 +668,21 @@ export default function WhatsAppPage() {
         }
       } else {
         console.error('Shipment error:', shipmentData)
-        alert('Error al generar guía: ' + JSON.stringify(shipmentData.status_messages || 'Error desconocido'))
+        console.error('Full shipment error details:', JSON.stringify(shipmentData, null, 2))
+        // Extract error messages from nested structure
+        let errorMsg = 'Error desconocido'
+        if (shipmentData.status_messages && Array.isArray(shipmentData.status_messages)) {
+          const errors = shipmentData.status_messages
+            .map((msg: { error?: string[] | string }) => {
+              if (msg.error) {
+                return Array.isArray(msg.error) ? msg.error.join(', ') : msg.error
+              }
+              return JSON.stringify(msg)
+            })
+            .join(' | ')
+          errorMsg = errors
+        }
+        alert('Error al generar guía: ' + errorMsg)
       }
     } catch (error) {
       console.error('Error creating shipment:', error)
