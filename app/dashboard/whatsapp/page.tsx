@@ -44,6 +44,7 @@ import {
   BarChart3,
   Store,
   Boxes,
+  FileText,
 } from 'lucide-react'
 // ShoppingCart already imported
 import { DateRangePicker } from '@/components/ui/date-range-picker'
@@ -116,6 +117,8 @@ export default function WhatsAppPage() {
   const [chartData, setChartData] = useState<ChartDataPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [importText, setImportText] = useState('')
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: subDays(new Date(), 30),
     to: new Date(),
@@ -140,6 +143,84 @@ export default function WhatsAppPage() {
     precio_unitario: 0,
     notas: '',
   })
+
+  // Parse WhatsApp text block
+  function parseWhatsAppText(text: string) {
+    const lines = text.split('\n')
+    const data: Record<string, string> = {}
+
+    for (const line of lines) {
+      const colonIndex = line.indexOf(':')
+      if (colonIndex > 0) {
+        const key = line.substring(0, colonIndex).trim().toLowerCase()
+        const value = line.substring(colonIndex + 1).trim()
+
+        // Map common field names
+        if (key.includes('nombre') && !key.includes('edificio') && !key.includes('conjunto')) {
+          data.nombre = value
+        } else if (key.includes('cédula') || key.includes('cedula') || key.includes('cc')) {
+          data.cedula = value
+        } else if (key.includes('dirección') || key.includes('direccion')) {
+          data.direccion = value
+        } else if (key.includes('barrio')) {
+          data.barrio = value
+        } else if (key.includes('edificio') || key.includes('conjunto')) {
+          data.edificio = value
+        } else if (key.includes('ciudad')) {
+          data.ciudad = value
+        } else if (key.includes('celular') || key.includes('teléfono') || key.includes('telefono') || key.includes('tel')) {
+          data.telefono = value.replace(/\D/g, '') // Remove non-digits
+        } else if (key.includes('correo') || key.includes('email') || key.includes('mail')) {
+          data.email = value
+        } else if (key.includes('talla') || key.includes('size')) {
+          data.talla = value
+        } else if (key.includes('diseño') || key.includes('diseno') || key.includes('producto') || key.includes('referencia')) {
+          data.diseno = value
+        } else if (key.includes('color')) {
+          data.color = value
+        } else if (key.includes('cantidad')) {
+          data.cantidad = value
+        }
+      }
+    }
+
+    return data
+  }
+
+  function handleImportText() {
+    const parsed = parseWhatsAppText(importText)
+
+    // Build full address
+    let direccionCompleta = parsed.direccion || ''
+    if (parsed.barrio) {
+      direccionCompleta += direccionCompleta ? `, Barrio ${parsed.barrio}` : `Barrio ${parsed.barrio}`
+    }
+    if (parsed.edificio) {
+      direccionCompleta += direccionCompleta ? `, ${parsed.edificio}` : parsed.edificio
+    }
+
+    // Build product info for notes
+    const productInfo: string[] = []
+    if (parsed.talla) productInfo.push(`Talla: ${parsed.talla}`)
+    if (parsed.diseno) productInfo.push(`Diseño: ${parsed.diseno}`)
+    if (parsed.color) productInfo.push(`Color: ${parsed.color}`)
+
+    setFormData(prev => ({
+      ...prev,
+      cliente_nombre: parsed.nombre || prev.cliente_nombre,
+      cliente_cedula: parsed.cedula || prev.cliente_cedula,
+      cliente_telefono: parsed.telefono || prev.cliente_telefono,
+      cliente_email: parsed.email || prev.cliente_email,
+      cliente_direccion: direccionCompleta || prev.cliente_direccion,
+      cliente_ciudad: parsed.ciudad || prev.cliente_ciudad,
+      cantidad: parsed.cantidad ? parseInt(parsed.cantidad) || 1 : prev.cantidad,
+      notas: productInfo.length > 0 ? productInfo.join(', ') : prev.notas,
+    }))
+
+    setImportDialogOpen(false)
+    setDialogOpen(true)
+    setImportText('')
+  }
 
   async function fetchData() {
     setLoading(true)
@@ -348,6 +429,54 @@ export default function WhatsAppPage() {
           </div>
           <div className="flex items-center gap-2 mt-4 md:mt-0">
             <DateRangePicker date={dateRange} onDateChange={setDateRange} />
+
+            {/* Import from text dialog */}
+            <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Importar Texto
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Importar desde WhatsApp</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p className="text-sm text-[#71828A]">
+                    Pega el bloque de texto del cliente con los datos del pedido
+                  </p>
+                  <Textarea
+                    value={importText}
+                    onChange={e => setImportText(e.target.value)}
+                    placeholder={`Ejemplo:
+Nombre: Maria Moreno
+Cédula: 22587285
+Dirección: Cra 5 # 87-19
+Barrio: Refugio
+Ciudad: Bogota
+Celular: 3175134486
+Correo: cliente@email.com
+Talla: 21
+Diseño: chocolate`}
+                    className="min-h-[200px] font-mono text-sm"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={handleImportText}
+                      disabled={!importText.trim()}
+                      className="bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]"
+                    >
+                      Procesar
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]">
