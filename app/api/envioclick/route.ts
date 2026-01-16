@@ -75,46 +75,56 @@ export async function POST(request: Request) {
         return cleaned || '3000000000'
       }
 
-      // Create shipment/guide - include all fields from quote
+      // Helper to truncate strings to max length
+      const truncate = (str: string, max: number) => str ? str.substring(0, max) : ''
+      const ensureMin = (str: string, min: number, defaultVal: string) =>
+        str && str.length >= min ? str : defaultVal
+
+      // Generate pickup date (tomorrow)
+      const tomorrow = new Date()
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      const pickupDate = tomorrow.toISOString().split('T')[0]
+
+      // Create shipment/guide with all required fields per API docs
       const shipmentData: Record<string, unknown> = {
-        idRate: Number(body.idRate), // Rate ID from quote (required)
-        requestPickup: false, // No solicitar recolección automática
+        idRate: Number(body.idRate),
+        myShipmentReference: truncate(`ORD-${Date.now()}`, 28), // Required: min 2, max 28
+        requestPickup: false,
+        pickupDate: pickupDate, // Required: yyyy-mm-dd
+        insurance: false, // Required boolean
         packages: [{
           weight: body.weight || 1,
           height: body.height || 10,
           width: body.width || 10,
           length: body.length || 15,
         }],
-        description: body.description || 'Producto Shuless',
+        description: truncate(body.description || 'Producto Shuless', 25), // max 25
         contentValue: body.contentValue || 100000,
         origin: {
           daneCode: ORIGIN.daneCode,
-          address: ORIGIN.address,
-          company: ORIGIN.company,
-          firstName: ORIGIN.firstName,
-          lastName: ORIGIN.lastName,
-          email: ORIGIN.email,
-          phone: ORIGIN.phone,
-          suburb: 'Santa Barbara',
-          crossStreet: 'Calle 124 con Carrera 19',
+          address: truncate(ORIGIN.address, 50), // min 2, max 50 (but min 8 for destination)
+          company: truncate(ORIGIN.company, 28), // min 2, max 28
+          firstName: truncate(ORIGIN.firstName, 14), // min 2, max 14
+          lastName: truncate(ORIGIN.lastName, 14), // min 2, max 14
+          email: ORIGIN.email, // min 8, max 60
+          phone: ORIGIN.phone, // exactly 10
+          suburb: 'Santa Barbara', // min 2, max 30
+          crossStreet: truncate('Calle 124 con Carrera 19', 35), // min 2, max 35
+          reference: 'Edificio Shuless', // min 2, max 25 - REQUIRED
         },
         destination: {
           daneCode: body.daneCode,
-          address: body.address,
-          company: body.firstName || 'Cliente', // Use name as company if empty
-          firstName: body.firstName || 'Cliente',
-          lastName: body.lastName || 'Shuless',
-          email: body.email || 'cliente@shuless.co',
-          phone: formatPhone(body.phone),
-          suburb: body.suburb && body.suburb.length >= 2 ? body.suburb.substring(0, 30) : 'Barrio',
-          crossStreet: body.crossStreet || 'Calle principal',
-          reference: body.reference || 'N/A',
+          address: ensureMin(truncate(body.address || '', 50), 8, 'Direccion pendiente'), // min 8, max 50
+          company: ensureMin(truncate(body.firstName || 'Cliente', 28), 2, 'Cliente'), // min 2, max 28
+          firstName: ensureMin(truncate(body.firstName || 'Cliente', 14), 2, 'Cliente'), // min 2, max 14
+          lastName: ensureMin(truncate(body.lastName || 'Cliente', 14), 2, 'Cliente'), // min 2, max 14
+          email: body.email || 'cliente@shuless.co', // min 8, max 60
+          phone: formatPhone(body.phone), // exactly 10
+          suburb: ensureMin(truncate(body.suburb || 'Barrio', 30), 2, 'Barrio'), // min 2, max 30
+          crossStreet: ensureMin(truncate(body.crossStreet || 'Calle principal', 35), 2, 'Calle principal'), // min 2, max 35
+          reference: ensureMin(truncate(body.reference || 'Casa', 25), 2, 'Casa'), // min 2, max 25
         },
       }
-
-      // Add optional fields if provided
-      if (body.idCarrier) shipmentData.idCarrier = Number(body.idCarrier)
-      if (body.idProduct) shipmentData.idProduct = Number(body.idProduct)
 
       console.log('EnvioClick Shipment Request:', JSON.stringify(shipmentData, null, 2))
 
