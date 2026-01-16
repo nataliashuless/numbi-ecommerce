@@ -516,30 +516,72 @@ export default function WhatsAppPage() {
       })
 
       const quoteData = await quoteRes.json()
+      console.log('EnvioClick Quote Full Response:', JSON.stringify(quoteData, null, 2))
 
-      if (quoteData.status === 'OK' && quoteData.data) {
-        // Parse quote options from response
-        const options: QuoteOption[] = (quoteData.data || []).map((q: {
-          carrier: string
-          carrierLogo?: string
-          serviceId: string
-          serviceName: string
-          deliveryDays: number
-          price: number
-          currency?: string
-        }) => ({
-          carrier: q.carrier,
-          carrierLogo: q.carrierLogo || '',
-          serviceId: q.serviceId,
-          serviceName: q.serviceName,
-          deliveryDays: q.deliveryDays,
-          price: q.price,
-          currency: q.currency || 'COP',
-        }))
+      // Handle various API response structures
+      if (quoteData.error) {
+        alert('Error al cotizar: ' + quoteData.error)
+        setQuoteLoading(false)
+        return
+      }
+
+      // Try to extract quotes array from different possible structures
+      let quotesArray: unknown[] = []
+
+      if (Array.isArray(quoteData)) {
+        // Response is directly an array
+        quotesArray = quoteData
+      } else if (Array.isArray(quoteData.data)) {
+        // Response has data as array
+        quotesArray = quoteData.data
+      } else if (quoteData.data && typeof quoteData.data === 'object') {
+        // Response has data as object - try to find array inside
+        const dataObj = quoteData.data as Record<string, unknown>
+        if (Array.isArray(dataObj.quotes)) {
+          quotesArray = dataObj.quotes
+        } else if (Array.isArray(dataObj.services)) {
+          quotesArray = dataObj.services
+        } else if (Array.isArray(dataObj.carriers)) {
+          quotesArray = dataObj.carriers
+        } else if (Array.isArray(dataObj.rates)) {
+          quotesArray = dataObj.rates
+        } else if (Array.isArray(dataObj.options)) {
+          quotesArray = dataObj.options
+        } else {
+          // Try to get values if they look like quote objects
+          const values = Object.values(dataObj)
+          if (values.length > 0 && typeof values[0] === 'object' && values[0] !== null) {
+            quotesArray = values
+          }
+        }
+      } else if (quoteData.quotes && Array.isArray(quoteData.quotes)) {
+        quotesArray = quoteData.quotes
+      } else if (quoteData.services && Array.isArray(quoteData.services)) {
+        quotesArray = quoteData.services
+      } else if (quoteData.rates && Array.isArray(quoteData.rates)) {
+        quotesArray = quoteData.rates
+      }
+
+      console.log('Parsed quotes array:', quotesArray)
+
+      if (quotesArray.length > 0) {
+        const options: QuoteOption[] = quotesArray.map((q: unknown) => {
+          const quote = q as Record<string, unknown>
+          return {
+            carrier: String(quote.carrier || quote.carrierName || quote.carrier_name || quote.name || 'Transportadora'),
+            carrierLogo: String(quote.carrierLogo || quote.carrier_logo || quote.logo || ''),
+            serviceId: String(quote.serviceId || quote.service_id || quote.id || ''),
+            serviceName: String(quote.serviceName || quote.service_name || quote.service || quote.type || 'Servicio estándar'),
+            deliveryDays: Number(quote.deliveryDays || quote.delivery_days || quote.days || quote.estimatedDays || quote.estimated_days || 3),
+            price: Number(quote.price || quote.total || quote.amount || quote.cost || quote.rate || 0),
+            currency: String(quote.currency || 'COP'),
+          }
+        })
         setQuoteOptions(options)
       } else {
-        console.error('Quote error:', quoteData)
-        alert('Error al cotizar: ' + (quoteData.status_messages?.error || 'Intenta de nuevo'))
+        console.error('Could not parse quotes from response:', quoteData)
+        const statusMsg = quoteData.status_messages ? JSON.stringify(quoteData.status_messages) : ''
+        alert('No hay cotizaciones disponibles para este destino. ' + statusMsg)
       }
     } catch (error) {
       console.error('Error getting quote:', error)
