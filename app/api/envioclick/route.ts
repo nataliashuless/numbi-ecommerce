@@ -35,7 +35,7 @@ export async function POST(request: Request) {
           width: body.width || 10,
           length: body.length || 15,
         }],
-        description: body.description || 'Producto Numbi',
+        description: body.description || 'Producto Shuless',
         contentValue: body.contentValue || 100000,
         origin: {
           daneCode: ORIGIN.daneCode,
@@ -47,16 +47,20 @@ export async function POST(request: Request) {
         },
       }
 
+      console.log('EnvioClick Quote Request:', JSON.stringify(quoteData, null, 2))
+      console.log('Using API Key:', API_KEY ? 'Set' : 'NOT SET')
+
       const response = await fetch(`${API_BASE}/quotation`, {
         method: 'POST',
         headers: {
-          'Authorization': API_KEY,
+          'Authorization': API_KEY!,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(quoteData),
       })
 
       const data = await response.json()
+      console.log('EnvioClick Quote Response:', JSON.stringify(data, null, 2))
       return NextResponse.json(data)
 
     } else if (action === 'shipment') {
