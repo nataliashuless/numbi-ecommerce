@@ -75,8 +75,8 @@ export async function POST(request: Request) {
         return cleaned || '3000000000'
       }
 
-      // Create shipment/guide
-      const shipmentData = {
+      // Create shipment/guide - include all fields from quote
+      const shipmentData: Record<string, unknown> = {
         idRate: Number(body.idRate), // Rate ID from quote (required)
         requestPickup: false, // No solicitar recolección automática
         packages: [{
@@ -111,6 +111,10 @@ export async function POST(request: Request) {
           reference: body.reference || 'N/A',
         },
       }
+
+      // Add optional fields if provided
+      if (body.idCarrier) shipmentData.idCarrier = Number(body.idCarrier)
+      if (body.idProduct) shipmentData.idProduct = Number(body.idProduct)
 
       console.log('EnvioClick Shipment Request:', JSON.stringify(shipmentData, null, 2))
 

@@ -96,6 +96,8 @@ interface QuoteOption {
   deliveryDays: number
   price: number
   currency: string
+  idCarrier: number
+  idProduct: number
 }
 
 interface Stats {
@@ -580,6 +582,9 @@ export default function WhatsAppPage() {
             deliveryDays: Number(quote.deliveryDays || quote.delivery_days || quote.days || quote.estimatedDays || quote.estimated_days || 3),
             price: totalPrice,
             currency: String(quote.currency || 'COP'),
+            // Additional fields that might be needed for shipment
+            idCarrier: Number(quote.idCarrier || quote.id_carrier || 0),
+            idProduct: Number(quote.idProduct || quote.id_product || 0),
           }
         })
         setQuoteOptions(options)
@@ -617,6 +622,8 @@ export default function WhatsAppPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           idRate: option.serviceId, // serviceId contains the idRate from quote
+          idCarrier: option.idCarrier,
+          idProduct: option.idProduct,
           daneCode: daneData.daneCode,
           address: venta.cliente_direccion,
           firstName: venta.cliente_nombre?.split(' ')[0] || 'Cliente',
