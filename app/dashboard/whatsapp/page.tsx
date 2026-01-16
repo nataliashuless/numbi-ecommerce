@@ -160,37 +160,51 @@ export default function WhatsAppPage() {
     const data: Record<string, string> = {}
 
     for (const line of lines) {
+      // Try to find a separator (colon or space for specific fields)
+      let key = ''
+      let value = ''
+
       const colonIndex = line.indexOf(':')
       if (colonIndex > 0) {
-        const key = line.substring(0, colonIndex).trim().toLowerCase()
-        const value = line.substring(colonIndex + 1).trim()
-
-        // Map common field names
-        if (key.includes('nombre') && !key.includes('edificio') && !key.includes('conjunto')) {
-          data.nombre = value
-        } else if (key.includes('cédula') || key.includes('cedula') || key.includes('cc')) {
-          data.cedula = value
-        } else if (key.includes('dirección') || key.includes('direccion')) {
-          data.direccion = value
-        } else if (key.includes('barrio')) {
-          data.barrio = value
-        } else if (key.includes('edificio') || key.includes('conjunto')) {
-          data.edificio = value
-        } else if (key.includes('ciudad')) {
-          data.ciudad = value
-        } else if (key.includes('celular') || key.includes('teléfono') || key.includes('telefono') || key.includes('tel')) {
-          data.telefono = value.replace(/\D/g, '') // Remove non-digits
-        } else if (key.includes('correo') || key.includes('email') || key.includes('mail')) {
-          data.email = value
-        } else if (key.includes('talla') || key.includes('size')) {
-          data.talla = value
-        } else if (key.includes('diseño') || key.includes('diseno') || key.includes('producto') || key.includes('referencia')) {
-          data.diseno = value
-        } else if (key.includes('color')) {
-          data.color = value
-        } else if (key.includes('cantidad')) {
-          data.cantidad = value
+        key = line.substring(0, colonIndex).trim().toLowerCase()
+        value = line.substring(colonIndex + 1).trim()
+      } else {
+        // Handle lines without colon (e.g., "Celular 3175134486")
+        const lineLower = line.toLowerCase().trim()
+        if (lineLower.startsWith('celular ') || lineLower.startsWith('cel ') || lineLower.startsWith('telefono ') || lineLower.startsWith('teléfono ')) {
+          const parts = line.trim().split(/\s+/)
+          key = parts[0].toLowerCase()
+          value = parts.slice(1).join(' ')
         }
+      }
+
+      if (!key) continue
+
+      // Map common field names
+      if (key.includes('nombre') && !key.includes('edificio') && !key.includes('conjunto')) {
+        data.nombre = value
+      } else if (key.includes('cédula') || key.includes('cedula') || key.includes('cc')) {
+        data.cedula = value
+      } else if (key.includes('dirección') || key.includes('direccion')) {
+        data.direccion = value
+      } else if (key.includes('barrio')) {
+        data.barrio = value
+      } else if (key.includes('edificio') || key.includes('conjunto')) {
+        data.edificio = value
+      } else if (key.includes('ciudad')) {
+        data.ciudad = value
+      } else if (key.includes('celular') || key.includes('teléfono') || key.includes('telefono') || key.includes('tel') || key.includes('cel')) {
+        data.telefono = value.replace(/\D/g, '') // Remove non-digits
+      } else if (key.includes('correo') || key.includes('email') || key.includes('mail')) {
+        data.email = value
+      } else if (key.includes('talla') || key.includes('size')) {
+        data.talla = value
+      } else if (key.includes('diseño') || key.includes('diseno') || key.includes('producto') || key.includes('referencia')) {
+        data.diseno = value
+      } else if (key.includes('color')) {
+        data.color = value
+      } else if (key.includes('cantidad')) {
+        data.cantidad = value
       }
     }
 
