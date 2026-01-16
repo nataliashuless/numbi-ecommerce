@@ -61,6 +61,24 @@ function formatCurrency(value: number): string {
 
 const COLORS = ['#96bf48', '#25D366', '#6366f1']
 
+function getGroupKey(dateStr: string, groupBy: 'day' | 'week' | 'month' | 'quarter'): string {
+  const date = new Date(dateStr + 'T12:00:00')
+  if (groupBy === 'month') {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+  } else if (groupBy === 'week') {
+    const tempDate = new Date(date.getTime())
+    tempDate.setHours(0, 0, 0, 0)
+    tempDate.setDate(tempDate.getDate() + 3 - (tempDate.getDay() + 6) % 7)
+    const week1 = new Date(tempDate.getFullYear(), 0, 4)
+    const weekNum = 1 + Math.round(((tempDate.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7)
+    return `${tempDate.getFullYear()}-W${String(weekNum).padStart(2, '0')}`
+  } else if (groupBy === 'quarter') {
+    const quarter = Math.floor(date.getMonth() / 3) + 1
+    return `${date.getFullYear()}-Q${quarter}`
+  }
+  return dateStr
+}
+
 export default function DashboardPage() {
   const [data, setData] = useState<ConsolidatedData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -69,6 +87,7 @@ export default function DashboardPage() {
     from: subDays(new Date(), 30),
     to: new Date(),
   })
+  const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month' | 'quarter'>('day')
 
   async function fetchData() {
     if (!dateRange?.from || !dateRange?.to) return
@@ -121,23 +140,25 @@ export default function DashboardPage() {
         unidades: shopifyStats.unidades + whatsappStats.unidades + tiendasStats.unidades,
       }
 
-      // Combine chart data
+      // Combine chart data with grouping
       const chartDataMap: Record<string, { shopify: number; whatsapp: number; tiendas: number }> = {}
 
       // Add Shopify data
       shopifyData?.chartData?.forEach((d: { date: string; sales: number }) => {
-        if (!chartDataMap[d.date]) {
-          chartDataMap[d.date] = { shopify: 0, whatsapp: 0, tiendas: 0 }
+        const key = getGroupKey(d.date, groupBy)
+        if (!chartDataMap[key]) {
+          chartDataMap[key] = { shopify: 0, whatsapp: 0, tiendas: 0 }
         }
-        chartDataMap[d.date].shopify = d.sales
+        chartDataMap[key].shopify += d.sales
       })
 
       // Add WhatsApp data
       whatsappData?.chartData?.forEach((d: { date: string; sales: number }) => {
-        if (!chartDataMap[d.date]) {
-          chartDataMap[d.date] = { shopify: 0, whatsapp: 0, tiendas: 0 }
+        const key = getGroupKey(d.date, groupBy)
+        if (!chartDataMap[key]) {
+          chartDataMap[key] = { shopify: 0, whatsapp: 0, tiendas: 0 }
         }
-        chartDataMap[d.date].whatsapp = d.sales
+        chartDataMap[key].whatsapp += d.sales
       })
 
       const chartData = Object.entries(chartDataMap)
@@ -162,7 +183,7 @@ export default function DashboardPage() {
     if (dateRange?.from && dateRange?.to) {
       fetchData()
     }
-  }, [dateRange])
+  }, [dateRange, groupBy])
 
   const pieData = data ? [
     { name: 'Shopify', value: data.shopify.ventas, color: '#96bf48' },
@@ -170,10 +191,20 @@ export default function DashboardPage() {
     { name: 'Tiendas', value: data.tiendas.ventas, color: '#6366f1' },
   ].filter(d => d.value > 0) : []
 
-  const formattedChartData = data?.chartData.map(d => ({
-    ...d,
-    displayDate: format(new Date(d.date), 'dd MMM', { locale: es })
-  })) || []
+  const formattedChartData = data?.chartData.map(d => {
+    let displayDate = d.date
+    if (groupBy === 'day') {
+      displayDate = format(new Date(d.date), 'dd MMM', { locale: es })
+    } else if (groupBy === 'week') {
+      displayDate = d.date // e.g., "2024-W01"
+    } else if (groupBy === 'month') {
+      const [year, month] = d.date.split('-')
+      displayDate = format(new Date(parseInt(year), parseInt(month) - 1, 1), 'MMM yyyy', { locale: es })
+    } else if (groupBy === 'quarter') {
+      displayDate = d.date // e.g., "2024-Q1"
+    }
+    return { ...d, displayDate }
+  }) || []
 
   return (
     <div className="min-h-screen bg-[#F5F7F4]">
@@ -350,8 +381,42 @@ export default function DashboardPage() {
             <div className="grid gap-4 md:grid-cols-3 mb-8">
               {/* Stacked Bar Chart */}
               <Card className="md:col-span-2">
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="text-lg">Ventas por Canal</CardTitle>
+                  <div className="flex gap-1">
+                    <Button
+                      variant={groupBy === 'day' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setGroupBy('day')}
+                      className={groupBy === 'day' ? 'bg-[#00D47F] text-[#233037] hover:bg-[#00D47F]/90' : ''}
+                    >
+                      Día
+                    </Button>
+                    <Button
+                      variant={groupBy === 'week' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setGroupBy('week')}
+                      className={groupBy === 'week' ? 'bg-[#00D47F] text-[#233037] hover:bg-[#00D47F]/90' : ''}
+                    >
+                      Semana
+                    </Button>
+                    <Button
+                      variant={groupBy === 'month' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setGroupBy('month')}
+                      className={groupBy === 'month' ? 'bg-[#00D47F] text-[#233037] hover:bg-[#00D47F]/90' : ''}
+                    >
+                      Mes
+                    </Button>
+                    <Button
+                      variant={groupBy === 'quarter' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setGroupBy('quarter')}
+                      className={groupBy === 'quarter' ? 'bg-[#00D47F] text-[#233037] hover:bg-[#00D47F]/90' : ''}
+                    >
+                      Trimestre
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="h-[300px]">
