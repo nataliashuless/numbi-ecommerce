@@ -64,6 +64,17 @@ export async function POST(request: Request) {
       return NextResponse.json(data)
 
     } else if (action === 'shipment') {
+      // Format phone number (ensure it has country code)
+      const formatPhone = (phone: string) => {
+        if (!phone) return '3000000000'
+        const cleaned = phone.replace(/\D/g, '')
+        // If starts with 57, remove it (API might add it)
+        if (cleaned.startsWith('57') && cleaned.length > 10) {
+          return cleaned.substring(2)
+        }
+        return cleaned || '3000000000'
+      }
+
       // Create shipment/guide
       const shipmentData = {
         idRate: Number(body.idRate), // Rate ID from quote (required)
@@ -84,20 +95,20 @@ export async function POST(request: Request) {
           lastName: ORIGIN.lastName,
           email: ORIGIN.email,
           phone: ORIGIN.phone,
-          suburb: 'Santa Barbara', // Barrio origen
-          crossStreet: 'Calle 124 con Carrera 19', // Calle de cruce
+          suburb: 'Santa Barbara',
+          crossStreet: 'Calle 124 con Carrera 19',
         },
         destination: {
           daneCode: body.daneCode,
           address: body.address,
-          company: body.company || '',
-          firstName: body.firstName,
-          lastName: body.lastName || '',
-          email: body.email || '',
-          phone: body.phone,
-          suburb: body.suburb || 'Centro', // Barrio destino (2-30 chars)
-          crossStreet: body.crossStreet || 'N/A', // Calle de cruce
-          reference: body.reference || '',
+          company: body.firstName || 'Cliente', // Use name as company if empty
+          firstName: body.firstName || 'Cliente',
+          lastName: body.lastName || 'Shuless',
+          email: body.email || 'cliente@shuless.co',
+          phone: formatPhone(body.phone),
+          suburb: body.suburb && body.suburb.length >= 2 ? body.suburb.substring(0, 30) : 'Barrio',
+          crossStreet: body.crossStreet || 'Calle principal',
+          reference: body.reference || 'N/A',
         },
       }
 
