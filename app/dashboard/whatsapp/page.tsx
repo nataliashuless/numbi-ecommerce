@@ -567,13 +567,18 @@ export default function WhatsAppPage() {
       if (quotesArray.length > 0) {
         const options: QuoteOption[] = quotesArray.map((q: unknown) => {
           const quote = q as Record<string, unknown>
+          // Calculate total price: flete + minimumInsurance (EnvioClick structure)
+          const flete = Number(quote.flete || 0)
+          const insurance = Number(quote.minimumInsurance || quote.insurance || 0)
+          const totalPrice = flete + insurance || Number(quote.price || quote.total || quote.amount || quote.cost || quote.rate || 0)
+
           return {
             carrier: String(quote.carrier || quote.carrierName || quote.carrier_name || quote.name || 'Transportadora'),
             carrierLogo: String(quote.carrierLogo || quote.carrier_logo || quote.logo || ''),
-            serviceId: String(quote.serviceId || quote.service_id || quote.id || ''),
-            serviceName: String(quote.serviceName || quote.service_name || quote.service || quote.type || 'Servicio estándar'),
+            serviceId: String(quote.idRate || quote.serviceId || quote.service_id || quote.id || ''),
+            serviceName: String(quote.product || quote.serviceName || quote.service_name || quote.service || quote.type || 'Servicio estándar'),
             deliveryDays: Number(quote.deliveryDays || quote.delivery_days || quote.days || quote.estimatedDays || quote.estimated_days || 3),
-            price: Number(quote.price || quote.total || quote.amount || quote.cost || quote.rate || 0),
+            price: totalPrice,
             currency: String(quote.currency || 'COP'),
           }
         })
