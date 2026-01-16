@@ -20,6 +20,8 @@ export async function GET(request: Request) {
     const params = new URLSearchParams()
     params.set('status', 'any')
     params.set('limit', '250')
+    // Include archived orders
+    params.set('archived_status', 'any')
 
     // Set date range - if no start date, use a very old date to get all orders
     const effectiveStartDate = startDate || '2020-01-01'
