@@ -49,6 +49,8 @@ import {
   ChevronRight,
   Truck,
   Clock,
+  MapPin,
+  ExternalLink,
 } from 'lucide-react'
 // ShoppingCart already imported
 import { DateRangePicker } from '@/components/ui/date-range-picker'
@@ -79,6 +81,21 @@ interface VentaWA {
   total: number
   notas: string | null
   enviado: boolean
+  envio_carrier: string | null
+  envio_tracking: string | null
+  envio_guia_url: string | null
+  envio_costo: number | null
+  envio_estado: string | null
+}
+
+interface QuoteOption {
+  carrier: string
+  carrierLogo: string
+  serviceId: string
+  serviceName: string
+  deliveryDays: number
+  price: number
+  currency: string
 }
 
 interface Stats {
@@ -129,6 +146,11 @@ export default function WhatsAppPage() {
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [importText, setImportText] = useState('')
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [shippingDialogOpen, setShippingDialogOpen] = useState(false)
+  const [selectedVentaForShipping, setSelectedVentaForShipping] = useState<VentaWA | null>(null)
+  const [quoteOptions, setQuoteOptions] = useState<QuoteOption[]>([])
+  const [quoteLoading, setQuoteLoading] = useState(false)
+  const [shipmentLoading, setShipmentLoading] = useState(false)
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: subDays(new Date(), 30),
     to: new Date(),
@@ -452,6 +474,162 @@ export default function WhatsAppPage() {
       }
       return next
     })
+  }
+
+  async function handleOpenShippingDialog(venta: VentaWA) {
+    setSelectedVentaForShipping(venta)
+    setQuoteOptions([])
+    setShippingDialogOpen(true)
+
+    // Auto-fetch quote
+    await handleGetQuote(venta)
+  }
+
+  async function handleGetQuote(venta: VentaWA) {
+    if (!venta.cliente_ciudad || !venta.cliente_direccion) {
+      alert('El pedido necesita ciudad y dirección para cotizar')
+      return
+    }
+
+    setQuoteLoading(true)
+    try {
+      // Get DANE code for city
+      const daneRes = await fetch(`/api/envioclick?city=${encodeURIComponent(venta.cliente_ciudad.toLowerCase())}`)
+      const daneData = await daneRes.json()
+
+      if (!daneData.daneCode) {
+        alert(`No se encontró código DANE para ${venta.cliente_ciudad}. Contacta soporte.`)
+        setQuoteLoading(false)
+        return
+      }
+
+      // Get quote
+      const quoteRes = await fetch('/api/envioclick?action=quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          daneCode: daneData.daneCode,
+          address: venta.cliente_direccion,
+          contentValue: venta.total,
+          description: `${venta.producto_nombre} ${venta.producto_variante || ''}`.trim(),
+        }),
+      })
+
+      const quoteData = await quoteRes.json()
+
+      if (quoteData.status === 'OK' && quoteData.data) {
+        // Parse quote options from response
+        const options: QuoteOption[] = (quoteData.data || []).map((q: {
+          carrier: string
+          carrierLogo?: string
+          serviceId: string
+          serviceName: string
+          deliveryDays: number
+          price: number
+          currency?: string
+        }) => ({
+          carrier: q.carrier,
+          carrierLogo: q.carrierLogo || '',
+          serviceId: q.serviceId,
+          serviceName: q.serviceName,
+          deliveryDays: q.deliveryDays,
+          price: q.price,
+          currency: q.currency || 'COP',
+        }))
+        setQuoteOptions(options)
+      } else {
+        console.error('Quote error:', quoteData)
+        alert('Error al cotizar: ' + (quoteData.status_messages?.error || 'Intenta de nuevo'))
+      }
+    } catch (error) {
+      console.error('Error getting quote:', error)
+      alert('Error al conectar con EnvioClick')
+    } finally {
+      setQuoteLoading(false)
+    }
+  }
+
+  async function handleCreateShipment(option: QuoteOption) {
+    if (!selectedVentaForShipping) return
+
+    const venta = selectedVentaForShipping
+
+    if (!confirm(`¿Generar guía con ${option.carrier} por ${formatCurrency(option.price)}?`)) {
+      return
+    }
+
+    setShipmentLoading(true)
+    try {
+      // Get DANE code
+      const daneRes = await fetch(`/api/envioclick?city=${encodeURIComponent(venta.cliente_ciudad!.toLowerCase())}`)
+      const daneData = await daneRes.json()
+
+      // Create shipment
+      const shipmentRes = await fetch('/api/envioclick?action=shipment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          carrier: option.carrier,
+          serviceId: option.serviceId,
+          daneCode: daneData.daneCode,
+          address: venta.cliente_direccion,
+          firstName: venta.cliente_nombre?.split(' ')[0] || 'Cliente',
+          lastName: venta.cliente_nombre?.split(' ').slice(1).join(' ') || '',
+          phone: venta.cliente_telefono || '',
+          email: venta.cliente_email || '',
+          contentValue: venta.total,
+          description: `${venta.producto_nombre} ${venta.producto_variante || ''}`.trim(),
+        }),
+      })
+
+      const shipmentData = await shipmentRes.json()
+
+      if (shipmentData.status === 'OK' && shipmentData.data) {
+        // Update order with shipping info
+        const updateRes = await fetch(`/api/whatsapp?id=${venta.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            envio_carrier: option.carrier,
+            envio_tracking: shipmentData.data.tracker,
+            envio_guia_url: shipmentData.data.url,
+            envio_costo: option.price,
+            envio_estado: 'Pendiente de Recolección',
+            enviado: false,
+          }),
+        })
+
+        if (updateRes.ok) {
+          // Update local state
+          setVentas(prev => prev.map(v =>
+            v.id === venta.id ? {
+              ...v,
+              envio_carrier: option.carrier,
+              envio_tracking: shipmentData.data.tracker,
+              envio_guia_url: shipmentData.data.url,
+              envio_costo: option.price,
+              envio_estado: 'Pendiente de Recolección',
+            } : v
+          ))
+
+          alert(`Guía generada exitosamente!\nTracking: ${shipmentData.data.tracker}`)
+          setShippingDialogOpen(false)
+
+          // Open PDF in new tab
+          if (shipmentData.data.url) {
+            window.open(shipmentData.data.url, '_blank')
+          }
+        }
+      } else {
+        console.error('Shipment error:', shipmentData)
+        alert('Error al generar guía: ' + JSON.stringify(shipmentData.status_messages || 'Error desconocido'))
+      }
+    } catch (error) {
+      console.error('Error creating shipment:', error)
+      alert('Error al conectar con EnvioClick')
+    } finally {
+      setShipmentLoading(false)
+    }
   }
 
   const formattedChartData = chartData.map(d => ({
@@ -936,6 +1114,55 @@ Diseño: chocolate`}
                                     </div>
                                   )}
                                 </div>
+
+                                {/* Shipping section */}
+                                <div className="mt-4 pt-4 border-t">
+                                  {venta.envio_tracking ? (
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-4">
+                                        <div>
+                                          <span className="text-[#71828A] text-sm">Transportadora:</span>
+                                          <p className="font-medium">{venta.envio_carrier}</p>
+                                        </div>
+                                        <div>
+                                          <span className="text-[#71828A] text-sm">Tracking:</span>
+                                          <p className="font-medium">{venta.envio_tracking}</p>
+                                        </div>
+                                        <div>
+                                          <span className="text-[#71828A] text-sm">Costo envío:</span>
+                                          <p className="font-medium">{formatCurrency(venta.envio_costo || 0)}</p>
+                                        </div>
+                                        <div>
+                                          <span className="text-[#71828A] text-sm">Estado:</span>
+                                          <p className="font-medium">{venta.envio_estado}</p>
+                                        </div>
+                                      </div>
+                                      {venta.envio_guia_url && (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => window.open(venta.envio_guia_url!, '_blank')}
+                                        >
+                                          <ExternalLink className="h-4 w-4 mr-2" />
+                                          Ver Guía
+                                        </Button>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[#71828A] text-sm">Sin guía de envío generada</span>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleOpenShippingDialog(venta)}
+                                        disabled={!venta.cliente_ciudad || !venta.cliente_direccion}
+                                      >
+                                        <MapPin className="h-4 w-4 mr-2" />
+                                        Cotizar Envío
+                                      </Button>
+                                    </div>
+                                  )}
+                                </div>
                               </TableCell>
                             </TableRow>
                           )}
@@ -948,6 +1175,72 @@ Diseño: chocolate`}
             </Card>
           </>
         )}
+
+        {/* Shipping Quote Dialog */}
+        <Dialog open={shippingDialogOpen} onOpenChange={setShippingDialogOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Cotizar Envío - EnvioClick</DialogTitle>
+            </DialogHeader>
+            {selectedVentaForShipping && (
+              <div className="space-y-4">
+                <div className="bg-gray-50 p-3 rounded-lg text-sm">
+                  <p><strong>Destino:</strong> {selectedVentaForShipping.cliente_ciudad}</p>
+                  <p><strong>Dirección:</strong> {selectedVentaForShipping.cliente_direccion}</p>
+                  <p><strong>Cliente:</strong> {selectedVentaForShipping.cliente_nombre}</p>
+                  <p><strong>Valor declarado:</strong> {formatCurrency(selectedVentaForShipping.total)}</p>
+                </div>
+
+                {quoteLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-[#00D47F] mr-2" />
+                    <span className="text-[#71828A]">Cotizando...</span>
+                  </div>
+                ) : quoteOptions.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-[#71828A]">Selecciona una opción:</p>
+                    {quoteOptions.map((option, index) => (
+                      <div
+                        key={index}
+                        className="border rounded-lg p-3 hover:border-[#00D47F] cursor-pointer transition-colors"
+                        onClick={() => !shipmentLoading && handleCreateShipment(option)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">{option.carrier}</p>
+                            <p className="text-sm text-[#71828A]">{option.serviceName}</p>
+                            <p className="text-xs text-[#71828A]">{option.deliveryDays} días hábiles</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-lg text-[#00D47F]">
+                              {formatCurrency(option.price)}
+                            </p>
+                            {shipmentLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <p className="text-xs text-[#71828A]">Click para generar</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-[#71828A]">
+                    <p>No hay cotizaciones disponibles.</p>
+                    <p className="text-sm">Verifica la ciudad y dirección.</p>
+                  </div>
+                )}
+
+                <div className="flex justify-end">
+                  <Button variant="outline" onClick={() => setShippingDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   )
