@@ -1,4 +1,5 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
 export async function createClient() {
@@ -27,6 +28,14 @@ export async function createClient() {
   )
 }
 
+// Service role client to bypass RLS for server-side profile checks
+function getServiceClient() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
+
 // Helper to get current user
 export async function getUser() {
   const supabase = await createClient()
@@ -34,14 +43,16 @@ export async function getUser() {
   return user
 }
 
-// Helper to get user profile with role
+// Helper to get user profile with role (uses service client to bypass RLS)
 export async function getUserProfile() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) return null
 
-  const { data: profile } = await supabase
+  // Use service client to bypass RLS
+  const serviceClient = getServiceClient()
+  const { data: profile } = await serviceClient
     .from('profiles')
     .select('*')
     .eq('id', user.id)
