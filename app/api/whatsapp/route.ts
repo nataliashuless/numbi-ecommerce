@@ -95,6 +95,29 @@ export async function POST(request: Request) {
   return NextResponse.json(data)
 }
 
+export async function PATCH(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const id = searchParams.get('id')
+  const body = await request.json()
+
+  if (!id) {
+    return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
+  }
+
+  const { data, error } = await supabase
+    .from('ventas_whatsapp')
+    .update(body)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json(data)
+}
+
 export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')

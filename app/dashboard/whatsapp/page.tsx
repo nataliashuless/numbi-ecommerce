@@ -45,6 +45,10 @@ import {
   Store,
   Boxes,
   FileText,
+  ChevronDown,
+  ChevronRight,
+  Truck,
+  Clock,
 } from 'lucide-react'
 // ShoppingCart already imported
 import { DateRangePicker } from '@/components/ui/date-range-picker'
@@ -63,6 +67,10 @@ interface VentaWA {
   fecha: string
   cliente_nombre: string | null
   cliente_telefono: string | null
+  cliente_cedula: string | null
+  cliente_email: string | null
+  cliente_direccion: string | null
+  cliente_ciudad: string | null
   producto_nombre: string
   producto_variante: string | null
   producto_sku: string | null
@@ -70,6 +78,7 @@ interface VentaWA {
   precio_unitario: number
   total: number
   notas: string | null
+  enviado: boolean
 }
 
 interface Stats {
@@ -119,6 +128,7 @@ export default function WhatsAppPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [importText, setImportText] = useState('')
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: subDays(new Date(), 30),
     to: new Date(),
@@ -199,12 +209,37 @@ export default function WhatsAppPage() {
       direccionCompleta += direccionCompleta ? `, ${parsed.edificio}` : parsed.edificio
     }
 
-    // Build product info for notes
+    // Try to match product based on diseño/producto field
+    let matchedProductId = ''
+    let matchedVariantId = ''
+    const searchTerm = (parsed.diseno || parsed.producto || '').toLowerCase()
+
+    if (searchTerm && products.length > 0) {
+      // First try exact match on product title
+      for (const product of products) {
+        if (product.title.toLowerCase().includes(searchTerm)) {
+          matchedProductId = product.id.toString()
+          // If talla is specified, try to match variant
+          if (parsed.talla) {
+            const matchedVariant = product.variants.find(v =>
+              v.title.toLowerCase().includes(parsed.talla!.toLowerCase())
+            )
+            if (matchedVariant) {
+              matchedVariantId = matchedVariant.id.toString()
+            }
+          }
+          break
+        }
+      }
+    }
+
+    // Build additional notes (only for info not matched to product)
     const productInfo: string[] = []
-    if (parsed.talla) productInfo.push(`Talla: ${parsed.talla}`)
-    if (parsed.diseno) productInfo.push(`Diseño: ${parsed.diseno}`)
+    if (parsed.talla && !matchedVariantId) productInfo.push(`Talla: ${parsed.talla}`)
+    if (parsed.diseno && !matchedProductId) productInfo.push(`Diseño: ${parsed.diseno}`)
     if (parsed.color) productInfo.push(`Color: ${parsed.color}`)
 
+    // Set form data
     setFormData(prev => ({
       ...prev,
       cliente_nombre: parsed.nombre || prev.cliente_nombre,
@@ -216,6 +251,18 @@ export default function WhatsAppPage() {
       cantidad: parsed.cantidad ? parseInt(parsed.cantidad) || 1 : prev.cantidad,
       notas: productInfo.length > 0 ? productInfo.join(', ') : prev.notas,
     }))
+
+    // Set matched product/variant if found
+    if (matchedProductId) {
+      setSelectedProduct(matchedProductId)
+      handleProductChange(matchedProductId)
+      if (matchedVariantId) {
+        setTimeout(() => {
+          setSelectedVariant(matchedVariantId)
+          handleVariantChange(matchedVariantId)
+        }, 100)
+      }
+    }
 
     setImportDialogOpen(false)
     setDialogOpen(true)
@@ -357,6 +404,35 @@ export default function WhatsAppPage() {
     } catch (error) {
       console.error('Error deleting sale:', error)
     }
+  }
+
+  async function handleToggleEnviado(id: string, currentValue: boolean) {
+    try {
+      const res = await fetch(`/api/whatsapp?id=${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enviado: !currentValue }),
+      })
+      if (res.ok) {
+        setVentas(prev => prev.map(v =>
+          v.id === id ? { ...v, enviado: !currentValue } : v
+        ))
+      }
+    } catch (error) {
+      console.error('Error updating enviado:', error)
+    }
+  }
+
+  function toggleRowExpanded(id: string) {
+    setExpandedRows(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
   }
 
   const formattedChartData = chartData.map(d => ({
@@ -738,50 +814,113 @@ Diseño: chocolate`}
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-8"></TableHead>
                         <TableHead>Fecha</TableHead>
                         <TableHead>Producto</TableHead>
                         <TableHead>Cliente</TableHead>
                         <TableHead className="text-center">Cant.</TableHead>
-                        <TableHead className="text-right">Precio Unit.</TableHead>
                         <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="text-center">Enviado</TableHead>
                         <TableHead></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {ventas.map((venta) => (
-                        <TableRow key={venta.id}>
-                          <TableCell className="text-[#71828A]">
-                            {format(new Date(venta.fecha), 'dd MMM yyyy', { locale: es })}
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium">{venta.producto_nombre}</div>
-                            {venta.producto_variante && (
-                              <div className="text-xs text-[#71828A]">{venta.producto_variante}</div>
-                            )}
-                            {venta.producto_sku && (
-                              <div className="text-xs text-[#71828A]">SKU: {venta.producto_sku}</div>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {venta.cliente_nombre || '-'}
-                            {venta.cliente_telefono && (
-                              <div className="text-xs text-[#71828A]">{venta.cliente_telefono}</div>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-center">{venta.cantidad}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(venta.precio_unitario)}</TableCell>
-                          <TableCell className="text-right font-medium">{formatCurrency(venta.total)}</TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDelete(venta.id)}
-                              className="text-red-500 hover:text-red-700"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
+                        <>
+                          <TableRow key={venta.id} className="cursor-pointer hover:bg-gray-50">
+                            <TableCell onClick={() => toggleRowExpanded(venta.id)}>
+                              {expandedRows.has(venta.id) ? (
+                                <ChevronDown className="h-4 w-4 text-[#71828A]" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-[#71828A]" />
+                              )}
+                            </TableCell>
+                            <TableCell className="text-[#71828A]" onClick={() => toggleRowExpanded(venta.id)}>
+                              {format(new Date(venta.fecha), 'dd MMM yyyy', { locale: es })}
+                            </TableCell>
+                            <TableCell onClick={() => toggleRowExpanded(venta.id)}>
+                              <div className="font-medium">{venta.producto_nombre}</div>
+                              {venta.producto_variante && (
+                                <div className="text-xs text-[#71828A]">{venta.producto_variante}</div>
+                              )}
+                            </TableCell>
+                            <TableCell onClick={() => toggleRowExpanded(venta.id)}>
+                              {venta.cliente_nombre || '-'}
+                            </TableCell>
+                            <TableCell className="text-center" onClick={() => toggleRowExpanded(venta.id)}>
+                              {venta.cantidad}
+                            </TableCell>
+                            <TableCell className="text-right font-medium" onClick={() => toggleRowExpanded(venta.id)}>
+                              {formatCurrency(venta.total)}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleToggleEnviado(venta.id, venta.enviado)}
+                                className={venta.enviado ? 'text-green-600 hover:text-green-700' : 'text-orange-500 hover:text-orange-600'}
+                              >
+                                {venta.enviado ? (
+                                  <Truck className="h-4 w-4" />
+                                ) : (
+                                  <Clock className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDelete(venta.id)}
+                                className="text-red-500 hover:text-red-700"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                          {expandedRows.has(venta.id) && (
+                            <TableRow key={`${venta.id}-detail`} className="bg-gray-50">
+                              <TableCell colSpan={8} className="py-4">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                  <div>
+                                    <span className="text-[#71828A]">Teléfono:</span>
+                                    <p className="font-medium">{venta.cliente_telefono || '-'}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-[#71828A]">Cédula:</span>
+                                    <p className="font-medium">{venta.cliente_cedula || '-'}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-[#71828A]">Email:</span>
+                                    <p className="font-medium">{venta.cliente_email || '-'}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-[#71828A]">Ciudad:</span>
+                                    <p className="font-medium">{venta.cliente_ciudad || '-'}</p>
+                                  </div>
+                                  <div className="md:col-span-2">
+                                    <span className="text-[#71828A]">Dirección:</span>
+                                    <p className="font-medium">{venta.cliente_direccion || '-'}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-[#71828A]">SKU:</span>
+                                    <p className="font-medium">{venta.producto_sku || '-'}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-[#71828A]">Precio Unitario:</span>
+                                    <p className="font-medium">{formatCurrency(venta.precio_unitario)}</p>
+                                  </div>
+                                  {venta.notas && (
+                                    <div className="md:col-span-4">
+                                      <span className="text-[#71828A]">Notas:</span>
+                                      <p className="font-medium">{venta.notas}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </>
                       ))}
                     </TableBody>
                   </Table>
