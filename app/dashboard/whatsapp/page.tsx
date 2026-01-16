@@ -224,23 +224,27 @@ export default function WhatsAppPage() {
     }
 
     // Try to match product based on diseño/producto field
-    let matchedProductId = ''
-    let matchedVariantId = ''
+    let matchedProduct: Product | null = null
+    let matchedVariant: ProductVariant | null = null
     const searchTerm = (parsed.diseno || parsed.producto || '').toLowerCase()
 
     if (searchTerm && products.length > 0) {
       // First try exact match on product title
       for (const product of products) {
         if (product.title.toLowerCase().includes(searchTerm)) {
-          matchedProductId = product.id.toString()
+          matchedProduct = product
           // If talla is specified, try to match variant
           if (parsed.talla) {
-            const matchedVariant = product.variants.find(v =>
+            const variant = product.variants.find(v =>
               v.title.toLowerCase().includes(parsed.talla!.toLowerCase())
             )
-            if (matchedVariant) {
-              matchedVariantId = matchedVariant.id.toString()
+            if (variant) {
+              matchedVariant = variant
             }
+          }
+          // If no talla match but product has only one variant, use it
+          if (!matchedVariant && product.variants.length === 1) {
+            matchedVariant = product.variants[0]
           }
           break
         }
@@ -249,11 +253,11 @@ export default function WhatsAppPage() {
 
     // Build additional notes (only for info not matched to product)
     const productInfo: string[] = []
-    if (parsed.talla && !matchedVariantId) productInfo.push(`Talla: ${parsed.talla}`)
-    if (parsed.diseno && !matchedProductId) productInfo.push(`Diseño: ${parsed.diseno}`)
+    if (parsed.talla && !matchedVariant) productInfo.push(`Talla: ${parsed.talla}`)
+    if (parsed.diseno && !matchedProduct) productInfo.push(`Diseño: ${parsed.diseno}`)
     if (parsed.color) productInfo.push(`Color: ${parsed.color}`)
 
-    // Set form data
+    // Set form data with all matched info including price
     setFormData(prev => ({
       ...prev,
       cliente_nombre: parsed.nombre || prev.cliente_nombre,
@@ -264,17 +268,18 @@ export default function WhatsAppPage() {
       cliente_ciudad: parsed.ciudad || prev.cliente_ciudad,
       cantidad: parsed.cantidad ? parseInt(parsed.cantidad) || 1 : prev.cantidad,
       notas: productInfo.length > 0 ? productInfo.join(', ') : prev.notas,
+      // Set product info if matched
+      producto_nombre: matchedProduct?.title || prev.producto_nombre,
+      producto_variante: matchedVariant && matchedVariant.title !== 'Default Title' ? matchedVariant.title : prev.producto_variante,
+      producto_sku: matchedVariant?.sku || prev.producto_sku,
+      precio_unitario: matchedVariant?.price || prev.precio_unitario,
     }))
 
-    // Set matched product/variant if found
-    if (matchedProductId) {
-      setSelectedProduct(matchedProductId)
-      handleProductChange(matchedProductId)
-      if (matchedVariantId) {
-        setTimeout(() => {
-          setSelectedVariant(matchedVariantId)
-          handleVariantChange(matchedVariantId)
-        }, 100)
+    // Set selected product/variant for the dropdowns
+    if (matchedProduct) {
+      setSelectedProduct(matchedProduct.id.toString())
+      if (matchedVariant) {
+        setSelectedVariant(matchedVariant.id.toString())
       }
     }
 
