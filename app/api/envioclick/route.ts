@@ -5,13 +5,13 @@ const API_KEY = process.env.ENVIOCLICKPRO_API_KEY
 
 // Origin address (your warehouse/store)
 const ORIGIN = {
-  daneCode: '11001000', // Bogotá - change if needed
-  address: 'Calle 98 62-37', // Your address
-  company: 'Numbi',
-  firstName: 'Numbi',
-  lastName: 'Store',
-  email: 'ventas@numbi.co',
-  phone: '3001234567',
+  daneCode: '11001000', // Bogotá
+  address: 'Calle 124 #19-46',
+  company: 'Shuless',
+  firstName: 'Carolina',
+  lastName: 'Castillo',
+  email: 'calzadoshuless@gmail.com',
+  phone: '3125317939',
 }
 
 // POST /api/envioclick - Quote or create shipment
