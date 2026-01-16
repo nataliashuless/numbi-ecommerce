@@ -616,8 +616,7 @@ export default function WhatsAppPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          carrier: option.carrier,
-          serviceId: option.serviceId,
+          idRate: option.serviceId, // serviceId contains the idRate from quote
           daneCode: daneData.daneCode,
           address: venta.cliente_direccion,
           firstName: venta.cliente_nombre?.split(' ')[0] || 'Cliente',

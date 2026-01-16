@@ -66,15 +66,14 @@ export async function POST(request: Request) {
     } else if (action === 'shipment') {
       // Create shipment/guide
       const shipmentData = {
-        carrier: body.carrier, // Selected carrier from quote
-        serviceId: body.serviceId, // Service ID from quote
+        idRate: Number(body.idRate), // Rate ID from quote (required)
         packages: [{
           weight: body.weight || 1,
           height: body.height || 10,
           width: body.width || 10,
           length: body.length || 15,
         }],
-        description: body.description || 'Producto Numbi',
+        description: body.description || 'Producto Shuless',
         contentValue: body.contentValue || 100000,
         origin: {
           daneCode: ORIGIN.daneCode,
@@ -98,6 +97,8 @@ export async function POST(request: Request) {
         },
       }
 
+      console.log('EnvioClick Shipment Request:', JSON.stringify(shipmentData, null, 2))
+
       const response = await fetch(`${API_BASE}/shipment`, {
         method: 'POST',
         headers: {
@@ -108,6 +109,7 @@ export async function POST(request: Request) {
       })
 
       const data = await response.json()
+      console.log('EnvioClick Shipment Response:', JSON.stringify(data, null, 2))
       return NextResponse.json(data)
 
     } else if (action === 'track') {
