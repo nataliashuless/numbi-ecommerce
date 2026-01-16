@@ -89,8 +89,8 @@ export async function POST(request: Request) {
       const shipmentData: Record<string, unknown> = {
         idRate: Number(body.idRate),
         myShipmentReference: truncate(`ORD-${Date.now()}`, 28), // Required: min 2, max 28
-        requestPickup: false,
-        pickupDate: pickupDate, // Required: yyyy-mm-dd
+        requestPickup: true, // Solicitar recolección en dirección de origen
+        pickupDate: pickupDate, // Required: yyyy-mm-dd (mañana)
         insurance: false, // Required boolean
         packages: [{
           weight: body.weight || 1,
