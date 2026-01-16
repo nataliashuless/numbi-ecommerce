@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ShoppingBag, Store, BarChart3, Zap } from 'lucide-react'
+import { ShoppingBag, Store, BarChart3, Zap, MessageCircle, Truck, Users } from 'lucide-react'
 
 export default function HomePage() {
   return (
@@ -13,11 +13,18 @@ export default function HomePage() {
             <span className="text-2xl font-semibold text-white tracking-tight">numbi</span>
             <span className="text-xs text-[#00D47F] font-medium bg-[#334047] px-2 py-1 rounded">E-commerce</span>
           </div>
-          <Link href="/api/auth/shopify">
-            <Button className="bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037] font-medium">
-              Conectar Tienda
-            </Button>
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/login">
+              <Button variant="ghost" className="text-white hover:text-[#00D47F] hover:bg-[#334047]">
+                Iniciar Sesión
+              </Button>
+            </Link>
+            <Link href="/register">
+              <Button className="bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037] font-medium">
+                Crear Cuenta
+              </Button>
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -28,28 +35,63 @@ export default function HomePage() {
             Centraliza todas tus ventas en un solo lugar
           </h1>
           <p className="text-xl text-[#99C3D2] mb-8">
-            Conecta tu tienda Shopify, Mercado Libre y más.
-            Visualiza ventas, sincroniza inventario y genera facturas automáticamente.
+            Conecta tu tienda Shopify, gestiona ventas por WhatsApp, controla consignaciones en tiendas de terceros y genera guías de envío automáticamente.
           </p>
           <p className="text-[#6FDAAA] font-medium mb-8">
             Gratis para clientes de Numbi Contabilidad
           </p>
-          <Link href="/api/auth/shopify">
-            <Button size="lg" className="bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037] font-semibold text-lg px-8">
-              <Store className="mr-2 h-5 w-5" />
-              Conectar Shopify
-            </Button>
-          </Link>
+          <div className="flex justify-center gap-4">
+            <Link href="/register">
+              <Button size="lg" className="bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037] font-semibold text-lg px-8">
+                Comenzar Gratis
+              </Button>
+            </Link>
+            <Link href="/login">
+              <Button size="lg" variant="outline" className="border-[#00D47F] text-[#00D47F] hover:bg-[#00D47F]/10 font-semibold text-lg px-8">
+                Ya tengo cuenta
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* Features */}
-        <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
           <Card className="bg-[#334047] border-[#334047]">
             <CardHeader>
-              <ShoppingBag className="h-10 w-10 text-[#00D47F] mb-2" />
-              <CardTitle className="text-white">Todas tus órdenes</CardTitle>
+              <Store className="h-10 w-10 text-[#00D47F] mb-2" />
+              <CardTitle className="text-white">Shopify integrado</CardTitle>
               <CardDescription className="text-[#99C3D2]">
-                Ve todas las ventas de Shopify, Mercado Libre y más en un dashboard unificado.
+                Conecta tu tienda Shopify y visualiza todas tus órdenes, productos e inventario.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card className="bg-[#334047] border-[#334047]">
+            <CardHeader>
+              <MessageCircle className="h-10 w-10 text-[#25D366] mb-2" />
+              <CardTitle className="text-white">Ventas WhatsApp</CardTitle>
+              <CardDescription className="text-[#99C3D2]">
+                Registra ventas manuales de WhatsApp e importa pedidos con un solo click.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card className="bg-[#334047] border-[#334047]">
+            <CardHeader>
+              <Users className="h-10 w-10 text-[#00D47F] mb-2" />
+              <CardTitle className="text-white">Tiendas de terceros</CardTitle>
+              <CardDescription className="text-[#99C3D2]">
+                Controla consignaciones, comisiones y liquidaciones con tiendas aliadas.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card className="bg-[#334047] border-[#334047]">
+            <CardHeader>
+              <Truck className="h-10 w-10 text-[#00D47F] mb-2" />
+              <CardTitle className="text-white">Envíos con EnvioClick</CardTitle>
+              <CardDescription className="text-[#99C3D2]">
+                Cotiza y genera guías de envío con Coordinadora, Servientrega y más.
               </CardDescription>
             </CardHeader>
           </Card>
@@ -57,19 +99,19 @@ export default function HomePage() {
           <Card className="bg-[#334047] border-[#334047]">
             <CardHeader>
               <BarChart3 className="h-10 w-10 text-[#00D47F] mb-2" />
-              <CardTitle className="text-white">Métricas en tiempo real</CardTitle>
+              <CardTitle className="text-white">Métricas consolidadas</CardTitle>
               <CardDescription className="text-[#99C3D2]">
-                Ventas totales, productos más vendidos, tendencias y más.
+                Dashboard unificado con ventas de todos tus canales en tiempo real.
               </CardDescription>
             </CardHeader>
           </Card>
 
           <Card className="bg-[#334047] border-[#334047]">
             <CardHeader>
-              <Zap className="h-10 w-10 text-[#00D47F] mb-2" />
-              <CardTitle className="text-white">Facturación automática</CardTitle>
+              <ShoppingBag className="h-10 w-10 text-[#00D47F] mb-2" />
+              <CardTitle className="text-white">Inventario unificado</CardTitle>
               <CardDescription className="text-[#99C3D2]">
-                Genera facturas en Siigo o Alegra automáticamente con cada venta.
+                Controla stock de Shopify, consignaciones y productos disponibles.
               </CardDescription>
             </CardHeader>
           </Card>
@@ -77,7 +119,7 @@ export default function HomePage() {
 
         {/* Coming Soon */}
         <div className="mt-16 text-center">
-          <p className="text-[#71828A] text-sm">Próximamente: Mercado Libre • Linio • Falabella • WooCommerce</p>
+          <p className="text-[#71828A] text-sm">Próximamente: Mercado Libre • Facturación Electrónica • WooCommerce</p>
         </div>
       </main>
     </div>
