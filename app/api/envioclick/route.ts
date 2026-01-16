@@ -67,6 +67,7 @@ export async function POST(request: Request) {
       // Create shipment/guide
       const shipmentData = {
         idRate: Number(body.idRate), // Rate ID from quote (required)
+        requestPickup: false, // No solicitar recolección automática
         packages: [{
           weight: body.weight || 1,
           height: body.height || 10,
@@ -83,6 +84,8 @@ export async function POST(request: Request) {
           lastName: ORIGIN.lastName,
           email: ORIGIN.email,
           phone: ORIGIN.phone,
+          suburb: 'Santa Barbara', // Barrio origen
+          crossStreet: 'Calle 124 con Carrera 19', // Calle de cruce
         },
         destination: {
           daneCode: body.daneCode,
@@ -92,7 +95,8 @@ export async function POST(request: Request) {
           lastName: body.lastName || '',
           email: body.email || '',
           phone: body.phone,
-          suburb: body.suburb || '',
+          suburb: body.suburb || 'Centro', // Barrio destino (2-30 chars)
+          crossStreet: body.crossStreet || 'N/A', // Calle de cruce
           reference: body.reference || '',
         },
       }
