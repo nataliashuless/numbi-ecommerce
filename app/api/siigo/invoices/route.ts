@@ -16,22 +16,41 @@ export async function GET(request: Request) {
 
   try {
     const invoices = await listInvoices(startDate, endDate)
+    const supabase = getAdminClient()
 
     const customerIds = invoices.map(i => i.customer?.id).filter(Boolean) as string[]
     const namesMap = await getCustomersByIds(customerIds)
 
-    const supabase = getAdminClient()
     const { data: waVentas } = await supabase
       .from('ventas_whatsapp')
       .select('siigo_invoice_id')
       .not('siigo_invoice_id', 'is', null)
     const whatsappInvoiceIds = new Set((waVentas || []).map(v => v.siigo_invoice_id))
 
-    const enriched = invoices.map(inv => ({
-      ...inv,
-      customer_name: namesMap.get(inv.customer?.id) || null,
-      source: whatsappInvoiceIds.has(inv.id) ? 'whatsapp' : 'unknown',
-    }))
+    const { data: tiendasWithSiigo } = await supabase
+      .from('tiendas_terceros')
+      .select('id, nombre, siigo_customer_identification')
+      .not('siigo_customer_identification', 'is', null)
+    const tiendasByNit = new Map<string, { id: string; nombre: string }>()
+    for (const t of (tiendasWithSiigo || []) as Array<{ id: string; nombre: string; siigo_customer_identification: string }>) {
+      tiendasByNit.set(t.siigo_customer_identification, { id: t.id, nombre: t.nombre })
+    }
+
+    const enriched = invoices.map(inv => {
+      const tiendaMatch = inv.customer?.identification
+        ? tiendasByNit.get(inv.customer.identification)
+        : undefined
+      let source: 'whatsapp' | 'tienda' | 'unknown' = 'unknown'
+      if (whatsappInvoiceIds.has(inv.id)) source = 'whatsapp'
+      else if (tiendaMatch) source = 'tienda'
+      return {
+        ...inv,
+        customer_name: namesMap.get(inv.customer?.id) || null,
+        source,
+        tienda_id: tiendaMatch?.id || null,
+        tienda_nombre: tiendaMatch?.nombre || null,
+      }
+    })
 
     return NextResponse.json({
       invoices: enriched,

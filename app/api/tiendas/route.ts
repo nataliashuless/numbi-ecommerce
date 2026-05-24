@@ -88,6 +88,7 @@ export async function POST(request: Request) {
       comision_fijo: body.comision_fijo || null,
       notas: body.notas || null,
       activa: true,
+      siigo_customer_identification: body.siigo_customer_identification || null,
     }])
     .select()
     .single()
@@ -120,6 +121,7 @@ export async function PUT(request: Request) {
     updated_at: new Date().toISOString(),
   }
 
+  if ('siigo_customer_identification' in body) updateData.siigo_customer_identification = body.siigo_customer_identification || null
   if ('siigo_cost_center_id' in body) updateData.siigo_cost_center_id = body.siigo_cost_center_id
   if ('siigo_cost_center_name' in body) updateData.siigo_cost_center_name = body.siigo_cost_center_name
   if ('siigo_seller_id' in body) updateData.siigo_seller_id = body.siigo_seller_id

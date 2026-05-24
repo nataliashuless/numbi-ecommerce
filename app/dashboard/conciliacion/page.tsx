@@ -51,16 +51,19 @@ interface SiigoInvoice {
   total: number
   customer: { id: string; identification: string }
   customer_name: string | null
-  source: 'whatsapp' | 'unknown'
+  source: 'whatsapp' | 'tienda' | 'unknown'
+  tienda_id: string | null
+  tienda_nombre: string | null
   observations: string
 }
 
 type MatchStatus = 'matched' | 'shopify_only' | 'siigo_only'
-type InvoiceSource = 'shopify' | 'whatsapp' | 'otra'
+type InvoiceSource = 'shopify' | 'whatsapp' | 'tienda' | 'otra'
 
 interface Row {
   status: MatchStatus
-  source: InvoiceSource | 'shopify'
+  source: InvoiceSource
+  tiendaNombre: string | null
   date: string
   orderNumber: number | null
   shopify: ShopifyOrder | null
@@ -148,6 +151,7 @@ export default function ConciliacionPage() {
         out.push({
           status: 'matched',
           source: 'shopify',
+          tiendaNombre: null,
           date: order.createdAt.slice(0, 10),
           orderNumber: order.orderNumber,
           shopify: order,
@@ -159,6 +163,7 @@ export default function ConciliacionPage() {
         out.push({
           status: 'shopify_only',
           source: 'shopify',
+          tiendaNombre: null,
           date: order.createdAt.slice(0, 10),
           orderNumber: order.orderNumber,
           shopify: order,
@@ -171,10 +176,13 @@ export default function ConciliacionPage() {
 
     for (const inv of invoices) {
       if (usedInvoiceIds.has(inv.id)) continue
-      const source: InvoiceSource = inv.source === 'whatsapp' ? 'whatsapp' : 'otra'
+      let source: InvoiceSource = 'otra'
+      if (inv.source === 'whatsapp') source = 'whatsapp'
+      else if (inv.source === 'tienda') source = 'tienda'
       out.push({
         status: 'siigo_only',
         source,
+        tiendaNombre: inv.tienda_nombre,
         date: inv.date,
         orderNumber: extractOrderNumber(inv.observations),
         shopify: null,
@@ -197,16 +205,17 @@ export default function ConciliacionPage() {
     const shopifyOnly = rows.filter(r => r.status === 'shopify_only').length
     const siigoOnly = rows.filter(r => r.status === 'siigo_only').length
     const siigoBySource = {
-      shopify: rows.filter(r => r.status === 'matched').length,
       whatsapp: rows.filter(r => r.status === 'siigo_only' && r.source === 'whatsapp').length,
+      tienda: rows.filter(r => r.status === 'siigo_only' && r.source === 'tienda').length,
       otra: rows.filter(r => r.status === 'siigo_only' && r.source === 'otra').length,
     }
     return { totalShopify, totalSiigo, matched, shopifyOnly, siigoOnly, siigoBySource }
   }, [orders, invoices, rows])
 
-  const sourceBadge = (source: InvoiceSource | 'shopify') => {
+  const sourceBadge = (source: InvoiceSource, tiendaNombre: string | null) => {
     if (source === 'shopify') return <Badge className="bg-[#96bf48]/15 text-[#5a7a2a] hover:bg-[#96bf48]/15">Shopify</Badge>
     if (source === 'whatsapp') return <Badge className="bg-[#25D366]/15 text-[#0e7a3e] hover:bg-[#25D366]/15">WhatsApp</Badge>
+    if (source === 'tienda') return <Badge className="bg-[#1DA9EF]/15 text-[#0073D1] hover:bg-[#1DA9EF]/15">Tienda: {tiendaNombre}</Badge>
     return <Badge className="bg-[#1A2238]/10 text-[#1A2238] hover:bg-[#1A2238]/10">Otra</Badge>
   }
 
@@ -347,7 +356,7 @@ export default function ConciliacionPage() {
             <CardContent>
               <div className="text-2xl font-bold text-amber-700">{stats.siigoOnly}</div>
               <p className="text-xs text-[#545454]">
-                {stats.siigoBySource.whatsapp} WA · {stats.siigoBySource.otra} otras
+                {stats.siigoBySource.tienda} tienda · {stats.siigoBySource.whatsapp} WA · {stats.siigoBySource.otra} otras
               </p>
             </CardContent>
           </Card>
@@ -403,7 +412,7 @@ export default function ConciliacionPage() {
                     {visibleRows.map((row, idx) => (
                       <TableRow key={`${row.shopify?.id || ''}-${row.siigo?.id || ''}-${idx}`}>
                         <TableCell className="text-sm text-[#545454]">{row.date}</TableCell>
-                        <TableCell>{sourceBadge(row.source)}</TableCell>
+                        <TableCell>{sourceBadge(row.source, row.tiendaNombre)}</TableCell>
                         <TableCell>
                           {row.status === 'matched' && (
                             <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Pareada</Badge>

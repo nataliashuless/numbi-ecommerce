@@ -158,7 +158,45 @@ export default function TiendasPage() {
     comision_porcentaje: '',
     comision_fijo: '',
     notas: '',
+    siigo_customer_identification: '',
   })
+  const [siigoLookup, setSiigoLookup] = useState<{ loading: boolean; found: string | null; error: string | null }>({
+    loading: false,
+    found: null,
+    error: null,
+  })
+
+  async function lookupSiigoCustomer() {
+    const nit = formData.siigo_customer_identification.trim()
+    if (!nit) return
+    setSiigoLookup({ loading: true, found: null, error: null })
+    try {
+      const res = await fetch('/api/siigo?action=find-customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identification: nit }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error consultando Siigo')
+      if (!data.customer) {
+        setSiigoLookup({ loading: false, found: null, error: 'No se encontró cliente con ese NIT' })
+        return
+      }
+      const name = Array.isArray(data.customer.name)
+        ? data.customer.name.filter(Boolean).join(' ').trim()
+        : (data.customer.commercial_name || '')
+      setSiigoLookup({ loading: false, found: name || nit, error: null })
+      if (!formData.nombre && name) {
+        setFormData(prev => ({ ...prev, nombre: name }))
+      }
+    } catch (e) {
+      setSiigoLookup({
+        loading: false,
+        found: null,
+        error: e instanceof Error ? e.message : 'Error',
+      })
+    }
+  }
 
   async function fetchData() {
     setLoading(true)
@@ -231,7 +269,9 @@ export default function TiendasPage() {
           comision_porcentaje: '',
           comision_fijo: '',
           notas: '',
+          siigo_customer_identification: '',
         })
+        setSiigoLookup({ loading: false, found: null, error: null })
         fetchData()
       }
     } catch (error) {
@@ -385,6 +425,38 @@ export default function TiendasPage() {
                     onChange={e => setFormData({ ...formData, direccion: e.target.value })}
                     placeholder="Direccion de la tienda"
                   />
+                </div>
+
+                <div className="border-t pt-4">
+                  <Label htmlFor="siigo_nit" className="text-base font-semibold">NIT en Siigo</Label>
+                  <p className="text-xs text-[#545454] mb-2">
+                    Identificación del cliente en Siigo. Usado para asociar facturas a esta tienda en la conciliación.
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      id="siigo_nit"
+                      value={formData.siigo_customer_identification}
+                      onChange={e => {
+                        setFormData({ ...formData, siigo_customer_identification: e.target.value })
+                        setSiigoLookup({ loading: false, found: null, error: null })
+                      }}
+                      placeholder="Ej: 901534817"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={lookupSiigoCustomer}
+                      disabled={siigoLookup.loading || !formData.siigo_customer_identification.trim()}
+                    >
+                      {siigoLookup.loading ? 'Buscando...' : 'Verificar'}
+                    </Button>
+                  </div>
+                  {siigoLookup.found && (
+                    <p className="text-xs text-green-700 mt-1">✓ Encontrado en Siigo: <strong>{siigoLookup.found}</strong></p>
+                  )}
+                  {siigoLookup.error && (
+                    <p className="text-xs text-red-700 mt-1">{siigoLookup.error}</p>
+                  )}
                 </div>
 
                 <div className="border-t pt-4">
