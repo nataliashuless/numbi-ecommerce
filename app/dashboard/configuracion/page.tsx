@@ -366,16 +366,16 @@ export default function ConfiguracionPage() {
   return (
     <div className="min-h-screen bg-[#FFFFFF]">
       {/* Header */}
-      <header className="bg-[#121212] border-b border-[#242833]">
+      <header className="bg-[#1DA9EF] border-b border-[#E5E7EB]">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <span className="text-2xl font-semibold text-white tracking-tight">shuless</span>
-              <span className="text-xs text-[#121212] font-medium bg-[#242833] px-2 py-1 rounded">E-commerce</span>
+              <span className="text-xs text-[#1A2238] font-medium bg-[#1A2238] px-2 py-1 rounded">E-commerce</span>
             </div>
           </div>
           <Link href="/">
-            <Button variant="ghost" className="text-[#929292] hover:text-white hover:bg-[#242833]">
+            <Button variant="ghost" className="text-[#929292] hover:text-white hover:bg-[#1A2238]">
               <LogOut className="h-4 w-4 mr-2" />
               Cerrar sesión
             </Button>
@@ -388,42 +388,42 @@ export default function ConfiguracionPage() {
         <div className="container mx-auto px-4">
           <nav className="flex gap-4">
             <Link href="/dashboard">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Ventas
               </Button>
             </Link>
             <Link href="/dashboard/shopify">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <ShoppingCart className="h-4 w-4 mr-2" />
                 Shopify
               </Button>
             </Link>
             <Link href="/dashboard/whatsapp">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <MessageCircle className="h-4 w-4 mr-2" />
                 WhatsApp
               </Button>
             </Link>
             <Link href="/dashboard/tiendas">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Store className="h-4 w-4 mr-2" />
                 Tiendas
               </Button>
             </Link>
             <Link href="/dashboard/productos">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Package className="h-4 w-4 mr-2" />
                 Productos
               </Button>
             </Link>
             <Link href="/dashboard/inventario">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Boxes className="h-4 w-4 mr-2" />
                 Inventario
               </Button>
             </Link>
-            <Button variant="ghost" className="rounded-none border-b-2 border-[#121212] text-[#121212] py-4">
+            <Button variant="ghost" className="rounded-none border-b-2 border-[#1DA9EF] text-[#1A2238] py-4">
               <Settings className="h-4 w-4 mr-2" />
               Configuración
             </Button>
@@ -434,13 +434,13 @@ export default function ConfiguracionPage() {
       {/* Main */}
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-[#121212] mb-2">Configuración</h1>
+          <h1 className="text-3xl font-bold text-[#1A2238] mb-2">Configuración</h1>
           <p className="text-[#545454]">Administra tus integraciones y credenciales</p>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-[#121212]" />
+            <Loader2 className="h-8 w-8 animate-spin text-[#1A2238]" />
           </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2">
@@ -493,7 +493,7 @@ export default function ConfiguracionPage() {
                       shopify_access_token: integration.shopify_access_token,
                     }, setSavingShopify)}
                     disabled={savingShopify}
-                    className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]"
+                    className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]"
                   >
                     {savingShopify ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                     Guardar
@@ -586,7 +586,7 @@ export default function ConfiguracionPage() {
                 {siigoConnected && (
                   <div className="border-t pt-4 mt-4 space-y-4">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-medium text-[#121212]">Configuración Siigo - WhatsApp</h4>
+                      <h4 className="font-medium text-[#1A2238]">Configuración Siigo - WhatsApp</h4>
                       {loadingSiigoOptions && (
                         <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
                       )}

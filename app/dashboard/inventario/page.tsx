@@ -198,7 +198,7 @@ export default function InventarioPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[#121212]" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#1A2238]" />
         <span className="ml-2 text-[#545454]">Cargando inventario...</span>
       </div>
     )
@@ -210,7 +210,7 @@ export default function InventarioPage() {
         <div className="text-center">
           <p className="text-red-500 mb-4">{error}</p>
           <Link href="/api/auth/shopify">
-            <Button className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]">
+            <Button className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]">
               Reconectar Shopify
             </Button>
           </Link>
@@ -265,16 +265,16 @@ export default function InventarioPage() {
   return (
     <div className="min-h-screen bg-[#FFFFFF]">
       {/* Header */}
-      <header className="bg-[#121212] border-b border-[#242833]">
+      <header className="bg-[#1DA9EF] border-b border-[#E5E7EB]">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <span className="text-2xl font-semibold text-white tracking-tight">shuless</span>
-              <span className="text-xs text-[#121212] font-medium bg-[#242833] px-2 py-1 rounded">E-commerce</span>
+              <span className="text-xs text-[#1A2238] font-medium bg-[#1A2238] px-2 py-1 rounded">E-commerce</span>
             </div>
           </div>
           <Link href="/">
-            <Button variant="ghost" className="text-[#929292] hover:text-white hover:bg-[#242833]">
+            <Button variant="ghost" className="text-[#929292] hover:text-white hover:bg-[#1A2238]">
               <LogOut className="h-4 w-4 mr-2" />
               Cerrar sesión
             </Button>
@@ -287,41 +287,41 @@ export default function InventarioPage() {
         <div className="container mx-auto px-4">
           <nav className="flex gap-4">
             <Link href="/dashboard">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Ventas
               </Button>
             </Link>
             <Link href="/dashboard/shopify">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <ShoppingCart className="h-4 w-4 mr-2" />
                 Shopify
               </Button>
             </Link>
             <Link href="/dashboard/whatsapp">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <MessageCircle className="h-4 w-4 mr-2" />
                 WhatsApp
               </Button>
             </Link>
             <Link href="/dashboard/tiendas">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Store className="h-4 w-4 mr-2" />
                 Tiendas
               </Button>
             </Link>
             <Link href="/dashboard/productos">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Package className="h-4 w-4 mr-2" />
                 Productos
               </Button>
             </Link>
-            <Button variant="ghost" className="rounded-none border-b-2 border-[#121212] text-[#121212] py-4">
+            <Button variant="ghost" className="rounded-none border-b-2 border-[#1DA9EF] text-[#1A2238] py-4">
               <Boxes className="h-4 w-4 mr-2" />
               Inventario
             </Button>
             <Link href="/dashboard/configuracion">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Settings className="h-4 w-4 mr-2" />
                 Configuración
               </Button>
@@ -333,7 +333,7 @@ export default function InventarioPage() {
       <main className="container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-[#121212]">Inventario y Forecast</h1>
+            <h1 className="text-2xl font-bold text-[#1A2238]">Inventario y Forecast</h1>
             <TabsList>
               <TabsTrigger value="inventario" className="flex items-center gap-2">
                 <Boxes className="h-4 w-4" />
@@ -353,10 +353,10 @@ export default function InventarioPage() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-[#545454]">Total Empresa</CardTitle>
-                  <Boxes className="h-4 w-4 text-[#121212]" />
+                  <Boxes className="h-4 w-4 text-[#1A2238]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#121212]">{totales.total.toLocaleString()}</div>
+                  <div className="text-2xl font-bold text-[#1A2238]">{totales.total.toLocaleString()}</div>
                   <p className="text-xs text-[#545454]">unidades totales</p>
                 </CardContent>
               </Card>
@@ -366,7 +366,7 @@ export default function InventarioPage() {
                   <Warehouse className="h-4 w-4 text-blue-500" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#121212]">{totales.bodega.toLocaleString()}</div>
+                  <div className="text-2xl font-bold text-[#1A2238]">{totales.bodega.toLocaleString()}</div>
                   <p className="text-xs text-[#545454]">{totales.total > 0 ? ((totales.bodega / totales.total) * 100).toFixed(0) : 0}% del total</p>
                 </CardContent>
               </Card>
@@ -376,7 +376,7 @@ export default function InventarioPage() {
                   <Store className="h-4 w-4 text-purple-500" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#121212]">{totales.consignado.toLocaleString()}</div>
+                  <div className="text-2xl font-bold text-[#1A2238]">{totales.consignado.toLocaleString()}</div>
                   <p className="text-xs text-[#545454]">en {tiendas.length} tiendas</p>
                 </CardContent>
               </Card>
@@ -386,7 +386,7 @@ export default function InventarioPage() {
                   <Package className="h-4 w-4 text-yellow-500" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#121212]">{lowStockCount + outOfStockCount}</div>
+                  <div className="text-2xl font-bold text-[#1A2238]">{lowStockCount + outOfStockCount}</div>
                   <p className="text-xs text-[#545454]">{outOfStockCount} agotados, {lowStockCount} stock bajo</p>
                 </CardContent>
               </Card>
@@ -409,7 +409,7 @@ export default function InventarioPage() {
                     <Button
                       variant={filter === 'all' ? 'default' : 'outline'}
                       onClick={() => setFilter('all')}
-                      className={filter === 'all' ? 'bg-[#121212] hover:bg-[#121212]/90 text-[#121212]' : ''}
+                      className={filter === 'all' ? 'bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]' : ''}
                     >
                       Todos ({inventario.length})
                     </Button>
@@ -480,7 +480,7 @@ export default function InventarioPage() {
                                   />
                                 )}
                                 <div>
-                                  <div className="font-medium text-[#121212]">{item.producto}</div>
+                                  <div className="font-medium text-[#1A2238]">{item.producto}</div>
                                   {item.variante && (
                                     <div className="text-sm text-[#545454]">{item.variante}</div>
                                   )}
@@ -536,7 +536,7 @@ export default function InventarioPage() {
           <TabsContent value="forecast">
             {forecastLoading ? (
               <div className="flex items-center justify-center py-20">
-                <Loader2 className="h-8 w-8 animate-spin text-[#121212]" />
+                <Loader2 className="h-8 w-8 animate-spin text-[#1A2238]" />
                 <span className="ml-2 text-[#545454]">Calculando forecast...</span>
               </div>
             ) : forecastData ? (
@@ -569,17 +569,17 @@ export default function InventarioPage() {
                       <TrendingUp className="h-4 w-4 text-yellow-500" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold text-[#121212]">{forecastData.resumen.medios}</div>
+                      <div className="text-2xl font-bold text-[#1A2238]">{forecastData.resumen.medios}</div>
                       <p className="text-xs text-[#545454]">se agotan en 30 dias</p>
                     </CardContent>
                   </Card>
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                       <CardTitle className="text-sm font-medium text-[#545454]">Producir Sugerido</CardTitle>
-                      <Factory className="h-4 w-4 text-[#121212]" />
+                      <Factory className="h-4 w-4 text-[#1A2238]" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold text-[#121212]">{forecastData.resumen.totalProducirSugerido.toLocaleString()}</div>
+                      <div className="text-2xl font-bold text-[#1A2238]">{forecastData.resumen.totalProducirSugerido.toLocaleString()}</div>
                       <p className="text-xs text-[#545454]">unidades totales</p>
                     </CardContent>
                   </Card>
@@ -589,7 +589,7 @@ export default function InventarioPage() {
                       <ShoppingCart className="h-4 w-4 text-blue-500" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold text-[#121212]">{forecastData.resumen.totalVentasPeriodo.toLocaleString()}</div>
+                      <div className="text-2xl font-bold text-[#1A2238]">{forecastData.resumen.totalVentasPeriodo.toLocaleString()}</div>
                       <p className="text-xs text-[#545454]">unidades vendidas</p>
                     </CardContent>
                   </Card>
@@ -636,7 +636,7 @@ export default function InventarioPage() {
                           placeholder="7"
                         />
                       </div>
-                      <Button onClick={fetchForecast} className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]">
+                      <Button onClick={fetchForecast} className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]">
                         Recalcular
                       </Button>
                     </div>
@@ -660,7 +660,7 @@ export default function InventarioPage() {
                         <Button
                           variant={forecastFilter === 'all' ? 'default' : 'outline'}
                           onClick={() => setForecastFilter('all')}
-                          className={forecastFilter === 'all' ? 'bg-[#121212] hover:bg-[#121212]/90 text-[#121212]' : ''}
+                          className={forecastFilter === 'all' ? 'bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]' : ''}
                         >
                           Todos
                         </Button>
@@ -730,7 +730,7 @@ export default function InventarioPage() {
                                       />
                                     )}
                                     <div>
-                                      <div className="font-medium text-[#121212]">{item.producto}</div>
+                                      <div className="font-medium text-[#1A2238]">{item.producto}</div>
                                       {item.variante && (
                                         <div className="text-sm text-[#545454]">{item.variante}</div>
                                       )}
@@ -757,7 +757,7 @@ export default function InventarioPage() {
                                 </TableCell>
                                 <TableCell className="text-center">
                                   {item.diasHastaAgotamiento !== null ? (
-                                    <span className={`font-bold ${item.diasHastaAgotamiento <= 7 ? 'text-red-600' : item.diasHastaAgotamiento <= 14 ? 'text-orange-600' : 'text-[#121212]'}`}>
+                                    <span className={`font-bold ${item.diasHastaAgotamiento <= 7 ? 'text-red-600' : item.diasHastaAgotamiento <= 14 ? 'text-orange-600' : 'text-[#1A2238]'}`}>
                                       {item.diasHastaAgotamiento} dias
                                     </span>
                                   ) : (

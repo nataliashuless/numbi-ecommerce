@@ -429,7 +429,7 @@ export default function TiendaDetallePage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[#121212]" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#1A2238]" />
       </div>
     )
   }
@@ -445,11 +445,11 @@ export default function TiendaDetallePage() {
   return (
     <div className="min-h-screen bg-[#FFFFFF]">
       {/* Header */}
-      <header className="bg-[#121212] border-b border-[#242833]">
+      <header className="bg-[#1DA9EF] border-b border-[#E5E7EB]">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <Link href="/dashboard/tiendas">
-              <Button variant="ghost" size="icon" className="text-white hover:bg-[#242833]">
+              <Button variant="ghost" size="icon" className="text-white hover:bg-[#1A2238]">
                 <ArrowLeft className="h-5 w-5" />
               </Button>
             </Link>
@@ -477,7 +477,7 @@ export default function TiendaDetallePage() {
               <Package className="h-4 w-4 text-[#545454]" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-[#121212]">{stats?.inventarioActual || 0}</div>
+              <div className="text-2xl font-bold text-[#1A2238]">{stats?.inventarioActual || 0}</div>
               <p className="text-xs text-[#545454]">unidades en tienda</p>
             </CardContent>
           </Card>
@@ -488,7 +488,7 @@ export default function TiendaDetallePage() {
               <ShoppingCart className="h-4 w-4 text-[#545454]" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-[#121212]">{formatCurrency(stats?.totalVentas || 0)}</div>
+              <div className="text-2xl font-bold text-[#1A2238]">{formatCurrency(stats?.totalVentas || 0)}</div>
               <p className="text-xs text-[#545454]">{stats?.totalVendido || 0} unidades</p>
             </CardContent>
           </Card>
@@ -499,7 +499,7 @@ export default function TiendaDetallePage() {
               <DollarSign className="h-4 w-4 text-[#545454]" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-[#121212]">{formatCurrency(stats?.montoPendiente || 0)}</div>
+              <div className="text-2xl font-bold text-[#1A2238]">{formatCurrency(stats?.montoPendiente || 0)}</div>
               <p className="text-xs text-[#545454]">{stats?.ventasPendientes || 0} ventas</p>
             </CardContent>
           </Card>
@@ -510,7 +510,7 @@ export default function TiendaDetallePage() {
               <FileText className="h-4 w-4 text-[#545454]" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-[#121212]">{formatCurrency(stats?.totalComisiones || 0)}</div>
+              <div className="text-2xl font-bold text-[#1A2238]">{formatCurrency(stats?.totalComisiones || 0)}</div>
               <p className="text-xs text-[#545454]">total acumulado</p>
             </CardContent>
           </Card>
@@ -536,7 +536,7 @@ export default function TiendaDetallePage() {
                 <CardTitle>Stock en Tienda</CardTitle>
                 <Dialog open={consignacionDialog} onOpenChange={setConsignacionDialog}>
                   <DialogTrigger asChild>
-                    <Button className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]">
+                    <Button className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]">
                       <Plus className="h-4 w-4 mr-2" />
                       Consignar
                     </Button>
@@ -618,7 +618,7 @@ export default function TiendaDetallePage() {
                         />
                       </div>
                       <div className="flex justify-end">
-                        <Button type="submit" className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]">
+                        <Button type="submit" className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]">
                           Guardar
                         </Button>
                       </div>
@@ -718,7 +718,7 @@ export default function TiendaDetallePage() {
                 <CardTitle>Ventas Reportadas</CardTitle>
                 <Dialog open={ventaDialog} onOpenChange={setVentaDialog}>
                   <DialogTrigger asChild>
-                    <Button className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]">
+                    <Button className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]">
                       <Plus className="h-4 w-4 mr-2" />
                       Registrar Venta
                     </Button>
@@ -779,7 +779,7 @@ export default function TiendaDetallePage() {
                         La comisión se calculará automáticamente según la configuración de la tienda.
                       </p>
                       <div className="flex justify-end">
-                        <Button type="submit" className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]">
+                        <Button type="submit" className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]">
                           Guardar
                         </Button>
                       </div>
@@ -816,7 +816,7 @@ export default function TiendaDetallePage() {
                           <TableCell className="text-center">{v.cantidad}</TableCell>
                           <TableCell className="text-right">{formatCurrency(v.precio_venta)}</TableCell>
                           <TableCell className="text-right text-red-500">-{formatCurrency(v.comision)}</TableCell>
-                          <TableCell className="text-right font-medium text-[#121212]">{formatCurrency(v.neto)}</TableCell>
+                          <TableCell className="text-right font-medium text-[#1A2238]">{formatCurrency(v.neto)}</TableCell>
                           <TableCell>
                             {v.liquidacion_id ? (
                               <Badge className="bg-green-500"><CheckCircle className="h-3 w-3 mr-1" />Liquidada</Badge>
@@ -841,7 +841,7 @@ export default function TiendaDetallePage() {
                 <Dialog open={liquidacionDialog} onOpenChange={setLiquidacionDialog}>
                   <DialogTrigger asChild>
                     <Button
-                      className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]"
+                      className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]"
                       disabled={stats?.ventasPendientes === 0}
                     >
                       <Plus className="h-4 w-4 mr-2" />
@@ -885,7 +885,7 @@ export default function TiendaDetallePage() {
                         Se liquidarán todas las ventas pendientes en el período seleccionado.
                       </p>
                       <div className="flex justify-end">
-                        <Button type="submit" className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]">
+                        <Button type="submit" className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]">
                           Crear Liquidación
                         </Button>
                       </div>
@@ -920,7 +920,7 @@ export default function TiendaDetallePage() {
                           </TableCell>
                           <TableCell className="text-right">{formatCurrency(l.total_ventas)}</TableCell>
                           <TableCell className="text-right text-red-500">-{formatCurrency(l.total_comisiones)}</TableCell>
-                          <TableCell className="text-right font-medium text-[#121212]">{formatCurrency(l.total_neto)}</TableCell>
+                          <TableCell className="text-right font-medium text-[#1A2238]">{formatCurrency(l.total_neto)}</TableCell>
                           <TableCell>
                             {l.estado === 'pagada' ? (
                               <Badge className="bg-green-500"><CheckCircle className="h-3 w-3 mr-1" />Pagada</Badge>
@@ -959,7 +959,7 @@ export default function TiendaDetallePage() {
                   </p>
                 </div>
                 <Button
-                  className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]"
+                  className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]"
                   onClick={handleSaveSiigoConfig}
                   disabled={siigoSaving || !siigoConnected}
                 >
@@ -974,7 +974,7 @@ export default function TiendaDetallePage() {
               <CardContent>
                 {siigoLoading ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-[#121212]" />
+                    <Loader2 className="h-6 w-6 animate-spin text-[#1A2238]" />
                     <span className="ml-2 text-[#545454]">Cargando opciones de Siigo...</span>
                   </div>
                 ) : !siigoConnected ? (
@@ -1114,7 +1114,7 @@ export default function TiendaDetallePage() {
                     {/* Current Config Summary */}
                     {(siigoConfig.siigo_cost_center_name || siigoConfig.siigo_seller_name) && (
                       <div className="mt-6 p-4 bg-[#FFFFFF] rounded-lg">
-                        <p className="text-sm font-medium text-[#121212] mb-2">Configuración actual:</p>
+                        <p className="text-sm font-medium text-[#1A2238] mb-2">Configuración actual:</p>
                         <ul className="text-sm text-[#545454] space-y-1">
                           {siigoConfig.siigo_cost_center_name && (
                             <li>Centro de Costo: {siigoConfig.siigo_cost_center_name}</li>

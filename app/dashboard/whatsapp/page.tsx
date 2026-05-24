@@ -999,16 +999,16 @@ export default function WhatsAppPage() {
   return (
     <div className="min-h-screen bg-[#FFFFFF]">
       {/* Header */}
-      <header className="bg-[#121212] border-b border-[#242833]">
+      <header className="bg-[#1DA9EF] border-b border-[#E5E7EB]">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <span className="text-2xl font-semibold text-white tracking-tight">shuless</span>
-              <span className="text-xs text-[#121212] font-medium bg-[#242833] px-2 py-1 rounded">E-commerce</span>
+              <span className="text-xs text-[#1A2238] font-medium bg-[#1A2238] px-2 py-1 rounded">E-commerce</span>
             </div>
           </div>
           <Link href="/">
-            <Button variant="ghost" className="text-[#929292] hover:text-white hover:bg-[#242833]">
+            <Button variant="ghost" className="text-[#929292] hover:text-white hover:bg-[#1A2238]">
               <LogOut className="h-4 w-4 mr-2" />
               Cerrar sesión
             </Button>
@@ -1021,41 +1021,41 @@ export default function WhatsAppPage() {
         <div className="container mx-auto px-4">
           <nav className="flex gap-4">
             <Link href="/dashboard">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Ventas
               </Button>
             </Link>
             <Link href="/dashboard/shopify">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <ShoppingCart className="h-4 w-4 mr-2" />
                 Shopify
               </Button>
             </Link>
-            <Button variant="ghost" className="rounded-none border-b-2 border-[#121212] text-[#121212] py-4">
+            <Button variant="ghost" className="rounded-none border-b-2 border-[#1DA9EF] text-[#1A2238] py-4">
               <MessageCircle className="h-4 w-4 mr-2" />
               WhatsApp
             </Button>
             <Link href="/dashboard/tiendas">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Store className="h-4 w-4 mr-2" />
                 Tiendas
               </Button>
             </Link>
             <Link href="/dashboard/productos">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Package className="h-4 w-4 mr-2" />
                 Productos
               </Button>
             </Link>
             <Link href="/dashboard/inventario">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Boxes className="h-4 w-4 mr-2" />
                 Inventario
               </Button>
             </Link>
             <Link href="/dashboard/configuracion">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Settings className="h-4 w-4 mr-2" />
                 Configuración
               </Button>
@@ -1068,7 +1068,7 @@ export default function WhatsAppPage() {
       <main className="container mx-auto px-4 py-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-[#121212] mb-2">Ventas WhatsApp</h1>
+            <h1 className="text-3xl font-bold text-[#1A2238] mb-2">Ventas WhatsApp</h1>
             <p className="text-[#545454]">Registro manual de ventas por WhatsApp</p>
           </div>
           <div className="flex items-center gap-2 mt-4 md:mt-0">
@@ -1226,7 +1226,7 @@ Diseño: chocolate`}
                       </Button>
                       <Button
                         onClick={handleAcceptImportResults}
-                        className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]"
+                        className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]"
                       >
                         <Check className="h-4 w-4 mr-2" />
                         Aceptar y Continuar
@@ -1239,7 +1239,7 @@ Diseño: chocolate`}
 
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]">
+                <Button className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]">
                   <Plus className="h-4 w-4 mr-2" />
                   Nueva Venta
                 </Button>
@@ -1399,7 +1399,7 @@ Diseño: chocolate`}
                     <div className="text-lg font-semibold">
                       Total: {formatCurrency(formData.cantidad * formData.precio_unitario)}
                     </div>
-                    <Button type="submit" className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]">
+                    <Button type="submit" className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]">
                       Guardar
                     </Button>
                   </div>
@@ -1411,7 +1411,7 @@ Diseño: chocolate`}
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-[#121212]" />
+            <Loader2 className="h-8 w-8 animate-spin text-[#1A2238]" />
           </div>
         ) : (
           <>
@@ -1423,7 +1423,7 @@ Diseño: chocolate`}
                   <DollarSign className="h-4 w-4 text-[#545454]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#121212]">{formatCurrency(stats.totalVentas)}</div>
+                  <div className="text-2xl font-bold text-[#1A2238]">{formatCurrency(stats.totalVentas)}</div>
                 </CardContent>
               </Card>
 
@@ -1433,7 +1433,7 @@ Diseño: chocolate`}
                   <ShoppingCart className="h-4 w-4 text-[#545454]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#121212]">{stats.numVentas}</div>
+                  <div className="text-2xl font-bold text-[#1A2238]">{stats.numVentas}</div>
                 </CardContent>
               </Card>
 
@@ -1443,7 +1443,7 @@ Diseño: chocolate`}
                   <Package className="h-4 w-4 text-[#545454]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#121212]">{stats.totalUnidades}</div>
+                  <div className="text-2xl font-bold text-[#1A2238]">{stats.totalUnidades}</div>
                 </CardContent>
               </Card>
 
@@ -1453,7 +1453,7 @@ Diseño: chocolate`}
                   <TrendingUp className="h-4 w-4 text-[#545454]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#121212]">{formatCurrency(stats.promedioVenta)}</div>
+                  <div className="text-2xl font-bold text-[#1A2238]">{formatCurrency(stats.promedioVenta)}</div>
                 </CardContent>
               </Card>
             </div>
@@ -1700,7 +1700,7 @@ Diseño: chocolate`}
 
                 {quoteLoading ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-[#121212] mr-2" />
+                    <Loader2 className="h-6 w-6 animate-spin text-[#1A2238] mr-2" />
                     <span className="text-[#545454]">Cotizando...</span>
                   </div>
                 ) : quoteOptions.length > 0 ? (
@@ -1709,7 +1709,7 @@ Diseño: chocolate`}
                     {quoteOptions.map((option, index) => (
                       <div
                         key={index}
-                        className="border rounded-lg p-3 hover:border-[#121212] cursor-pointer transition-colors"
+                        className="border rounded-lg p-3 hover:border-[#1DA9EF] cursor-pointer transition-colors"
                         onClick={() => !shipmentLoading && handleCreateShipment(option)}
                       >
                         <div className="flex items-center justify-between">
@@ -1719,7 +1719,7 @@ Diseño: chocolate`}
                             <p className="text-xs text-[#545454]">{option.deliveryDays} días hábiles</p>
                           </div>
                           <div className="text-right">
-                            <p className="font-bold text-lg text-[#121212]">
+                            <p className="font-bold text-lg text-[#1A2238]">
                               {formatCurrency(option.price)}
                             </p>
                             {shipmentLoading ? (

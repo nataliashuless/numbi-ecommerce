@@ -12,12 +12,12 @@ export async function GET(request: Request) {
         <head>
           <title>Conectar Shopify - Shuless</title>
           <style>
-            body { font-family: system-ui; background: #121212; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+            body { font-family: system-ui; background: #1DA9EF; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
             .container { text-align: center; max-width: 400px; }
-            h1 { color: #121212; margin-bottom: 24px; }
-            input { padding: 12px 16px; font-size: 16px; border: 2px solid #242833; border-radius: 8px; width: 100%; box-sizing: border-box; background: #242833; color: white; margin-bottom: 16px; }
-            input:focus { outline: none; border-color: #121212; }
-            button { background: #121212; color: #121212; padding: 12px 24px; font-size: 16px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; width: 100%; }
+            h1 { color: #1DA9EF; margin-bottom: 24px; }
+            input { padding: 12px 16px; font-size: 16px; border: 2px solid #1A2238; border-radius: 8px; width: 100%; box-sizing: border-box; background: #1A2238; color: white; margin-bottom: 16px; }
+            input:focus { outline: none; border-color: #1DA9EF; }
+            button { background: #1DA9EF; color: #1DA9EF; padding: 12px 24px; font-size: 16px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; width: 100%; }
             button:hover { background: #00C070; }
             p { color: #929292; font-size: 14px; }
           </style>

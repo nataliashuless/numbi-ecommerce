@@ -246,16 +246,16 @@ export default function TiendasPage() {
   return (
     <div className="min-h-screen bg-[#FFFFFF]">
       {/* Header */}
-      <header className="bg-[#121212] border-b border-[#242833]">
+      <header className="bg-[#1DA9EF] border-b border-[#E5E7EB]">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <span className="text-2xl font-semibold text-white tracking-tight">shuless</span>
-              <span className="text-xs text-[#121212] font-medium bg-[#242833] px-2 py-1 rounded">E-commerce</span>
+              <span className="text-xs text-[#1A2238] font-medium bg-[#1A2238] px-2 py-1 rounded">E-commerce</span>
             </div>
           </div>
           <Link href="/">
-            <Button variant="ghost" className="text-[#929292] hover:text-white hover:bg-[#242833]">
+            <Button variant="ghost" className="text-[#929292] hover:text-white hover:bg-[#1A2238]">
               <LogOut className="h-4 w-4 mr-2" />
               Cerrar sesión
             </Button>
@@ -268,41 +268,41 @@ export default function TiendasPage() {
         <div className="container mx-auto px-4">
           <nav className="flex gap-4">
             <Link href="/dashboard">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Ventas
               </Button>
             </Link>
             <Link href="/dashboard/shopify">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <ShoppingCart className="h-4 w-4 mr-2" />
                 Shopify
               </Button>
             </Link>
             <Link href="/dashboard/whatsapp">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <MessageCircle className="h-4 w-4 mr-2" />
                 WhatsApp
               </Button>
             </Link>
-            <Button variant="ghost" className="rounded-none border-b-2 border-[#121212] text-[#121212] py-4">
+            <Button variant="ghost" className="rounded-none border-b-2 border-[#1DA9EF] text-[#1A2238] py-4">
               <Store className="h-4 w-4 mr-2" />
               Tiendas
             </Button>
             <Link href="/dashboard/productos">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Package className="h-4 w-4 mr-2" />
                 Productos
               </Button>
             </Link>
             <Link href="/dashboard/inventario">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Boxes className="h-4 w-4 mr-2" />
                 Inventario
               </Button>
             </Link>
             <Link href="/dashboard/configuracion">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Settings className="h-4 w-4 mr-2" />
                 Configuración
               </Button>
@@ -315,12 +315,12 @@ export default function TiendasPage() {
       <main className="container mx-auto px-4 py-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-[#121212] mb-2">Tiendas de Terceros</h1>
+            <h1 className="text-3xl font-bold text-[#1A2238] mb-2">Tiendas de Terceros</h1>
             <p className="text-[#545454]">Gestiona consignaciones y ventas en tiendas aliadas</p>
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212] mt-4 md:mt-0">
+              <Button className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238] mt-4 md:mt-0">
                 <Plus className="h-4 w-4 mr-2" />
                 Nueva Tienda
               </Button>
@@ -443,7 +443,7 @@ export default function TiendasPage() {
                 </div>
 
                 <div className="flex justify-end pt-4 border-t">
-                  <Button type="submit" className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]">
+                  <Button type="submit" className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]">
                     Guardar Tienda
                   </Button>
                 </div>
@@ -454,7 +454,7 @@ export default function TiendasPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-[#121212]" />
+            <Loader2 className="h-8 w-8 animate-spin text-[#1A2238]" />
           </div>
         ) : (
           <>
@@ -466,7 +466,7 @@ export default function TiendasPage() {
                   <Building2 className="h-4 w-4 text-[#545454]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#121212]">{stats.totalTiendas}</div>
+                  <div className="text-2xl font-bold text-[#1A2238]">{stats.totalTiendas}</div>
                   <p className="text-xs text-[#545454]">{stats.tiendasActivas} activas</p>
                 </CardContent>
               </Card>
@@ -477,7 +477,7 @@ export default function TiendasPage() {
                   <Package className="h-4 w-4 text-[#545454]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#121212]">{stats.inventarioTotal}</div>
+                  <div className="text-2xl font-bold text-[#1A2238]">{stats.inventarioTotal}</div>
                   <p className="text-xs text-[#545454]">unidades en tiendas</p>
                 </CardContent>
               </Card>
@@ -488,7 +488,7 @@ export default function TiendasPage() {
                   <DollarSign className="h-4 w-4 text-[#545454]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#121212]">{formatCurrency(stats.montoPendienteTotal)}</div>
+                  <div className="text-2xl font-bold text-[#1A2238]">{formatCurrency(stats.montoPendienteTotal)}</div>
                   <p className="text-xs text-[#545454]">ventas pendientes</p>
                 </CardContent>
               </Card>
@@ -499,7 +499,7 @@ export default function TiendasPage() {
                   <TrendingUp className="h-4 w-4 text-[#545454]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#121212]">
+                  <div className="text-2xl font-bold text-[#1A2238]">
                     {ventasStats ? formatCurrency(ventasStats.totalNeto) : '-'}
                   </div>
                   <p className="text-xs text-[#545454]">
@@ -521,7 +521,7 @@ export default function TiendasPage() {
                         variant={groupBy === 'day' ? 'default' : 'ghost'}
                         size="sm"
                         onClick={() => setGroupBy('day')}
-                        className={groupBy === 'day' ? 'bg-[#121212] hover:bg-[#121212]/90 text-[#121212]' : ''}
+                        className={groupBy === 'day' ? 'bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]' : ''}
                       >
                         Dia
                       </Button>
@@ -529,7 +529,7 @@ export default function TiendasPage() {
                         variant={groupBy === 'week' ? 'default' : 'ghost'}
                         size="sm"
                         onClick={() => setGroupBy('week')}
-                        className={groupBy === 'week' ? 'bg-[#121212] hover:bg-[#121212]/90 text-[#121212]' : ''}
+                        className={groupBy === 'week' ? 'bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]' : ''}
                       >
                         Semana
                       </Button>
@@ -537,7 +537,7 @@ export default function TiendasPage() {
                         variant={groupBy === 'month' ? 'default' : 'ghost'}
                         size="sm"
                         onClick={() => setGroupBy('month')}
-                        className={groupBy === 'month' ? 'bg-[#121212] hover:bg-[#121212]/90 text-[#121212]' : ''}
+                        className={groupBy === 'month' ? 'bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]' : ''}
                       >
                         Mes
                       </Button>
@@ -549,7 +549,7 @@ export default function TiendasPage() {
                 <div className="h-[300px]">
                   {chartLoading ? (
                     <div className="flex items-center justify-center h-full">
-                      <Loader2 className="h-8 w-8 animate-spin text-[#121212]" />
+                      <Loader2 className="h-8 w-8 animate-spin text-[#1A2238]" />
                     </div>
                   ) : formattedChartData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
@@ -562,7 +562,7 @@ export default function TiendasPage() {
                           contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
                         />
                         <Legend />
-                        <Bar dataKey="neto" name="Neto" fill="#121212" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="neto" name="Neto" fill="#1DA9EF" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="comision" name="Comision" fill="#6366f1" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -584,7 +584,7 @@ export default function TiendasPage() {
                     </div>
                     <div>
                       <span className="text-[#545454]">Neto: </span>
-                      <span className="font-bold text-[#121212]">{formatCurrency(ventasStats.totalNeto)}</span>
+                      <span className="font-bold text-[#1A2238]">{formatCurrency(ventasStats.totalNeto)}</span>
                     </div>
                   </div>
                 )}
@@ -603,7 +603,7 @@ export default function TiendasPage() {
                     <p className="text-[#545454] mb-4">No hay tiendas registradas</p>
                     <Button
                       onClick={() => setDialogOpen(true)}
-                      className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]"
+                      className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]"
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Agregar Primera Tienda
@@ -616,12 +616,12 @@ export default function TiendasPage() {
                         <div className="border rounded-lg p-4 hover:bg-gray-50 transition-colors cursor-pointer">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
-                              <div className="h-10 w-10 rounded-full bg-[#121212] flex items-center justify-center">
-                                <Store className="h-5 w-5 text-[#121212]" />
+                              <div className="h-10 w-10 rounded-full bg-[#1DA9EF] flex items-center justify-center">
+                                <Store className="h-5 w-5 text-[#1A2238]" />
                               </div>
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <span className="font-semibold text-[#121212]">{tienda.nombre}</span>
+                                  <span className="font-semibold text-[#1A2238]">{tienda.nombre}</span>
                                   {!tienda.activa && (
                                     <Badge variant="secondary">Inactiva</Badge>
                                   )}
@@ -638,7 +638,7 @@ export default function TiendasPage() {
                               </div>
                               <div className="text-right">
                                 <div className="text-sm text-[#545454]">Por Liquidar</div>
-                                <div className="font-semibold text-[#121212]">
+                                <div className="font-semibold text-[#1A2238]">
                                   {formatCurrency(tienda.montoPendiente)}
                                 </div>
                               </div>

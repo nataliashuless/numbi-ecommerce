@@ -48,38 +48,38 @@
 
 :root {
   --radius: 0.625rem;
-  /* Shuless Brand Colors — minimalist white/black with royal blue accent */
+  /* Shuless Brand Colors — vibrant blue with playful mint background */
   --background: #FFFFFF;
-  --foreground: #121212;
+  --foreground: #1A2238;
   --card: #FFFFFF;
-  --card-foreground: #121212;
+  --card-foreground: #1A2238;
   --popover: #FFFFFF;
-  --popover-foreground: #121212;
-  --primary: #121212;
+  --popover-foreground: #1A2238;
+  --primary: #1DA9EF;
   --primary-foreground: #FFFFFF;
-  --secondary: #F3F3F3;
-  --secondary-foreground: #121212;
-  --muted: #F3F3F3;
-  --muted-foreground: #545454;
-  --accent: #334FB4;
-  --accent-foreground: #FFFFFF;
+  --secondary: #E8F5F8;
+  --secondary-foreground: #1A2238;
+  --muted: #F4F8FA;
+  --muted-foreground: #6B7280;
+  --accent: #FFD93D;
+  --accent-foreground: #1A2238;
   --destructive: #ef4444;
-  --border: #E5E5E5;
-  --input: #E5E5E5;
-  --ring: #334FB4;
-  --chart-1: #121212;
-  --chart-2: #334FB4;
-  --chart-3: #545454;
-  --chart-4: #929292;
-  --chart-5: #242833;
-  --sidebar: #121212;
+  --border: #E5E7EB;
+  --input: #E5E7EB;
+  --ring: #1DA9EF;
+  --chart-1: #1DA9EF;
+  --chart-2: #0073D1;
+  --chart-3: #FFD93D;
+  --chart-4: #6B7280;
+  --chart-5: #1A2238;
+  --sidebar: #1A2238;
   --sidebar-foreground: #FFFFFF;
-  --sidebar-primary: #334FB4;
+  --sidebar-primary: #1DA9EF;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #242833;
+  --sidebar-accent: #2A3550;
   --sidebar-accent-foreground: #FFFFFF;
-  --sidebar-border: #242833;
-  --sidebar-ring: #334FB4;
+  --sidebar-border: #2A3550;
+  --sidebar-ring: #1DA9EF;
 }
 
 .dark {

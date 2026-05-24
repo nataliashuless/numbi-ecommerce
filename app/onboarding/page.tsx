@@ -43,11 +43,11 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#121212] flex items-center justify-center p-4">
-      <Card className="w-full max-w-md bg-[#2a3942] border-[#242833]">
+    <div className="min-h-screen bg-[#1DA9EF] flex items-center justify-center p-4">
+      <Card className="w-full max-w-md bg-[#1A2238] border-[#E5E7EB]">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 w-16 h-16 bg-[#121212]/20 rounded-full flex items-center justify-center">
-            <Store className="h-8 w-8 text-[#121212]" />
+          <div className="mx-auto mb-4 w-16 h-16 bg-[#1DA9EF]/20 rounded-full flex items-center justify-center">
+            <Store className="h-8 w-8 text-[#1A2238]" />
           </div>
           <CardTitle className="text-white text-2xl">Conectar Shopify</CardTitle>
           <CardDescription className="text-[#929292]">
@@ -72,9 +72,9 @@ export default function OnboardingPage() {
                   value={shop}
                   onChange={(e) => setShop(e.target.value)}
                   required
-                  className="bg-[#242833] border-[#445057] text-white placeholder:text-[#545454] rounded-r-none"
+                  className="bg-[#1A2238] border-[#2A3550] text-white placeholder:text-[#545454] rounded-r-none"
                 />
-                <span className="inline-flex items-center px-3 bg-[#445057] border border-l-0 border-[#445057] text-[#929292] text-sm rounded-r-md">
+                <span className="inline-flex items-center px-3 bg-[#2A3550] border border-l-0 border-[#2A3550] text-[#929292] text-sm rounded-r-md">
                   .myshopify.com
                 </span>
               </div>
@@ -85,7 +85,7 @@ export default function OnboardingPage() {
 
             <Button
               type="submit"
-              className="w-full bg-[#121212] hover:bg-[#121212]/90 text-[#121212] font-medium"
+              className="w-full bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238] font-medium"
               disabled={loading || !shop.trim()}
             >
               {loading ? (

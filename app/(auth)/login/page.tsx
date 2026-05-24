@@ -46,9 +46,9 @@ function LoginForm() {
       <Card className="w-full max-w-md bg-white border-[#E5E5E5]">
         <CardHeader className="text-center">
           <Link href="/" className="inline-block mb-4">
-            <span className="text-2xl font-semibold text-[#121212] tracking-tight">shuless</span>
+            <span className="text-2xl font-semibold text-[#1A2238] tracking-tight">shuless</span>
           </Link>
-          <CardTitle className="text-[#121212] text-2xl">Iniciar Sesión</CardTitle>
+          <CardTitle className="text-[#1A2238] text-2xl">Iniciar Sesión</CardTitle>
           <CardDescription className="text-[#545454]">
             Ingresa al panel de administración
           </CardDescription>
@@ -62,7 +62,7 @@ function LoginForm() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-[#121212]">Email</Label>
+              <Label htmlFor="email" className="text-[#1A2238]">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -70,12 +70,12 @@ function LoginForm() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="bg-white border-[#E5E5E5] text-[#121212] placeholder:text-[#929292]"
+                className="bg-white border-[#E5E5E5] text-[#1A2238] placeholder:text-[#929292]"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-[#121212]">Contraseña</Label>
+              <Label htmlFor="password" className="text-[#1A2238]">Contraseña</Label>
               <Input
                 id="password"
                 type="password"
@@ -83,13 +83,13 @@ function LoginForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="bg-white border-[#E5E5E5] text-[#121212] placeholder:text-[#929292]"
+                className="bg-white border-[#E5E5E5] text-[#1A2238] placeholder:text-[#929292]"
               />
             </div>
 
             <Button
               type="submit"
-              className="w-full bg-[#121212] hover:bg-[#242833] text-white font-medium"
+              className="w-full bg-[#1DA9EF] hover:bg-[#1A2238] text-white font-medium"
               disabled={loading}
             >
               {loading ? (
@@ -113,7 +113,7 @@ export default function LoginPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-white flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[#121212]" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#1A2238]" />
       </div>
     }>
       <LoginForm />
