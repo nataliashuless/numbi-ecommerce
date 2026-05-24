@@ -7,7 +7,6 @@ import { subDays, format } from 'date-fns'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import {
   Table,
   TableBody,
@@ -50,19 +49,24 @@ interface SiigoInvoice {
   prefix: string
   date: string
   total: number
-  customer: { identification: string }
+  customer: { id: string; identification: string }
+  customer_name: string | null
+  source: 'whatsapp' | 'unknown'
   observations: string
 }
 
 type MatchStatus = 'matched' | 'shopify_only' | 'siigo_only'
+type InvoiceSource = 'shopify' | 'whatsapp' | 'otra'
 
-interface MatchedRow {
+interface Row {
   status: MatchStatus
+  source: InvoiceSource | 'shopify'
   date: string
   orderNumber: number | null
   shopify: ShopifyOrder | null
   siigo: SiigoInvoice | null
   diff: number
+  clientName: string
 }
 
 function formatCurrency(value: number): string {
@@ -105,8 +109,7 @@ export default function ConciliacionPage() {
 
       if (!shopRes.ok) throw new Error('Error obteniendo órdenes Shopify')
       const shopData = await shopRes.json()
-      const allOrders: ShopifyOrder[] = shopData.orders || []
-      setOrders(allOrders)
+      setOrders(shopData.orders || [])
 
       if (!siigoRes.ok) {
         const e = await siigoRes.json().catch(() => ({}))
@@ -126,17 +129,15 @@ export default function ConciliacionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange])
 
-  const matchedRows = useMemo<MatchedRow[]>(() => {
-    const rows: MatchedRow[] = []
+  const rows = useMemo<Row[]>(() => {
+    const out: Row[] = []
     const invoicesByOrderNumber = new Map<number, SiigoInvoice>()
     const usedInvoiceIds = new Set<string>()
 
     for (const inv of invoices) {
       const orderNum = extractOrderNumber(inv.observations)
-      if (orderNum) {
-        if (!invoicesByOrderNumber.has(orderNum)) {
-          invoicesByOrderNumber.set(orderNum, inv)
-        }
+      if (orderNum && !invoicesByOrderNumber.has(orderNum)) {
+        invoicesByOrderNumber.set(orderNum, inv)
       }
     }
 
@@ -144,53 +145,70 @@ export default function ConciliacionPage() {
       const inv = invoicesByOrderNumber.get(order.orderNumber)
       if (inv) {
         usedInvoiceIds.add(inv.id)
-        rows.push({
+        out.push({
           status: 'matched',
+          source: 'shopify',
           date: order.createdAt.slice(0, 10),
           orderNumber: order.orderNumber,
           shopify: order,
           siigo: inv,
           diff: order.totalPrice - inv.total,
+          clientName: order.customerName || inv.customer_name || inv.customer.identification,
         })
       } else {
-        rows.push({
+        out.push({
           status: 'shopify_only',
+          source: 'shopify',
           date: order.createdAt.slice(0, 10),
           orderNumber: order.orderNumber,
           shopify: order,
           siigo: null,
           diff: order.totalPrice,
+          clientName: order.customerName || '—',
         })
       }
     }
 
     for (const inv of invoices) {
-      if (!usedInvoiceIds.has(inv.id)) {
-        rows.push({
-          status: 'siigo_only',
-          date: inv.date,
-          orderNumber: extractOrderNumber(inv.observations),
-          shopify: null,
-          siigo: inv,
-          diff: -inv.total,
-        })
-      }
+      if (usedInvoiceIds.has(inv.id)) continue
+      const source: InvoiceSource = inv.source === 'whatsapp' ? 'whatsapp' : 'otra'
+      out.push({
+        status: 'siigo_only',
+        source,
+        date: inv.date,
+        orderNumber: extractOrderNumber(inv.observations),
+        shopify: null,
+        siigo: inv,
+        diff: -inv.total,
+        clientName: inv.customer_name || inv.customer.identification,
+      })
     }
 
-    rows.sort((a, b) => b.date.localeCompare(a.date))
-    return rows
+    out.sort((a, b) => b.date.localeCompare(a.date))
+    return out
   }, [orders, invoices])
 
-  const visibleRows = matchedRows.filter(r => filter === 'all' || r.status === filter)
+  const visibleRows = rows.filter(r => filter === 'all' || r.status === filter)
 
   const stats = useMemo(() => {
     const totalShopify = orders.reduce((s, o) => s + o.totalPrice, 0)
     const totalSiigo = invoices.reduce((s, i) => s + i.total, 0)
-    const matched = matchedRows.filter(r => r.status === 'matched').length
-    const shopifyOnly = matchedRows.filter(r => r.status === 'shopify_only').length
-    const siigoOnly = matchedRows.filter(r => r.status === 'siigo_only').length
-    return { totalShopify, totalSiigo, matched, shopifyOnly, siigoOnly }
-  }, [orders, invoices, matchedRows])
+    const matched = rows.filter(r => r.status === 'matched').length
+    const shopifyOnly = rows.filter(r => r.status === 'shopify_only').length
+    const siigoOnly = rows.filter(r => r.status === 'siigo_only').length
+    const siigoBySource = {
+      shopify: rows.filter(r => r.status === 'matched').length,
+      whatsapp: rows.filter(r => r.status === 'siigo_only' && r.source === 'whatsapp').length,
+      otra: rows.filter(r => r.status === 'siigo_only' && r.source === 'otra').length,
+    }
+    return { totalShopify, totalSiigo, matched, shopifyOnly, siigoOnly, siigoBySource }
+  }, [orders, invoices, rows])
+
+  const sourceBadge = (source: InvoiceSource | 'shopify') => {
+    if (source === 'shopify') return <Badge className="bg-[#96bf48]/15 text-[#5a7a2a] hover:bg-[#96bf48]/15">Shopify</Badge>
+    if (source === 'whatsapp') return <Badge className="bg-[#25D366]/15 text-[#0e7a3e] hover:bg-[#25D366]/15">WhatsApp</Badge>
+    return <Badge className="bg-[#1A2238]/10 text-[#1A2238] hover:bg-[#1A2238]/10">Otra</Badge>
+  }
 
   return (
     <div className="min-h-screen bg-[#FFFFFF]">
@@ -204,8 +222,7 @@ export default function ConciliacionPage() {
           </div>
           <Link href="/">
             <Button variant="ghost" className="text-[#9CA3AF] hover:text-white hover:bg-[#2A3550]">
-              <LogOut className="h-4 w-4 mr-2" />
-              Cerrar sesión
+              <LogOut className="h-4 w-4 mr-2" />Cerrar sesión
             </Button>
           </Link>
         </div>
@@ -260,7 +277,7 @@ export default function ConciliacionPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-[#1A2238] mb-2">Conciliación Shopify ↔ Siigo</h1>
-            <p className="text-[#545454]">Cruzamos órdenes Shopify con facturas Siigo (matching por número de pedido en observaciones)</p>
+            <p className="text-[#545454]">Órdenes Shopify cruzadas con facturas Siigo por # de pedido. Facturas sin orden Shopify se categorizan por fuente (WhatsApp o Otra).</p>
           </div>
           <div className="flex items-center gap-2 mt-4 md:mt-0">
             <DateRangePicker date={dateRange} onDateChange={setDateRange} />
@@ -305,30 +322,33 @@ export default function ConciliacionPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-700">{stats.matched}</div>
+              <p className="text-xs text-[#545454]">Shopify con factura</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-[#545454] font-medium flex items-center gap-1">
-                <XCircle className="h-4 w-4 text-red-600" /> Sin factura
+                <XCircle className="h-4 w-4 text-red-600" /> Sin facturar
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-700">{stats.shopifyOnly}</div>
-              <p className="text-xs text-[#545454]">Shopify sin Siigo</p>
+              <p className="text-xs text-[#545454]">Shopify pendientes</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-[#545454] font-medium flex items-center gap-1">
-                <AlertCircle className="h-4 w-4 text-amber-600" /> Sin orden
+                <AlertCircle className="h-4 w-4 text-amber-600" /> Facturas otras
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-amber-700">{stats.siigoOnly}</div>
-              <p className="text-xs text-[#545454]">Siigo sin Shopify</p>
+              <p className="text-xs text-[#545454]">
+                {stats.siigoBySource.whatsapp} WA · {stats.siigoBySource.otra} otras
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -336,20 +356,22 @@ export default function ConciliacionPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <CardTitle>Detalle de conciliación</CardTitle>
-              <div className="flex gap-1">
-                {(['all', 'matched', 'shopify_only', 'siigo_only'] as const).map(f => (
+              <CardTitle>Detalle</CardTitle>
+              <div className="flex gap-1 flex-wrap">
+                {([
+                  ['all', `Todas (${rows.length})`],
+                  ['matched', `Pareadas (${stats.matched})`],
+                  ['shopify_only', `Sin facturar (${stats.shopifyOnly})`],
+                  ['siigo_only', `Facturas otras (${stats.siigoOnly})`],
+                ] as const).map(([key, label]) => (
                   <Button
-                    key={f}
+                    key={key}
                     size="sm"
-                    variant={filter === f ? 'default' : 'outline'}
-                    onClick={() => setFilter(f)}
-                    className={filter === f ? 'bg-[#1DA9EF] hover:bg-[#0073D1]' : ''}
+                    variant={filter === key ? 'default' : 'outline'}
+                    onClick={() => setFilter(key)}
+                    className={filter === key ? 'bg-[#1DA9EF] hover:bg-[#0073D1]' : ''}
                   >
-                    {f === 'all' && `Todas (${matchedRows.length})`}
-                    {f === 'matched' && `Pareadas (${stats.matched})`}
-                    {f === 'shopify_only' && `Solo Shopify (${stats.shopifyOnly})`}
-                    {f === 'siigo_only' && `Solo Siigo (${stats.siigoOnly})`}
+                    {label}
                   </Button>
                 ))}
               </div>
@@ -368,12 +390,12 @@ export default function ConciliacionPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Fecha</TableHead>
+                      <TableHead>Fuente</TableHead>
                       <TableHead>Estado</TableHead>
-                      <TableHead>Orden #</TableHead>
+                      <TableHead>Orden / Factura</TableHead>
                       <TableHead>Cliente</TableHead>
-                      <TableHead className="text-right">Total Shopify</TableHead>
-                      <TableHead>Factura</TableHead>
-                      <TableHead className="text-right">Total Siigo</TableHead>
+                      <TableHead className="text-right">Shopify</TableHead>
+                      <TableHead className="text-right">Siigo</TableHead>
                       <TableHead className="text-right">Diferencia</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -381,28 +403,29 @@ export default function ConciliacionPage() {
                     {visibleRows.map((row, idx) => (
                       <TableRow key={`${row.shopify?.id || ''}-${row.siigo?.id || ''}-${idx}`}>
                         <TableCell className="text-sm text-[#545454]">{row.date}</TableCell>
+                        <TableCell>{sourceBadge(row.source)}</TableCell>
                         <TableCell>
                           {row.status === 'matched' && (
                             <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Pareada</Badge>
                           )}
                           {row.status === 'shopify_only' && (
-                            <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Sin factura</Badge>
+                            <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Sin facturar</Badge>
                           )}
                           {row.status === 'siigo_only' && (
-                            <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">Sin orden</Badge>
+                            <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">Solo Siigo</Badge>
                           )}
                         </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {row.orderNumber ? `#${row.orderNumber}` : '—'}
-                        </TableCell>
                         <TableCell className="text-sm">
-                          {row.shopify?.customerName || row.siigo?.customer.identification || '—'}
+                          <div className="font-mono">
+                            {row.orderNumber ? `#${row.orderNumber}` : '—'}
+                          </div>
+                          {row.siigo && (
+                            <div className="text-xs text-[#545454] font-mono">{row.siigo.name}</div>
+                          )}
                         </TableCell>
+                        <TableCell className="text-sm">{row.clientName}</TableCell>
                         <TableCell className="text-right font-mono">
                           {row.shopify ? formatCurrency(row.shopify.totalPrice) : '—'}
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {row.siigo ? row.siigo.name : '—'}
                         </TableCell>
                         <TableCell className="text-right font-mono">
                           {row.siigo ? formatCurrency(row.siigo.total) : '—'}

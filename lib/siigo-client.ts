@@ -362,6 +362,33 @@ export async function listInvoices(
   return all
 }
 
+export async function getCustomersByIds(ids: string[]): Promise<Map<string, string>> {
+  const unique = Array.from(new Set(ids))
+  const result = new Map<string, string>()
+  const CONCURRENCY = 8
+
+  async function fetchOne(id: string): Promise<void> {
+    try {
+      const response = await siigoFetch(`/customers/${id}`)
+      if (!response.ok) return
+      const data = await response.json()
+      const name = Array.isArray(data.name)
+        ? data.name.filter(Boolean).join(' ').trim()
+        : (data.commercial_name || '').trim()
+      if (name) result.set(id, name)
+    } catch {
+      // skip
+    }
+  }
+
+  for (let i = 0; i < unique.length; i += CONCURRENCY) {
+    const batch = unique.slice(i, i + CONCURRENCY)
+    await Promise.all(batch.map(fetchOne))
+  }
+
+  return result
+}
+
 export async function getDocumentTypes(): Promise<Array<{ id: number; name: string }>> {
   const response = await siigoFetch('/document-types?type=FV')
   if (!response.ok) {
