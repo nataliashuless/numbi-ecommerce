@@ -43,6 +43,7 @@ export async function GET(request: Request) {
     }
     const rows = (cached || []) as Cached[]
 
+    const refreshCustomers = searchParams.get('refresh_customers') === 'true'
     const customerIds = Array.from(
       new Set(rows.map(r => r.customer_id).filter(Boolean) as string[])
     )
@@ -57,18 +58,22 @@ export async function GET(request: Request) {
         if (row.name) namesMap.set(row.id, row.name)
       }
 
-      const missing = customerIds.filter(id => !namesMap.has(id))
-      if (missing.length > 0) {
-        const fresh = await getCustomersByIds(missing)
-        for (const [id, name] of fresh) namesMap.set(id, name)
-        const toUpsert = Array.from(fresh.entries()).map(([id, name]) => ({
-          id,
-          name,
-          identification: rows.find(r => r.customer_id === id)?.customer_identification || null,
-          last_synced: new Date().toISOString(),
-        }))
-        if (toUpsert.length > 0) {
-          await supabase.from('siigo_customers').upsert(toUpsert, { onConflict: 'id' })
+      // Only call Siigo on demand. Default behavior: use what's in cache.
+      // Pass ?refresh_customers=true to backfill missing names (slow).
+      if (refreshCustomers) {
+        const missing = customerIds.filter(id => !namesMap.has(id))
+        if (missing.length > 0) {
+          const fresh = await getCustomersByIds(missing)
+          for (const [id, name] of fresh) namesMap.set(id, name)
+          const toUpsert = Array.from(fresh.entries()).map(([id, name]) => ({
+            id,
+            name,
+            identification: rows.find(r => r.customer_id === id)?.customer_identification || null,
+            last_synced: new Date().toISOString(),
+          }))
+          if (toUpsert.length > 0) {
+            await supabase.from('siigo_customers').upsert(toUpsert, { onConflict: 'id' })
+          }
         }
       }
     }

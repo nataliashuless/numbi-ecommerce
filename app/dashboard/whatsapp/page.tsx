@@ -1048,6 +1048,12 @@ export default function WhatsAppPage() {
                 Conciliación
               </Button>
             </Link>
+            <Link href="/dashboard/analitica">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Analítica
+              </Button>
+            </Link>
             <Link href="/dashboard/productos">
               <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Package className="h-4 w-4 mr-2" />

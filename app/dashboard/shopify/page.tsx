@@ -31,6 +31,7 @@ import {
   MessageCircle,
   Settings,
   FileText,
+  TrendingUp,
 } from 'lucide-react'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 import {
@@ -277,6 +278,12 @@ export default function DashboardPage() {
               <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <FileText className="h-4 w-4 mr-2" />
                 Conciliación
+              </Button>
+            </Link>
+            <Link href="/dashboard/analitica">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Analítica
               </Button>
             </Link>
             <Link href="/dashboard/productos">
