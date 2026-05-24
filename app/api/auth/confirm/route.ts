@@ -45,20 +45,13 @@ export async function GET(request: Request) {
       const { data: { user } } = await supabase.auth.getUser()
 
       if (user) {
-        // Use service client to bypass RLS for profile check
         const serviceClient = getServiceClient()
         const { data: profile } = await serviceClient
           .from('profiles')
-          .select('role, onboarding_completed')
+          .select('onboarding_completed')
           .eq('id', user.id)
           .single()
 
-        // If admin, redirect to admin panel
-        if (profile?.role === 'admin') {
-          return NextResponse.redirect(`${origin}/admin`)
-        }
-
-        // If user hasn't completed onboarding, redirect to onboarding
         if (!profile?.onboarding_completed) {
           return NextResponse.redirect(`${origin}/onboarding`)
         }

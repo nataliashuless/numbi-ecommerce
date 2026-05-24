@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 
-// GET - Get current user's integration settings
 export async function GET() {
-  const { user, error } = await requireAuth()
+  const { error } = await requireAuth()
   if (error) return error
 
   const supabase = getAdminClient()
@@ -11,14 +10,13 @@ export async function GET() {
   const { data: integration, error: fetchError } = await supabase
     .from('user_integrations')
     .select('*')
-    .eq('user_id', user!.id)
-    .single()
+    .limit(1)
+    .maybeSingle()
 
-  if (fetchError && fetchError.code !== 'PGRST116') {
+  if (fetchError) {
     return NextResponse.json({ error: fetchError.message }, { status: 500 })
   }
 
-  // Return integration (or empty object if none exists)
   return NextResponse.json({
     integration: integration || {
       shopify_shop: null,
@@ -31,15 +29,13 @@ export async function GET() {
   })
 }
 
-// PATCH - Update user's integration settings
 export async function PATCH(request: Request) {
-  const { user, error } = await requireAuth()
+  const { error } = await requireAuth()
   if (error) return error
 
   const updates = await request.json()
   const supabase = getAdminClient()
 
-  // Only allow updating specific fields
   const allowedFields = [
     'shopify_shop',
     'shopify_access_token',
@@ -47,7 +43,6 @@ export async function PATCH(request: Request) {
     'envioclick_origin_address',
     'siigo_username',
     'siigo_access_key',
-    // Legacy user-level Siigo config (kept for backward compatibility)
     'siigo_cost_center_id',
     'siigo_cost_center_name',
     'siigo_seller_id',
@@ -55,7 +50,6 @@ export async function PATCH(request: Request) {
     'siigo_iva_tax_id',
     'siigo_default_document_id',
     'siigo_default_document_name',
-    // WhatsApp-specific Siigo config
     'siigo_whatsapp_cost_center_id',
     'siigo_whatsapp_cost_center_name',
     'siigo_whatsapp_seller_id',
@@ -76,19 +70,17 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
   }
 
-  // Check if user has an integration record
   const { data: existing } = await supabase
     .from('user_integrations')
     .select('id')
-    .eq('user_id', user!.id)
-    .single()
+    .limit(1)
+    .maybeSingle()
 
   if (existing) {
-    // Update existing record
     const { data, error: updateError } = await supabase
       .from('user_integrations')
       .update(sanitizedUpdates)
-      .eq('user_id', user!.id)
+      .eq('id', existing.id)
       .select()
       .single()
 
@@ -98,13 +90,9 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({ integration: data })
   } else {
-    // Create new record
     const { data, error: insertError } = await supabase
       .from('user_integrations')
-      .insert({
-        user_id: user!.id,
-        ...sanitizedUpdates,
-      })
+      .insert(sanitizedUpdates)
       .select()
       .single()
 

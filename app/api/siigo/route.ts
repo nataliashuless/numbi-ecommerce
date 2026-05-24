@@ -17,9 +17,8 @@ import {
   type CreateInvoiceData,
 } from '@/lib/siigo-client'
 
-// POST /api/siigo - Various Siigo operations
 export async function POST(request: Request) {
-  const { user, error } = await requireAuth()
+  const { error } = await requireAuth()
   if (error) return error
 
   const { searchParams } = new URL(request.url)
@@ -30,7 +29,7 @@ export async function POST(request: Request) {
 
     switch (action) {
       case 'test-connection': {
-        const result = await testConnection(user!.id)
+        const result = await testConnection()
         return NextResponse.json({ connected: result.success, error: result.error })
       }
 
@@ -39,7 +38,7 @@ export async function POST(request: Request) {
         if (!identification) {
           return NextResponse.json({ error: 'Identificación requerida' }, { status: 400 })
         }
-        const customer = await findCustomerByIdentification(user!.id, identification)
+        const customer = await findCustomerByIdentification(identification)
         return NextResponse.json({ customer })
       }
 
@@ -60,7 +59,7 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: 'NIT, nombre y email son requeridos' }, { status: 400 })
         }
 
-        const customer = await createCustomer(user!.id, customerData)
+        const customer = await createCustomer(customerData)
         return NextResponse.json({ customer })
       }
 
@@ -81,15 +80,12 @@ export async function POST(request: Request) {
           }, { status: 400 })
         }
 
-        // Load Siigo configuration based on source type (whatsapp or tienda)
         const sourceType = body.sourceType || 'whatsapp'
         const tiendaId = body.tiendaId
-        const siigoConfig = await getSiigoConfigForSource(user!.id, sourceType, tiendaId)
-        console.log('Creating invoice with config for', sourceType, ':', siigoConfig)
+        const siigoConfig = await getSiigoConfigForSource(sourceType, tiendaId)
 
-        const invoice = await createInvoice(user!.id, invoiceData, siigoConfig)
+        const invoice = await createInvoice(invoiceData, siigoConfig)
 
-        // If ventaId provided, update the venta_whatsapp record
         if (body.ventaId) {
           const supabase = getAdminClient()
           await supabase
@@ -99,14 +95,13 @@ export async function POST(request: Request) {
               siigo_invoice_number: invoice.number,
             })
             .eq('id', body.ventaId)
-            .eq('user_id', user!.id)
         }
 
         return NextResponse.json({ invoice })
       }
 
       case 'clear-cache': {
-        clearSiigoTokenCache(user!.id)
+        clearSiigoTokenCache()
         return NextResponse.json({ success: true })
       }
 
@@ -114,15 +109,13 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Acción inválida' }, { status: 400 })
     }
   } catch (err) {
-    console.error('Siigo API error:', err)
     const message = err instanceof Error ? err.message : 'Error en Siigo API'
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
-// GET /api/siigo - Get Siigo configuration data
 export async function GET(request: Request) {
-  const { user, error } = await requireAuth()
+  const { error } = await requireAuth()
   if (error) return error
 
   const { searchParams } = new URL(request.url)
@@ -131,104 +124,27 @@ export async function GET(request: Request) {
   try {
     switch (action) {
       case 'document-types': {
-        const types = await getDocumentTypes(user!.id)
+        const types = await getDocumentTypes()
         return NextResponse.json({ documentTypes: types })
       }
 
       case 'payment-types': {
-        const types = await getPaymentTypes(user!.id)
+        const types = await getPaymentTypes()
         return NextResponse.json({ paymentTypes: types })
       }
 
       case 'cost-centers': {
-        const centers = await getCostCenters(user!.id)
+        const centers = await getCostCenters()
         return NextResponse.json({ costCenters: centers })
       }
 
       case 'sellers': {
-        const sellers = await getSellers(user!.id)
+        const sellers = await getSellers()
         return NextResponse.json({ sellers })
       }
 
-      case 'debug-payment-types': {
-        // Debug: return raw payment types from Siigo without filtering
-        const { getSiigoToken } = await import('@/lib/siigo-client')
-        const token = await getSiigoToken(user!.id)
-        const response = await fetch('https://api.siigo.com/v1/payment-types?document_type=FV', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            'Partner-Id': 'numbi',
-          },
-        })
-        const rawData = await response.json()
-        return NextResponse.json({
-          status: response.status,
-          raw: rawData,
-          count: Array.isArray(rawData) ? rawData.length : 'not array'
-        })
-      }
-
-      case 'debug-cost-centers': {
-        // Debug: get cost centers and sellers from Siigo
-        const { getSiigoToken } = await import('@/lib/siigo-client')
-        const token = await getSiigoToken(user!.id)
-
-        const [costCentersRes, usersRes] = await Promise.all([
-          fetch('https://api.siigo.com/v1/cost-centers', {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-              'Partner-Id': 'numbi',
-            },
-          }),
-          fetch('https://api.siigo.com/v1/users', {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-              'Partner-Id': 'numbi',
-            },
-          })
-        ])
-
-        const costCenters = await costCentersRes.json()
-        const users = await usersRes.json()
-
-        return NextResponse.json({
-          costCenters,
-          users,
-        })
-      }
-
-      case 'debug-ventas': {
-        // Debug: check all ventas for this user
-        const supabase = getAdminClient()
-        const { data: ventas, error: ventasError } = await supabase
-          .from('ventas_whatsapp')
-          .select('id, fecha, cliente_nombre, producto_nombre, total, created_at')
-          .eq('user_id', user!.id)
-          .order('created_at', { ascending: false })
-          .limit(20)
-
-        // Also check stored payment methods
-        const { data: integration } = await supabase
-          .from('user_integrations')
-          .select('siigo_payment_methods')
-          .eq('user_id', user!.id)
-          .single()
-
-        return NextResponse.json({
-          userId: user!.id,
-          userEmail: user!.email,
-          ventasCount: ventas?.length || 0,
-          ventas: ventas || [],
-          storedPaymentMethods: integration?.siigo_payment_methods || [],
-          error: ventasError?.message
-        })
-      }
-
       case 'taxes': {
-        const taxes = await getTaxes(user!.id)
+        const taxes = await getTaxes()
         return NextResponse.json({ taxes })
       }
 
@@ -236,31 +152,13 @@ export async function GET(request: Request) {
         return NextResponse.json({ cities: COLOMBIAN_CITIES })
       }
 
-      default:
-        // Return all config
+      default: {
         const [documentTypes, paymentTypes, taxes] = await Promise.all([
-          getDocumentTypes(user!.id).catch((e) => {
-            console.error('Error fetching document types:', e)
-            return []
-          }),
-          getPaymentTypes(user!.id).catch((e) => {
-            console.error('Error fetching payment types:', e)
-            return []
-          }),
-          getTaxes(user!.id).catch((e) => {
-            console.error('Error fetching taxes:', e)
-            return []
-          }),
+          getDocumentTypes().catch(() => []),
+          getPaymentTypes().catch(() => []),
+          getTaxes().catch(() => []),
         ])
 
-        console.log('Siigo config fetched:', {
-          documentTypes: documentTypes?.length || 0,
-          paymentTypes: paymentTypes?.length || 0,
-          paymentTypesIds: paymentTypes?.map((p: { id: number }) => p.id),
-          taxes: taxes?.length || 0,
-        })
-
-        // Return with no-cache headers to prevent stale data
         return NextResponse.json({
           documentTypes,
           paymentTypes,
@@ -272,9 +170,9 @@ export async function GET(request: Request) {
             'Pragma': 'no-cache',
           }
         })
+      }
     }
   } catch (err) {
-    console.error('Siigo API error:', err)
     const message = err instanceof Error ? err.message : 'Error en Siigo API'
     return NextResponse.json({ error: message }, { status: 500 })
   }

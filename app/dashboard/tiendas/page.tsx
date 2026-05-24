@@ -244,18 +244,18 @@ export default function TiendasPage() {
   }))
 
   return (
-    <div className="min-h-screen bg-[#F5F7F4]">
+    <div className="min-h-screen bg-[#FFFFFF]">
       {/* Header */}
-      <header className="bg-[#233037] border-b border-[#334047]">
+      <header className="bg-[#121212] border-b border-[#242833]">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-semibold text-white tracking-tight">numbi</span>
-              <span className="text-xs text-[#00D47F] font-medium bg-[#334047] px-2 py-1 rounded">E-commerce</span>
+              <span className="text-2xl font-semibold text-white tracking-tight">shuless</span>
+              <span className="text-xs text-[#121212] font-medium bg-[#242833] px-2 py-1 rounded">E-commerce</span>
             </div>
           </div>
           <Link href="/">
-            <Button variant="ghost" className="text-[#99C3D2] hover:text-white hover:bg-[#334047]">
+            <Button variant="ghost" className="text-[#929292] hover:text-white hover:bg-[#242833]">
               <LogOut className="h-4 w-4 mr-2" />
               Cerrar sesión
             </Button>
@@ -268,41 +268,41 @@ export default function TiendasPage() {
         <div className="container mx-auto px-4">
           <nav className="flex gap-4">
             <Link href="/dashboard">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Ventas
               </Button>
             </Link>
             <Link href="/dashboard/shopify">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <ShoppingCart className="h-4 w-4 mr-2" />
                 Shopify
               </Button>
             </Link>
             <Link href="/dashboard/whatsapp">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <MessageCircle className="h-4 w-4 mr-2" />
                 WhatsApp
               </Button>
             </Link>
-            <Button variant="ghost" className="rounded-none border-b-2 border-[#00D47F] text-[#00D47F] py-4">
+            <Button variant="ghost" className="rounded-none border-b-2 border-[#121212] text-[#121212] py-4">
               <Store className="h-4 w-4 mr-2" />
               Tiendas
             </Button>
             <Link href="/dashboard/productos">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <Package className="h-4 w-4 mr-2" />
                 Productos
               </Button>
             </Link>
             <Link href="/dashboard/inventario">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <Boxes className="h-4 w-4 mr-2" />
                 Inventario
               </Button>
             </Link>
             <Link href="/dashboard/configuracion">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <Settings className="h-4 w-4 mr-2" />
                 Configuración
               </Button>
@@ -315,12 +315,12 @@ export default function TiendasPage() {
       <main className="container mx-auto px-4 py-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-[#233037] mb-2">Tiendas de Terceros</h1>
-            <p className="text-[#71828A]">Gestiona consignaciones y ventas en tiendas aliadas</p>
+            <h1 className="text-3xl font-bold text-[#121212] mb-2">Tiendas de Terceros</h1>
+            <p className="text-[#545454]">Gestiona consignaciones y ventas en tiendas aliadas</p>
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037] mt-4 md:mt-0">
+              <Button className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212] mt-4 md:mt-0">
                 <Plus className="h-4 w-4 mr-2" />
                 Nueva Tienda
               </Button>
@@ -443,7 +443,7 @@ export default function TiendasPage() {
                 </div>
 
                 <div className="flex justify-end pt-4 border-t">
-                  <Button type="submit" className="bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]">
+                  <Button type="submit" className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]">
                     Guardar Tienda
                   </Button>
                 </div>
@@ -454,7 +454,7 @@ export default function TiendasPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-[#00D47F]" />
+            <Loader2 className="h-8 w-8 animate-spin text-[#121212]" />
           </div>
         ) : (
           <>
@@ -462,47 +462,47 @@ export default function TiendasPage() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#71828A]">Total Tiendas</CardTitle>
-                  <Building2 className="h-4 w-4 text-[#71828A]" />
+                  <CardTitle className="text-sm font-medium text-[#545454]">Total Tiendas</CardTitle>
+                  <Building2 className="h-4 w-4 text-[#545454]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#233037]">{stats.totalTiendas}</div>
-                  <p className="text-xs text-[#71828A]">{stats.tiendasActivas} activas</p>
+                  <div className="text-2xl font-bold text-[#121212]">{stats.totalTiendas}</div>
+                  <p className="text-xs text-[#545454]">{stats.tiendasActivas} activas</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#71828A]">Inventario Consignado</CardTitle>
-                  <Package className="h-4 w-4 text-[#71828A]" />
+                  <CardTitle className="text-sm font-medium text-[#545454]">Inventario Consignado</CardTitle>
+                  <Package className="h-4 w-4 text-[#545454]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#233037]">{stats.inventarioTotal}</div>
-                  <p className="text-xs text-[#71828A]">unidades en tiendas</p>
+                  <div className="text-2xl font-bold text-[#121212]">{stats.inventarioTotal}</div>
+                  <p className="text-xs text-[#545454]">unidades en tiendas</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#71828A]">Por Liquidar</CardTitle>
-                  <DollarSign className="h-4 w-4 text-[#71828A]" />
+                  <CardTitle className="text-sm font-medium text-[#545454]">Por Liquidar</CardTitle>
+                  <DollarSign className="h-4 w-4 text-[#545454]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#00D47F]">{formatCurrency(stats.montoPendienteTotal)}</div>
-                  <p className="text-xs text-[#71828A]">ventas pendientes</p>
+                  <div className="text-2xl font-bold text-[#121212]">{formatCurrency(stats.montoPendienteTotal)}</div>
+                  <p className="text-xs text-[#545454]">ventas pendientes</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#71828A]">Ventas (Periodo)</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-[#71828A]" />
+                  <CardTitle className="text-sm font-medium text-[#545454]">Ventas (Periodo)</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-[#545454]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#233037]">
+                  <div className="text-2xl font-bold text-[#121212]">
                     {ventasStats ? formatCurrency(ventasStats.totalNeto) : '-'}
                   </div>
-                  <p className="text-xs text-[#71828A]">
+                  <p className="text-xs text-[#545454]">
                     {ventasStats ? `${ventasStats.totalUnidades} unidades` : 'neto a recibir'}
                   </p>
                 </CardContent>
@@ -521,7 +521,7 @@ export default function TiendasPage() {
                         variant={groupBy === 'day' ? 'default' : 'ghost'}
                         size="sm"
                         onClick={() => setGroupBy('day')}
-                        className={groupBy === 'day' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
+                        className={groupBy === 'day' ? 'bg-[#121212] hover:bg-[#121212]/90 text-[#121212]' : ''}
                       >
                         Dia
                       </Button>
@@ -529,7 +529,7 @@ export default function TiendasPage() {
                         variant={groupBy === 'week' ? 'default' : 'ghost'}
                         size="sm"
                         onClick={() => setGroupBy('week')}
-                        className={groupBy === 'week' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
+                        className={groupBy === 'week' ? 'bg-[#121212] hover:bg-[#121212]/90 text-[#121212]' : ''}
                       >
                         Semana
                       </Button>
@@ -537,7 +537,7 @@ export default function TiendasPage() {
                         variant={groupBy === 'month' ? 'default' : 'ghost'}
                         size="sm"
                         onClick={() => setGroupBy('month')}
-                        className={groupBy === 'month' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
+                        className={groupBy === 'month' ? 'bg-[#121212] hover:bg-[#121212]/90 text-[#121212]' : ''}
                       >
                         Mes
                       </Button>
@@ -549,25 +549,25 @@ export default function TiendasPage() {
                 <div className="h-[300px]">
                   {chartLoading ? (
                     <div className="flex items-center justify-center h-full">
-                      <Loader2 className="h-8 w-8 animate-spin text-[#00D47F]" />
+                      <Loader2 className="h-8 w-8 animate-spin text-[#121212]" />
                     </div>
                   ) : formattedChartData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={formattedChartData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis dataKey="displayDate" tick={{ fontSize: 12 }} stroke="#71828A" />
-                        <YAxis tick={{ fontSize: 12 }} stroke="#71828A" tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
+                        <XAxis dataKey="displayDate" tick={{ fontSize: 12 }} stroke="#545454" />
+                        <YAxis tick={{ fontSize: 12 }} stroke="#545454" tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
                         <Tooltip
                           formatter={(value) => [formatCurrency(Number(value)), '']}
                           contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
                         />
                         <Legend />
-                        <Bar dataKey="neto" name="Neto" fill="#00D47F" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="neto" name="Neto" fill="#121212" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="comision" name="Comision" fill="#6366f1" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
-                    <div className="flex items-center justify-center h-full text-[#71828A]">
+                    <div className="flex items-center justify-center h-full text-[#545454]">
                       No hay ventas en este periodo
                     </div>
                   )}
@@ -575,16 +575,16 @@ export default function TiendasPage() {
                 {ventasStats && ventasStats.totalTransacciones > 0 && (
                   <div className="mt-4 pt-4 border-t flex justify-end gap-8 text-sm">
                     <div>
-                      <span className="text-[#71828A]">Ventas brutas: </span>
+                      <span className="text-[#545454]">Ventas brutas: </span>
                       <span className="font-bold">{formatCurrency(ventasStats.totalVentas)}</span>
                     </div>
                     <div>
-                      <span className="text-[#71828A]">Comision: </span>
+                      <span className="text-[#545454]">Comision: </span>
                       <span className="font-bold text-purple-600">{formatCurrency(ventasStats.totalComision)}</span>
                     </div>
                     <div>
-                      <span className="text-[#71828A]">Neto: </span>
-                      <span className="font-bold text-[#00D47F]">{formatCurrency(ventasStats.totalNeto)}</span>
+                      <span className="text-[#545454]">Neto: </span>
+                      <span className="font-bold text-[#121212]">{formatCurrency(ventasStats.totalNeto)}</span>
                     </div>
                   </div>
                 )}
@@ -599,11 +599,11 @@ export default function TiendasPage() {
               <CardContent>
                 {tiendas.length === 0 ? (
                   <div className="text-center py-12">
-                    <Store className="h-12 w-12 mx-auto text-[#71828A] mb-4" />
-                    <p className="text-[#71828A] mb-4">No hay tiendas registradas</p>
+                    <Store className="h-12 w-12 mx-auto text-[#545454] mb-4" />
+                    <p className="text-[#545454] mb-4">No hay tiendas registradas</p>
                     <Button
                       onClick={() => setDialogOpen(true)}
-                      className="bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]"
+                      className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]"
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Agregar Primera Tienda
@@ -616,33 +616,33 @@ export default function TiendasPage() {
                         <div className="border rounded-lg p-4 hover:bg-gray-50 transition-colors cursor-pointer">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
-                              <div className="h-10 w-10 rounded-full bg-[#233037] flex items-center justify-center">
-                                <Store className="h-5 w-5 text-[#00D47F]" />
+                              <div className="h-10 w-10 rounded-full bg-[#121212] flex items-center justify-center">
+                                <Store className="h-5 w-5 text-[#121212]" />
                               </div>
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <span className="font-semibold text-[#233037]">{tienda.nombre}</span>
+                                  <span className="font-semibold text-[#121212]">{tienda.nombre}</span>
                                   {!tienda.activa && (
                                     <Badge variant="secondary">Inactiva</Badge>
                                   )}
                                 </div>
-                                <div className="text-sm text-[#71828A]">
+                                <div className="text-sm text-[#545454]">
                                   Comision: {formatComision(tienda)}
                                 </div>
                               </div>
                             </div>
                             <div className="flex items-center gap-6">
                               <div className="text-right">
-                                <div className="text-sm text-[#71828A]">Inventario</div>
+                                <div className="text-sm text-[#545454]">Inventario</div>
                                 <div className="font-semibold">{tienda.inventarioActual} uds</div>
                               </div>
                               <div className="text-right">
-                                <div className="text-sm text-[#71828A]">Por Liquidar</div>
-                                <div className="font-semibold text-[#00D47F]">
+                                <div className="text-sm text-[#545454]">Por Liquidar</div>
+                                <div className="font-semibold text-[#121212]">
                                   {formatCurrency(tienda.montoPendiente)}
                                 </div>
                               </div>
-                              <ChevronRight className="h-5 w-5 text-[#71828A]" />
+                              <ChevronRight className="h-5 w-5 text-[#545454]" />
                             </div>
                           </div>
                         </div>

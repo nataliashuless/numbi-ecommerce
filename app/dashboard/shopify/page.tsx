@@ -174,20 +174,20 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F5F7F4] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[#00D47F]" />
-        <span className="ml-2 text-[#71828A]">Cargando datos de Shopify...</span>
+      <div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#121212]" />
+        <span className="ml-2 text-[#545454]">Cargando datos de Shopify...</span>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#F5F7F4] flex items-center justify-center">
+      <div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-500 mb-4">{error}</p>
           <Link href="/api/auth/shopify">
-            <Button className="bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]">
+            <Button className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]">
               Reconectar Shopify
             </Button>
           </Link>
@@ -223,22 +223,22 @@ export default function DashboardPage() {
   }))
 
   return (
-    <div className="min-h-screen bg-[#F5F7F4]">
+    <div className="min-h-screen bg-[#FFFFFF]">
       {/* Header */}
-      <header className="bg-[#233037] border-b border-[#334047]">
+      <header className="bg-[#121212] border-b border-[#242833]">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-semibold text-white tracking-tight">numbi</span>
-              <span className="text-xs text-[#00D47F] font-medium bg-[#334047] px-2 py-1 rounded">E-commerce</span>
+              <span className="text-2xl font-semibold text-white tracking-tight">shuless</span>
+              <span className="text-xs text-[#121212] font-medium bg-[#242833] px-2 py-1 rounded">E-commerce</span>
             </div>
-            <div className="flex items-center gap-2 text-[#99C3D2] text-sm">
+            <div className="flex items-center gap-2 text-[#929292] text-sm">
               <Store className="h-4 w-4" />
               <span>{shop}</span>
             </div>
           </div>
           <Link href="/">
-            <Button variant="ghost" className="text-[#99C3D2] hover:text-white hover:bg-[#334047]">
+            <Button variant="ghost" className="text-[#929292] hover:text-white hover:bg-[#242833]">
               <LogOut className="h-4 w-4 mr-2" />
               Cerrar sesión
             </Button>
@@ -251,41 +251,41 @@ export default function DashboardPage() {
         <div className="container mx-auto px-4">
           <nav className="flex gap-4">
             <Link href="/dashboard">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Ventas
               </Button>
             </Link>
-            <Button variant="ghost" className="rounded-none border-b-2 border-[#00D47F] text-[#00D47F] py-4">
+            <Button variant="ghost" className="rounded-none border-b-2 border-[#121212] text-[#121212] py-4">
               <ShoppingCart className="h-4 w-4 mr-2" />
               Shopify
             </Button>
             <Link href="/dashboard/whatsapp">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <MessageCircle className="h-4 w-4 mr-2" />
                 WhatsApp
               </Button>
             </Link>
             <Link href="/dashboard/tiendas">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <Store className="h-4 w-4 mr-2" />
                 Tiendas
               </Button>
             </Link>
             <Link href="/dashboard/productos">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <Package className="h-4 w-4 mr-2" />
                 Productos
               </Button>
             </Link>
             <Link href="/dashboard/inventario">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <Boxes className="h-4 w-4 mr-2" />
                 Inventario
               </Button>
             </Link>
             <Link href="/dashboard/configuracion">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <Settings className="h-4 w-4 mr-2" />
                 Configuración
               </Button>
@@ -298,8 +298,8 @@ export default function DashboardPage() {
       <main className="container mx-auto px-4 py-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-[#233037] mb-2">Shopify</h1>
-            <p className="text-[#71828A]">Ventas de tu tienda Shopify</p>
+            <h1 className="text-3xl font-bold text-[#121212] mb-2">Shopify</h1>
+            <p className="text-[#545454]">Ventas de tu tienda Shopify</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 mt-4 md:mt-0">
             <div className="flex gap-1 border rounded-md p-1">
@@ -307,7 +307,7 @@ export default function DashboardPage() {
                 variant={groupBy === 'day' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setGroupBy('day')}
-                className={groupBy === 'day' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
+                className={groupBy === 'day' ? 'bg-[#121212] hover:bg-[#121212]/90 text-[#121212]' : ''}
               >
                 Día
               </Button>
@@ -315,7 +315,7 @@ export default function DashboardPage() {
                 variant={groupBy === 'week' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setGroupBy('week')}
-                className={groupBy === 'week' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
+                className={groupBy === 'week' ? 'bg-[#121212] hover:bg-[#121212]/90 text-[#121212]' : ''}
               >
                 Semana
               </Button>
@@ -323,7 +323,7 @@ export default function DashboardPage() {
                 variant={groupBy === 'month' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setGroupBy('month')}
-                className={groupBy === 'month' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
+                className={groupBy === 'month' ? 'bg-[#121212] hover:bg-[#121212]/90 text-[#121212]' : ''}
               >
                 Mes
               </Button>
@@ -347,48 +347,48 @@ export default function DashboardPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-[#71828A]">Ventas Totales</CardTitle>
-              <DollarSign className="h-4 w-4 text-[#71828A]" />
+              <CardTitle className="text-sm font-medium text-[#545454]">Ventas Totales</CardTitle>
+              <DollarSign className="h-4 w-4 text-[#545454]" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-[#233037]">{formatCurrency(stats.totalRevenue)}</div>
+              <div className="text-2xl font-bold text-[#121212]">{formatCurrency(stats.totalRevenue)}</div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-[#71828A]">Órdenes</CardTitle>
-              <ShoppingCart className="h-4 w-4 text-[#71828A]" />
+              <CardTitle className="text-sm font-medium text-[#545454]">Órdenes</CardTitle>
+              <ShoppingCart className="h-4 w-4 text-[#545454]" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-[#233037]">{stats.totalOrders}</div>
+              <div className="text-2xl font-bold text-[#121212]">{stats.totalOrders}</div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-[#71828A]">Unidades</CardTitle>
-              <Box className="h-4 w-4 text-[#71828A]" />
+              <CardTitle className="text-sm font-medium text-[#545454]">Unidades</CardTitle>
+              <Box className="h-4 w-4 text-[#545454]" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-[#233037]">{stats.totalUnits}</div>
+              <div className="text-2xl font-bold text-[#121212]">{stats.totalUnits}</div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-[#71828A]">Pagadas</CardTitle>
-              <Package className="h-4 w-4 text-[#71828A]" />
+              <CardTitle className="text-sm font-medium text-[#545454]">Pagadas</CardTitle>
+              <Package className="h-4 w-4 text-[#545454]" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-[#00D47F]">{stats.paidOrders}</div>
+              <div className="text-2xl font-bold text-[#121212]">{stats.paidOrders}</div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-[#71828A]">Pendientes</CardTitle>
-              <Clock className="h-4 w-4 text-[#71828A]" />
+              <CardTitle className="text-sm font-medium text-[#545454]">Pendientes</CardTitle>
+              <Clock className="h-4 w-4 text-[#545454]" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-yellow-500">{stats.pendingOrders}</div>
@@ -412,23 +412,23 @@ export default function DashboardPage() {
                       <XAxis
                         dataKey="displayDate"
                         tick={{ fontSize: 12 }}
-                        stroke="#71828A"
+                        stroke="#545454"
                       />
                       <YAxis
                         tick={{ fontSize: 12 }}
-                        stroke="#71828A"
+                        stroke="#545454"
                         tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
                       />
                       <Tooltip
                         formatter={(value) => [formatCurrency(Number(value)), 'Ventas']}
-                        labelStyle={{ color: '#233037' }}
+                        labelStyle={{ color: '#121212' }}
                         contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
                       />
-                      <Bar dataKey="sales" fill="#00D47F" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="sales" fill="#121212" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="flex items-center justify-center h-full text-[#71828A]">
+                  <div className="flex items-center justify-center h-full text-[#545454]">
                     No hay datos para mostrar
                   </div>
                 )}
@@ -450,28 +450,28 @@ export default function DashboardPage() {
                       <XAxis
                         dataKey="displayDate"
                         tick={{ fontSize: 12 }}
-                        stroke="#71828A"
+                        stroke="#545454"
                       />
                       <YAxis
                         tick={{ fontSize: 12 }}
-                        stroke="#71828A"
+                        stroke="#545454"
                       />
                       <Tooltip
                         formatter={(value) => [Number(value), 'Órdenes']}
-                        labelStyle={{ color: '#233037' }}
+                        labelStyle={{ color: '#121212' }}
                         contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
                       />
                       <Line
                         type="monotone"
                         dataKey="orders"
-                        stroke="#233037"
+                        stroke="#121212"
                         strokeWidth={2}
-                        dot={{ fill: '#233037', strokeWidth: 2 }}
+                        dot={{ fill: '#121212', strokeWidth: 2 }}
                       />
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="flex items-center justify-center h-full text-[#71828A]">
+                  <div className="flex items-center justify-center h-full text-[#545454]">
                     No hay datos para mostrar
                   </div>
                 )}
@@ -493,22 +493,22 @@ export default function DashboardPage() {
                       <XAxis
                         dataKey="displayDate"
                         tick={{ fontSize: 12 }}
-                        stroke="#71828A"
+                        stroke="#545454"
                       />
                       <YAxis
                         tick={{ fontSize: 12 }}
-                        stroke="#71828A"
+                        stroke="#545454"
                       />
                       <Tooltip
                         formatter={(value) => [Number(value), 'Unidades']}
-                        labelStyle={{ color: '#233037' }}
+                        labelStyle={{ color: '#121212' }}
                         contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
                       />
                       <Bar dataKey="units" fill="#6366f1" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="flex items-center justify-center h-full text-[#71828A]">
+                  <div className="flex items-center justify-center h-full text-[#545454]">
                     No hay datos para mostrar
                   </div>
                 )}
@@ -524,7 +524,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {orders.length === 0 ? (
-              <p className="text-[#71828A] text-center py-8">No hay órdenes todavía</p>
+              <p className="text-[#545454] text-center py-8">No hay órdenes todavía</p>
             ) : (
               <Table>
                 <TableHeader>
@@ -545,11 +545,11 @@ export default function DashboardPage() {
                         <div>
                           <div className="font-medium">{order.customerName}</div>
                           {order.customerEmail && (
-                            <div className="text-xs text-[#71828A]">{order.customerEmail}</div>
+                            <div className="text-xs text-[#545454]">{order.customerEmail}</div>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-[#71828A]">{formatDate(order.createdAt)}</TableCell>
+                      <TableCell className="text-[#545454]">{formatDate(order.createdAt)}</TableCell>
                       <TableCell>{getStatusBadge(order.financialStatus)}</TableCell>
                       <TableCell>{getFulfillmentBadge(order.fulfillmentStatus)}</TableCell>
                       <TableCell className="text-right font-medium">

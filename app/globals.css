@@ -48,38 +48,38 @@
 
 :root {
   --radius: 0.625rem;
-  /* Numbi Brand Colors */
-  --background: #F5F7F4;
-  --foreground: #233037;
-  --card: #ffffff;
-  --card-foreground: #233037;
-  --popover: #ffffff;
-  --popover-foreground: #233037;
-  --primary: #00D47F;
-  --primary-foreground: #ffffff;
-  --secondary: #D2E0E3;
-  --secondary-foreground: #233037;
-  --muted: #D2E0E3;
-  --muted-foreground: #71828A;
-  --accent: #6FDAAA;
-  --accent-foreground: #233037;
+  /* Shuless Brand Colors — minimalist white/black with royal blue accent */
+  --background: #FFFFFF;
+  --foreground: #121212;
+  --card: #FFFFFF;
+  --card-foreground: #121212;
+  --popover: #FFFFFF;
+  --popover-foreground: #121212;
+  --primary: #121212;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F3F3F3;
+  --secondary-foreground: #121212;
+  --muted: #F3F3F3;
+  --muted-foreground: #545454;
+  --accent: #334FB4;
+  --accent-foreground: #FFFFFF;
   --destructive: #ef4444;
-  --border: #D2E0E3;
-  --input: #D2E0E3;
-  --ring: #00D47F;
-  --chart-1: #00D47F;
-  --chart-2: #334047;
-  --chart-3: #6FDAAA;
-  --chart-4: #99C3D2;
-  --chart-5: #71828A;
-  --sidebar: #233037;
-  --sidebar-foreground: #F5F7F4;
-  --sidebar-primary: #00D47F;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #334047;
-  --sidebar-accent-foreground: #F5F7F4;
-  --sidebar-border: #334047;
-  --sidebar-ring: #00D47F;
+  --border: #E5E5E5;
+  --input: #E5E5E5;
+  --ring: #334FB4;
+  --chart-1: #121212;
+  --chart-2: #334FB4;
+  --chart-3: #545454;
+  --chart-4: #929292;
+  --chart-5: #242833;
+  --sidebar: #121212;
+  --sidebar-foreground: #FFFFFF;
+  --sidebar-primary: #334FB4;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #242833;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: #242833;
+  --sidebar-ring: #334FB4;
 }
 
 .dark {

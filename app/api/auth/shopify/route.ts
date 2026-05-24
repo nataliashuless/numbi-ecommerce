@@ -10,16 +10,16 @@ export async function GET(request: Request) {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Conectar Shopify - Numbi E-commerce</title>
+          <title>Conectar Shopify - Shuless</title>
           <style>
-            body { font-family: system-ui; background: #233037; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+            body { font-family: system-ui; background: #121212; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
             .container { text-align: center; max-width: 400px; }
-            h1 { color: #00D47F; margin-bottom: 24px; }
-            input { padding: 12px 16px; font-size: 16px; border: 2px solid #334047; border-radius: 8px; width: 100%; box-sizing: border-box; background: #334047; color: white; margin-bottom: 16px; }
-            input:focus { outline: none; border-color: #00D47F; }
-            button { background: #00D47F; color: #233037; padding: 12px 24px; font-size: 16px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; width: 100%; }
+            h1 { color: #121212; margin-bottom: 24px; }
+            input { padding: 12px 16px; font-size: 16px; border: 2px solid #242833; border-radius: 8px; width: 100%; box-sizing: border-box; background: #242833; color: white; margin-bottom: 16px; }
+            input:focus { outline: none; border-color: #121212; }
+            button { background: #121212; color: #121212; padding: 12px 24px; font-size: 16px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; width: 100%; }
             button:hover { background: #00C070; }
-            p { color: #99C3D2; font-size: 14px; }
+            p { color: #929292; font-size: 14px; }
           </style>
         </head>
         <body>

@@ -12,19 +12,17 @@ export async function GET(request: Request) {
   const endDate = searchParams.get('end_date')
   const groupBy = searchParams.get('group_by') || 'day'
 
-  // First get user's tiendas
-  const { data: userTiendas } = await supabase
+  // Get all tiendas
+  const { data: allTiendas } = await supabase
     .from('tiendas_terceros')
     .select('id, nombre')
-    .eq('user_id', user!.id)
 
-  const tiendaIds = (userTiendas || []).map(t => t.id)
+  const tiendaIds = (allTiendas || []).map(t => t.id)
   const tiendaNames: { [id: string]: string } = {}
-  userTiendas?.forEach(t => {
+  allTiendas?.forEach(t => {
     tiendaNames[t.id] = t.nombre
   })
 
-  // If user has no tiendas, return empty data
   if (tiendaIds.length === 0) {
     return NextResponse.json({
       chartData: [],

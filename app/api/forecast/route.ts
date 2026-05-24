@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAuth, getUserShopifyCredentials, getAdminClient } from '@/lib/auth-helpers'
+import { requireAuth, getShopifyCredentials, getAdminClient } from '@/lib/auth-helpers'
 
 interface ForecastItem {
   sku: string
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
   const stockSeguridad = parseInt(searchParams.get('stock_seguridad') || '7')  // Default 7 días de stock de seguridad
 
   // Get Shopify credentials from database
-  const credentials = await getUserShopifyCredentials(user!.id)
+  const credentials = await getShopifyCredentials()
   const shop = credentials?.shopify_shop
   const accessToken = credentials?.shopify_access_token
 
@@ -121,19 +121,17 @@ export async function GET(request: Request) {
       }
     }
 
-    // 3. Fetch WhatsApp sales from Supabase (filtered by user_id)
+    // 3. Fetch WhatsApp sales
     const { data: ventasWA } = await supabase
       .from('ventas_whatsapp')
       .select('producto_sku, cantidad')
-      .eq('user_id', user!.id)
       .gte('fecha', startDateStr)
       .lte('fecha', endDateStr)
 
-    // 4. Get user's tiendas first, then fetch their sales
+    // 4. Get tiendas first, then fetch their sales
     const { data: tiendas } = await supabase
       .from('tiendas_terceros')
       .select('id')
-      .eq('user_id', user!.id)
 
     const tiendaIds = (tiendas || []).map(t => t.id)
 

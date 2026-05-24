@@ -173,20 +173,20 @@ export default function ProductsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F5F7F4] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[#00D47F]" />
-        <span className="ml-2 text-[#71828A]">Cargando productos...</span>
+      <div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#121212]" />
+        <span className="ml-2 text-[#545454]">Cargando productos...</span>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#F5F7F4] flex items-center justify-center">
+      <div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-500 mb-4">{error}</p>
           <Link href="/api/auth/shopify">
-            <Button className="bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]">
+            <Button className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]">
               Reconectar Shopify
             </Button>
           </Link>
@@ -224,22 +224,22 @@ export default function ProductsPage() {
   })
 
   return (
-    <div className="min-h-screen bg-[#F5F7F4]">
+    <div className="min-h-screen bg-[#FFFFFF]">
       {/* Header */}
-      <header className="bg-[#233037] border-b border-[#334047]">
+      <header className="bg-[#121212] border-b border-[#242833]">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-semibold text-white tracking-tight">numbi</span>
-              <span className="text-xs text-[#00D47F] font-medium bg-[#334047] px-2 py-1 rounded">E-commerce</span>
+              <span className="text-2xl font-semibold text-white tracking-tight">shuless</span>
+              <span className="text-xs text-[#121212] font-medium bg-[#242833] px-2 py-1 rounded">E-commerce</span>
             </div>
-            <div className="flex items-center gap-2 text-[#99C3D2] text-sm">
+            <div className="flex items-center gap-2 text-[#929292] text-sm">
               <Store className="h-4 w-4" />
               <span>{shop}</span>
             </div>
           </div>
           <Link href="/">
-            <Button variant="ghost" className="text-[#99C3D2] hover:text-white hover:bg-[#334047]">
+            <Button variant="ghost" className="text-[#929292] hover:text-white hover:bg-[#242833]">
               <LogOut className="h-4 w-4 mr-2" />
               Cerrar sesión
             </Button>
@@ -252,41 +252,41 @@ export default function ProductsPage() {
         <div className="container mx-auto px-4">
           <nav className="flex gap-4">
             <Link href="/dashboard">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Ventas
               </Button>
             </Link>
             <Link href="/dashboard/shopify">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <ShoppingCart className="h-4 w-4 mr-2" />
                 Shopify
               </Button>
             </Link>
             <Link href="/dashboard/whatsapp">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <MessageCircle className="h-4 w-4 mr-2" />
                 WhatsApp
               </Button>
             </Link>
             <Link href="/dashboard/tiendas">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <Store className="h-4 w-4 mr-2" />
                 Tiendas
               </Button>
             </Link>
-            <Button variant="ghost" className="rounded-none border-b-2 border-[#00D47F] text-[#00D47F] py-4">
+            <Button variant="ghost" className="rounded-none border-b-2 border-[#121212] text-[#121212] py-4">
               <Package className="h-4 w-4 mr-2" />
               Productos
             </Button>
             <Link href="/dashboard/inventario">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <Boxes className="h-4 w-4 mr-2" />
                 Inventario
               </Button>
             </Link>
             <Link href="/dashboard/configuracion">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <Settings className="h-4 w-4 mr-2" />
                 Configuración
               </Button>
@@ -299,15 +299,15 @@ export default function ProductsPage() {
       <main className="container mx-auto px-4 py-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-[#233037] mb-2">Productos</h1>
-            <p className="text-[#71828A]">Inventario de tu tienda Shopify</p>
+            <h1 className="text-3xl font-bold text-[#121212] mb-2">Productos</h1>
+            <p className="text-[#545454]">Inventario de tu tienda Shopify</p>
           </div>
           <div className="flex gap-1 mt-4 md:mt-0 border rounded-md p-1 bg-white">
             <Button
               variant={filter === 'all' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setFilter('all')}
-              className={filter === 'all' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
+              className={filter === 'all' ? 'bg-[#121212] hover:bg-[#121212]/90 text-[#121212]' : ''}
             >
               Todos
             </Button>
@@ -334,37 +334,37 @@ export default function ProductsPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-[#71828A]">Total Productos</CardTitle>
-              <ShoppingBag className="h-4 w-4 text-[#71828A]" />
+              <CardTitle className="text-sm font-medium text-[#545454]">Total Productos</CardTitle>
+              <ShoppingBag className="h-4 w-4 text-[#545454]" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-[#233037]">{stats.totalProducts}</div>
+              <div className="text-2xl font-bold text-[#121212]">{stats.totalProducts}</div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-[#71828A]">Activos</CardTitle>
-              <Package className="h-4 w-4 text-[#71828A]" />
+              <CardTitle className="text-sm font-medium text-[#545454]">Activos</CardTitle>
+              <Package className="h-4 w-4 text-[#545454]" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-[#00D47F]">{stats.activeProducts}</div>
+              <div className="text-2xl font-bold text-[#121212]">{stats.activeProducts}</div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-[#71828A]">Inventario Total</CardTitle>
-              <Boxes className="h-4 w-4 text-[#71828A]" />
+              <CardTitle className="text-sm font-medium text-[#545454]">Inventario Total</CardTitle>
+              <Boxes className="h-4 w-4 text-[#545454]" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-[#233037]">{stats.totalInventory.toLocaleString()}</div>
+              <div className="text-2xl font-bold text-[#121212]">{stats.totalInventory.toLocaleString()}</div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-[#71828A]">Stock Bajo</CardTitle>
+              <CardTitle className="text-sm font-medium text-[#545454]">Stock Bajo</CardTitle>
               <AlertTriangle className="h-4 w-4 text-yellow-500" />
             </CardHeader>
             <CardContent>
@@ -374,7 +374,7 @@ export default function ProductsPage() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-[#71828A]">Agotados</CardTitle>
+              <CardTitle className="text-sm font-medium text-[#545454]">Agotados</CardTitle>
               <PackageX className="h-4 w-4 text-red-500" />
             </CardHeader>
             <CardContent>
@@ -387,7 +387,7 @@ export default function ProductsPage() {
         {filteredProducts.length === 0 ? (
           <Card>
             <CardContent className="py-8">
-              <p className="text-[#71828A] text-center">No hay productos en esta categoría</p>
+              <p className="text-[#545454] text-center">No hay productos en esta categoría</p>
             </CardContent>
           </Card>
         ) : (
@@ -401,17 +401,17 @@ export default function ProductsPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {expandedCategories.has(category) ? (
-                        <ChevronDown className="h-5 w-5 text-[#71828A]" />
+                        <ChevronDown className="h-5 w-5 text-[#545454]" />
                       ) : (
-                        <ChevronRight className="h-5 w-5 text-[#71828A]" />
+                        <ChevronRight className="h-5 w-5 text-[#545454]" />
                       )}
-                      <FolderOpen className="h-5 w-5 text-[#00D47F]" />
+                      <FolderOpen className="h-5 w-5 text-[#121212]" />
                       <CardTitle className="text-lg">{category}</CardTitle>
                       <Badge variant="secondary" className="ml-2">
                         {productsByCategory[category].length} productos
                       </Badge>
                     </div>
-                    <div className="text-sm text-[#71828A]">
+                    <div className="text-sm text-[#545454]">
                       {productsByCategory[category].reduce((sum, p) => sum + p.totalInventory, 0).toLocaleString()} uds en stock
                     </div>
                   </div>
@@ -441,9 +441,9 @@ export default function ProductsPage() {
                               <TableCell className="w-8">
                                 {product.variantCount > 1 && (
                                   expandedProducts.has(product.id) ? (
-                                    <ChevronDown className="h-4 w-4 text-[#71828A]" />
+                                    <ChevronDown className="h-4 w-4 text-[#545454]" />
                                   ) : (
-                                    <ChevronRight className="h-4 w-4 text-[#71828A]" />
+                                    <ChevronRight className="h-4 w-4 text-[#545454]" />
                                   )
                                 )}
                               </TableCell>
@@ -463,14 +463,14 @@ export default function ProductsPage() {
                                   <div>
                                     <div className="font-medium">{product.title}</div>
                                     {product.variantCount > 1 && (
-                                      <div className="text-xs text-[#71828A]">
+                                      <div className="text-xs text-[#545454]">
                                         {product.variantCount} variantes
                                       </div>
                                     )}
                                   </div>
                                 </div>
                               </TableCell>
-                              <TableCell className="text-[#71828A]">
+                              <TableCell className="text-[#545454]">
                                 {product.variants[0]?.sku || '-'}
                               </TableCell>
                               <TableCell>{getStatusBadge(product.status)}</TableCell>
@@ -497,7 +497,7 @@ export default function ProductsPage() {
                                     </div>
                                   </div>
                                 </TableCell>
-                                <TableCell className="text-[#71828A] text-sm">
+                                <TableCell className="text-[#545454] text-sm">
                                   {variant.sku || '-'}
                                 </TableCell>
                                 <TableCell></TableCell>

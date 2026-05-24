@@ -81,15 +81,13 @@ export async function GET(request: Request) {
     // Save to database using service client
     const serviceClient = getServiceClient()
 
-    // Check if user_integrations record exists
     const { data: existing } = await serviceClient
       .from('user_integrations')
       .select('id')
-      .eq('user_id', user.id)
-      .single()
+      .limit(1)
+      .maybeSingle()
 
     if (existing) {
-      // Update existing record
       await serviceClient
         .from('user_integrations')
         .update({
@@ -97,20 +95,17 @@ export async function GET(request: Request) {
           shopify_access_token: accessToken,
           shopify_connected_at: new Date().toISOString(),
         })
-        .eq('user_id', user.id)
+        .eq('id', existing.id)
     } else {
-      // Insert new record
       await serviceClient
         .from('user_integrations')
         .insert({
-          user_id: user.id,
           shopify_shop: shop,
           shopify_access_token: accessToken,
           shopify_connected_at: new Date().toISOString(),
         })
     }
 
-    // Mark onboarding as completed
     await serviceClient
       .from('profiles')
       .update({ onboarding_completed: true })

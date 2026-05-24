@@ -1,22 +1,15 @@
 import { NextResponse } from 'next/server'
-import { requireAuth, getAdminClient, verifyTiendaOwnership } from '@/lib/auth-helpers'
+import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // Require authentication
-  const { user, error } = await requireAuth()
+  const { error } = await requireAuth()
   if (error) return error
 
   const { id } = await params
   const supabase = getAdminClient()
-
-  // Verify ownership of the tienda
-  const isOwner = await verifyTiendaOwnership(id, user!.id)
-  if (!isOwner) {
-    return NextResponse.json({ error: 'Tienda no encontrada' }, { status: 404 })
-  }
 
   const body = await request.json()
 
@@ -84,18 +77,11 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // Require authentication
-  const { user, error } = await requireAuth()
+  const { error } = await requireAuth()
   if (error) return error
 
   const { id } = await params
   const supabase = getAdminClient()
-
-  // Verify ownership of the tienda
-  const isOwner = await verifyTiendaOwnership(id, user!.id)
-  if (!isOwner) {
-    return NextResponse.json({ error: 'Tienda no encontrada' }, { status: 404 })
-  }
 
   const body = await request.json()
 

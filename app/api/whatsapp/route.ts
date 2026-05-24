@@ -13,12 +13,10 @@ interface VentaWhatsApp {
   precio_unitario: number
   total: number
   notas: string | null
-  user_id: string
 }
 
 export async function GET(request: Request) {
-  // Require authentication
-  const { user, error } = await requireAuth()
+  const { error } = await requireAuth()
   if (error) return error
 
   const supabase = getAdminClient()
@@ -29,21 +27,14 @@ export async function GET(request: Request) {
   const limit = Math.min(parseInt(searchParams.get('limit') || '100'), 100)
   const offset = (page - 1) * limit
 
-  // Build query with user_id filter for multi-tenant isolation
   let query = supabase
     .from('ventas_whatsapp')
     .select('*', { count: 'exact' })
-    .eq('user_id', user!.id)
     .order('fecha', { ascending: false })
 
-  if (startDate) {
-    query = query.gte('fecha', startDate)
-  }
-  if (endDate) {
-    query = query.lte('fecha', endDate)
-  }
+  if (startDate) query = query.gte('fecha', startDate)
+  if (endDate) query = query.lte('fecha', endDate)
 
-  // Apply pagination
   query = query.range(offset, offset + limit - 1)
 
   const { data, error: queryError, count } = await query
@@ -54,12 +45,10 @@ export async function GET(request: Request) {
 
   const ventas = data as VentaWhatsApp[]
 
-  // Calculate stats
   const totalVentas = ventas.reduce((sum, v) => sum + Number(v.total), 0)
   const totalUnidades = ventas.reduce((sum, v) => sum + v.cantidad, 0)
   const numVentas = ventas.length
 
-  // Group by date for chart
   const chartDataMap: Record<string, { sales: number; orders: number; units: number }> = {}
   ventas.forEach(v => {
     const date = v.fecha
@@ -99,18 +88,15 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  // Require authentication
-  const { user, error } = await requireAuth()
+  const { error } = await requireAuth()
   if (error) return error
 
   const supabase = getAdminClient()
   const body = await request.json()
 
-  // Insert with user_id for multi-tenant isolation
   const { data, error: insertError } = await supabase
     .from('ventas_whatsapp')
     .insert([{
-      user_id: user!.id,
       fecha: body.fecha,
       cliente_nombre: body.cliente_nombre || null,
       cliente_telefono: body.cliente_telefono || null,
@@ -137,8 +123,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  // Require authentication
-  const { user, error } = await requireAuth()
+  const { error } = await requireAuth()
   if (error) return error
 
   const supabase = getAdminClient()
@@ -150,22 +135,10 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
   }
 
-  // Verify ownership before updating
-  const { data: existing } = await supabase
-    .from('ventas_whatsapp')
-    .select('user_id')
-    .eq('id', id)
-    .single()
-
-  if (!existing || existing.user_id !== user!.id) {
-    return NextResponse.json({ error: 'Venta no encontrada' }, { status: 404 })
-  }
-
   const { data, error: updateError } = await supabase
     .from('ventas_whatsapp')
     .update(body)
     .eq('id', id)
-    .eq('user_id', user!.id) // Double-check ownership
     .select()
     .single()
 
@@ -177,8 +150,7 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  // Require authentication
-  const { user, error } = await requireAuth()
+  const { error } = await requireAuth()
   if (error) return error
 
   const supabase = getAdminClient()
@@ -189,22 +161,10 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
   }
 
-  // Verify ownership before deleting
-  const { data: existing } = await supabase
-    .from('ventas_whatsapp')
-    .select('user_id')
-    .eq('id', id)
-    .single()
-
-  if (!existing || existing.user_id !== user!.id) {
-    return NextResponse.json({ error: 'Venta no encontrada' }, { status: 404 })
-  }
-
   const { error: deleteError } = await supabase
     .from('ventas_whatsapp')
     .delete()
     .eq('id', id)
-    .eq('user_id', user!.id) // Double-check ownership
 
   if (deleteError) {
     return NextResponse.json({ error: deleteError.message }, { status: 500 })

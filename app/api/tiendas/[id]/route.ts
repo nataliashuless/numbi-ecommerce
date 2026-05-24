@@ -1,30 +1,25 @@
 import { NextResponse } from 'next/server'
-import { requireAuth, getAdminClient, verifyTiendaOwnership } from '@/lib/auth-helpers'
+import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // Require authentication
-  const { user, error } = await requireAuth()
+  const { error } = await requireAuth()
   if (error) return error
 
   const { id } = await params
   const supabase = getAdminClient()
 
-  // Verify ownership
-  const isOwner = await verifyTiendaOwnership(id, user!.id)
-  if (!isOwner) {
-    return NextResponse.json({ error: 'Tienda no encontrada' }, { status: 404 })
-  }
-
-  // Get store details
   const { data: tienda, error: tiendaError } = await supabase
     .from('tiendas_terceros')
     .select('*')
     .eq('id', id)
-    .eq('user_id', user!.id)
     .single()
+
+  if (!tienda) {
+    return NextResponse.json({ error: 'Tienda no encontrada' }, { status: 404 })
+  }
 
   if (tiendaError) {
     return NextResponse.json({ error: tiendaError.message }, { status: 500 })

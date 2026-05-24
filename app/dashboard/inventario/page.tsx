@@ -197,20 +197,20 @@ export default function InventarioPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F5F7F4] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[#00D47F]" />
-        <span className="ml-2 text-[#71828A]">Cargando inventario...</span>
+      <div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#121212]" />
+        <span className="ml-2 text-[#545454]">Cargando inventario...</span>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#F5F7F4] flex items-center justify-center">
+      <div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-500 mb-4">{error}</p>
           <Link href="/api/auth/shopify">
-            <Button className="bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]">
+            <Button className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]">
               Reconectar Shopify
             </Button>
           </Link>
@@ -263,18 +263,18 @@ export default function InventarioPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F7F4]">
+    <div className="min-h-screen bg-[#FFFFFF]">
       {/* Header */}
-      <header className="bg-[#233037] border-b border-[#334047]">
+      <header className="bg-[#121212] border-b border-[#242833]">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-semibold text-white tracking-tight">numbi</span>
-              <span className="text-xs text-[#00D47F] font-medium bg-[#334047] px-2 py-1 rounded">E-commerce</span>
+              <span className="text-2xl font-semibold text-white tracking-tight">shuless</span>
+              <span className="text-xs text-[#121212] font-medium bg-[#242833] px-2 py-1 rounded">E-commerce</span>
             </div>
           </div>
           <Link href="/">
-            <Button variant="ghost" className="text-[#99C3D2] hover:text-white hover:bg-[#334047]">
+            <Button variant="ghost" className="text-[#929292] hover:text-white hover:bg-[#242833]">
               <LogOut className="h-4 w-4 mr-2" />
               Cerrar sesión
             </Button>
@@ -287,41 +287,41 @@ export default function InventarioPage() {
         <div className="container mx-auto px-4">
           <nav className="flex gap-4">
             <Link href="/dashboard">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Ventas
               </Button>
             </Link>
             <Link href="/dashboard/shopify">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <ShoppingCart className="h-4 w-4 mr-2" />
                 Shopify
               </Button>
             </Link>
             <Link href="/dashboard/whatsapp">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <MessageCircle className="h-4 w-4 mr-2" />
                 WhatsApp
               </Button>
             </Link>
             <Link href="/dashboard/tiendas">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <Store className="h-4 w-4 mr-2" />
                 Tiendas
               </Button>
             </Link>
             <Link href="/dashboard/productos">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <Package className="h-4 w-4 mr-2" />
                 Productos
               </Button>
             </Link>
-            <Button variant="ghost" className="rounded-none border-b-2 border-[#00D47F] text-[#00D47F] py-4">
+            <Button variant="ghost" className="rounded-none border-b-2 border-[#121212] text-[#121212] py-4">
               <Boxes className="h-4 w-4 mr-2" />
               Inventario
             </Button>
             <Link href="/dashboard/configuracion">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <Settings className="h-4 w-4 mr-2" />
                 Configuración
               </Button>
@@ -333,7 +333,7 @@ export default function InventarioPage() {
       <main className="container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-[#233037]">Inventario y Forecast</h1>
+            <h1 className="text-2xl font-bold text-[#121212]">Inventario y Forecast</h1>
             <TabsList>
               <TabsTrigger value="inventario" className="flex items-center gap-2">
                 <Boxes className="h-4 w-4" />
@@ -352,42 +352,42 @@ export default function InventarioPage() {
             <div className="grid gap-4 md:grid-cols-4 mb-8">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#71828A]">Total Empresa</CardTitle>
-                  <Boxes className="h-4 w-4 text-[#00D47F]" />
+                  <CardTitle className="text-sm font-medium text-[#545454]">Total Empresa</CardTitle>
+                  <Boxes className="h-4 w-4 text-[#121212]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#233037]">{totales.total.toLocaleString()}</div>
-                  <p className="text-xs text-[#71828A]">unidades totales</p>
+                  <div className="text-2xl font-bold text-[#121212]">{totales.total.toLocaleString()}</div>
+                  <p className="text-xs text-[#545454]">unidades totales</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#71828A]">En Bodega</CardTitle>
+                  <CardTitle className="text-sm font-medium text-[#545454]">En Bodega</CardTitle>
                   <Warehouse className="h-4 w-4 text-blue-500" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#233037]">{totales.bodega.toLocaleString()}</div>
-                  <p className="text-xs text-[#71828A]">{totales.total > 0 ? ((totales.bodega / totales.total) * 100).toFixed(0) : 0}% del total</p>
+                  <div className="text-2xl font-bold text-[#121212]">{totales.bodega.toLocaleString()}</div>
+                  <p className="text-xs text-[#545454]">{totales.total > 0 ? ((totales.bodega / totales.total) * 100).toFixed(0) : 0}% del total</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#71828A]">Consignado</CardTitle>
+                  <CardTitle className="text-sm font-medium text-[#545454]">Consignado</CardTitle>
                   <Store className="h-4 w-4 text-purple-500" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#233037]">{totales.consignado.toLocaleString()}</div>
-                  <p className="text-xs text-[#71828A]">en {tiendas.length} tiendas</p>
+                  <div className="text-2xl font-bold text-[#121212]">{totales.consignado.toLocaleString()}</div>
+                  <p className="text-xs text-[#545454]">en {tiendas.length} tiendas</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#71828A]">Alertas</CardTitle>
+                  <CardTitle className="text-sm font-medium text-[#545454]">Alertas</CardTitle>
                   <Package className="h-4 w-4 text-yellow-500" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#233037]">{lowStockCount + outOfStockCount}</div>
-                  <p className="text-xs text-[#71828A]">{outOfStockCount} agotados, {lowStockCount} stock bajo</p>
+                  <div className="text-2xl font-bold text-[#121212]">{lowStockCount + outOfStockCount}</div>
+                  <p className="text-xs text-[#545454]">{outOfStockCount} agotados, {lowStockCount} stock bajo</p>
                 </CardContent>
               </Card>
             </div>
@@ -397,7 +397,7 @@ export default function InventarioPage() {
               <CardContent className="pt-6">
                 <div className="flex flex-col md:flex-row gap-4">
                   <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#71828A]" />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#545454]" />
                     <Input
                       placeholder="Buscar por producto, SKU o variante..."
                       value={searchTerm}
@@ -409,7 +409,7 @@ export default function InventarioPage() {
                     <Button
                       variant={filter === 'all' ? 'default' : 'outline'}
                       onClick={() => setFilter('all')}
-                      className={filter === 'all' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
+                      className={filter === 'all' ? 'bg-[#121212] hover:bg-[#121212]/90 text-[#121212]' : ''}
                     >
                       Todos ({inventario.length})
                     </Button>
@@ -438,7 +438,7 @@ export default function InventarioPage() {
                 <CardTitle className="text-lg">
                   Detalle por Producto
                   {searchTerm && (
-                    <span className="ml-2 text-sm font-normal text-[#71828A]">
+                    <span className="ml-2 text-sm font-normal text-[#545454]">
                       ({filteredInventario.length} resultados)
                     </span>
                   )}
@@ -463,7 +463,7 @@ export default function InventarioPage() {
                     <TableBody>
                       {filteredInventario.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={4 + tiendas.length} className="text-center py-8 text-[#71828A]">
+                          <TableCell colSpan={4 + tiendas.length} className="text-center py-8 text-[#545454]">
                             {searchTerm ? 'No se encontraron productos' : 'No hay productos en inventario'}
                           </TableCell>
                         </TableRow>
@@ -480,14 +480,14 @@ export default function InventarioPage() {
                                   />
                                 )}
                                 <div>
-                                  <div className="font-medium text-[#233037]">{item.producto}</div>
+                                  <div className="font-medium text-[#121212]">{item.producto}</div>
                                   {item.variante && (
-                                    <div className="text-sm text-[#71828A]">{item.variante}</div>
+                                    <div className="text-sm text-[#545454]">{item.variante}</div>
                                   )}
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell className="font-mono text-sm text-[#71828A]">{item.sku}</TableCell>
+                            <TableCell className="font-mono text-sm text-[#545454]">{item.sku}</TableCell>
                             <TableCell className="text-center bg-blue-50/50">
                               {getInventoryBadge(item.bodega)}
                             </TableCell>
@@ -496,7 +496,7 @@ export default function InventarioPage() {
                                 {item.tiendas[tienda.id] > 0 ? (
                                   <Badge variant="secondary">{item.tiendas[tienda.id]}</Badge>
                                 ) : (
-                                  <span className="text-[#71828A]">-</span>
+                                  <span className="text-[#545454]">-</span>
                                 )}
                               </TableCell>
                             ))}
@@ -514,15 +514,15 @@ export default function InventarioPage() {
                   <div className="mt-4 pt-4 border-t">
                     <div className="flex justify-end gap-8 text-sm">
                       <div>
-                        <span className="text-[#71828A]">Bodega: </span>
+                        <span className="text-[#545454]">Bodega: </span>
                         <span className="font-bold text-blue-600">{filteredTotales.bodega.toLocaleString()}</span>
                       </div>
                       <div>
-                        <span className="text-[#71828A]">Consignado: </span>
+                        <span className="text-[#545454]">Consignado: </span>
                         <span className="font-bold text-purple-600">{filteredTotales.consignado.toLocaleString()}</span>
                       </div>
                       <div>
-                        <span className="text-[#71828A]">Total: </span>
+                        <span className="text-[#545454]">Total: </span>
                         <span className="font-bold text-green-600">{filteredTotales.total.toLocaleString()}</span>
                       </div>
                     </div>
@@ -536,8 +536,8 @@ export default function InventarioPage() {
           <TabsContent value="forecast">
             {forecastLoading ? (
               <div className="flex items-center justify-center py-20">
-                <Loader2 className="h-8 w-8 animate-spin text-[#00D47F]" />
-                <span className="ml-2 text-[#71828A]">Calculando forecast...</span>
+                <Loader2 className="h-8 w-8 animate-spin text-[#121212]" />
+                <span className="ml-2 text-[#545454]">Calculando forecast...</span>
               </div>
             ) : forecastData ? (
               <>
@@ -565,32 +565,32 @@ export default function InventarioPage() {
                   </Card>
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium text-[#71828A]">Media Prioridad</CardTitle>
+                      <CardTitle className="text-sm font-medium text-[#545454]">Media Prioridad</CardTitle>
                       <TrendingUp className="h-4 w-4 text-yellow-500" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold text-[#233037]">{forecastData.resumen.medios}</div>
-                      <p className="text-xs text-[#71828A]">se agotan en 30 dias</p>
+                      <div className="text-2xl font-bold text-[#121212]">{forecastData.resumen.medios}</div>
+                      <p className="text-xs text-[#545454]">se agotan en 30 dias</p>
                     </CardContent>
                   </Card>
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium text-[#71828A]">Producir Sugerido</CardTitle>
-                      <Factory className="h-4 w-4 text-[#00D47F]" />
+                      <CardTitle className="text-sm font-medium text-[#545454]">Producir Sugerido</CardTitle>
+                      <Factory className="h-4 w-4 text-[#121212]" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold text-[#233037]">{forecastData.resumen.totalProducirSugerido.toLocaleString()}</div>
-                      <p className="text-xs text-[#71828A]">unidades totales</p>
+                      <div className="text-2xl font-bold text-[#121212]">{forecastData.resumen.totalProducirSugerido.toLocaleString()}</div>
+                      <p className="text-xs text-[#545454]">unidades totales</p>
                     </CardContent>
                   </Card>
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium text-[#71828A]">Ventas ({diasAnalisis}d)</CardTitle>
+                      <CardTitle className="text-sm font-medium text-[#545454]">Ventas ({diasAnalisis}d)</CardTitle>
                       <ShoppingCart className="h-4 w-4 text-blue-500" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold text-[#233037]">{forecastData.resumen.totalVentasPeriodo.toLocaleString()}</div>
-                      <p className="text-xs text-[#71828A]">unidades vendidas</p>
+                      <div className="text-2xl font-bold text-[#121212]">{forecastData.resumen.totalVentasPeriodo.toLocaleString()}</div>
+                      <p className="text-xs text-[#545454]">unidades vendidas</p>
                     </CardContent>
                   </Card>
                 </div>
@@ -636,7 +636,7 @@ export default function InventarioPage() {
                           placeholder="7"
                         />
                       </div>
-                      <Button onClick={fetchForecast} className="bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]">
+                      <Button onClick={fetchForecast} className="bg-[#121212] hover:bg-[#121212]/90 text-[#121212]">
                         Recalcular
                       </Button>
                     </div>
@@ -648,7 +648,7 @@ export default function InventarioPage() {
                   <CardContent className="pt-6">
                     <div className="flex flex-col md:flex-row gap-4">
                       <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#71828A]" />
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#545454]" />
                         <Input
                           placeholder="Buscar por producto, SKU o variante..."
                           value={forecastSearchTerm}
@@ -660,7 +660,7 @@ export default function InventarioPage() {
                         <Button
                           variant={forecastFilter === 'all' ? 'default' : 'outline'}
                           onClick={() => setForecastFilter('all')}
-                          className={forecastFilter === 'all' ? 'bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]' : ''}
+                          className={forecastFilter === 'all' ? 'bg-[#121212] hover:bg-[#121212]/90 text-[#121212]' : ''}
                         >
                           Todos
                         </Button>
@@ -713,7 +713,7 @@ export default function InventarioPage() {
                         <TableBody>
                           {filteredForecast.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={8} className="text-center py-8 text-[#71828A]">
+                              <TableCell colSpan={8} className="text-center py-8 text-[#545454]">
                                 No hay productos que mostrar
                               </TableCell>
                             </TableRow>
@@ -730,14 +730,14 @@ export default function InventarioPage() {
                                       />
                                     )}
                                     <div>
-                                      <div className="font-medium text-[#233037]">{item.producto}</div>
+                                      <div className="font-medium text-[#121212]">{item.producto}</div>
                                       {item.variante && (
-                                        <div className="text-sm text-[#71828A]">{item.variante}</div>
+                                        <div className="text-sm text-[#545454]">{item.variante}</div>
                                       )}
                                     </div>
                                   </div>
                                 </TableCell>
-                                <TableCell className="font-mono text-sm text-[#71828A]">{item.sku}</TableCell>
+                                <TableCell className="font-mono text-sm text-[#545454]">{item.sku}</TableCell>
                                 <TableCell className="text-center">
                                   {getInventoryBadge(item.stockBodega)}
                                 </TableCell>
@@ -745,7 +745,7 @@ export default function InventarioPage() {
                                   <div className="text-sm">
                                     <span className="font-medium">{item.ventasTotal}</span>
                                     {item.ventasTotal > 0 && (
-                                      <div className="text-xs text-[#71828A]">
+                                      <div className="text-xs text-[#545454]">
                                         S:{item.ventasShopify} W:{item.ventasWhatsApp} T:{item.ventasTiendas}
                                       </div>
                                     )}
@@ -753,15 +753,15 @@ export default function InventarioPage() {
                                 </TableCell>
                                 <TableCell className="text-center">
                                   <span className="font-medium">{item.velocidadSemanal.toFixed(1)}</span>
-                                  <span className="text-xs text-[#71828A]"> uds/sem</span>
+                                  <span className="text-xs text-[#545454]"> uds/sem</span>
                                 </TableCell>
                                 <TableCell className="text-center">
                                   {item.diasHastaAgotamiento !== null ? (
-                                    <span className={`font-bold ${item.diasHastaAgotamiento <= 7 ? 'text-red-600' : item.diasHastaAgotamiento <= 14 ? 'text-orange-600' : 'text-[#233037]'}`}>
+                                    <span className={`font-bold ${item.diasHastaAgotamiento <= 7 ? 'text-red-600' : item.diasHastaAgotamiento <= 14 ? 'text-orange-600' : 'text-[#121212]'}`}>
                                       {item.diasHastaAgotamiento} dias
                                     </span>
                                   ) : (
-                                    <span className="text-[#71828A]">-</span>
+                                    <span className="text-[#545454]">-</span>
                                   )}
                                 </TableCell>
                                 <TableCell className="text-center">
@@ -771,7 +771,7 @@ export default function InventarioPage() {
                                   {item.sugerenciaProduccion > 0 ? (
                                     <span className="font-bold text-green-700">{item.sugerenciaProduccion}</span>
                                   ) : (
-                                    <span className="text-[#71828A]">-</span>
+                                    <span className="text-[#545454]">-</span>
                                   )}
                                 </TableCell>
                               </TableRow>
@@ -784,11 +784,11 @@ export default function InventarioPage() {
                     {filteredForecast.length > 0 && (
                       <div className="mt-4 pt-4 border-t">
                         <div className="flex justify-between items-center text-sm">
-                          <div className="text-[#71828A]">
+                          <div className="text-[#545454]">
                             Formula: Producir = (Lead Time + Stock Seguridad) x Velocidad Diaria - Stock Actual
                           </div>
                           <div>
-                            <span className="text-[#71828A]">Total a producir: </span>
+                            <span className="text-[#545454]">Total a producir: </span>
                             <span className="font-bold text-green-600">
                               {filteredForecast.reduce((sum, f) => sum + f.sugerenciaProduccion, 0).toLocaleString()} uds
                             </span>

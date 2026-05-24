@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAuth, getUserShopifyCredentials } from '@/lib/auth-helpers'
+import { requireAuth, getShopifyCredentials } from '@/lib/auth-helpers'
 
 interface ParsedData {
   cliente_nombre: string | null
@@ -34,9 +34,9 @@ interface ShopifyProduct {
 }
 
 // Fetch products from Shopify for RAG context
-async function fetchProductCatalog(userId: string): Promise<string[]> {
+async function fetchProductCatalog(): Promise<string[]> {
   try {
-    const credentials = await getUserShopifyCredentials(userId)
+    const credentials = await getShopifyCredentials()
     if (!credentials?.shopify_shop || !credentials?.shopify_access_token) {
       return []
     }
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     }
 
     // Fetch product catalog for RAG
-    const productNames = await fetchProductCatalog(user!.id)
+    const productNames = await fetchProductCatalog()
     const productCatalogContext = productNames.length > 0
       ? `\nCATÁLOGO DE PRODUCTOS DE LA TIENDA (usa estos nombres para identificar productos):\n${productNames.map(p => `- ${p}`).join('\n')}\n`
       : ''

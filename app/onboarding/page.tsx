@@ -43,14 +43,14 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#233037] flex items-center justify-center p-4">
-      <Card className="w-full max-w-md bg-[#2a3942] border-[#334047]">
+    <div className="min-h-screen bg-[#121212] flex items-center justify-center p-4">
+      <Card className="w-full max-w-md bg-[#2a3942] border-[#242833]">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 w-16 h-16 bg-[#00D47F]/20 rounded-full flex items-center justify-center">
-            <Store className="h-8 w-8 text-[#00D47F]" />
+          <div className="mx-auto mb-4 w-16 h-16 bg-[#121212]/20 rounded-full flex items-center justify-center">
+            <Store className="h-8 w-8 text-[#121212]" />
           </div>
           <CardTitle className="text-white text-2xl">Conectar Shopify</CardTitle>
-          <CardDescription className="text-[#99C3D2]">
+          <CardDescription className="text-[#929292]">
             Conecta tu tienda Shopify para comenzar a gestionar tus ventas y envíos
           </CardDescription>
         </CardHeader>
@@ -72,20 +72,20 @@ export default function OnboardingPage() {
                   value={shop}
                   onChange={(e) => setShop(e.target.value)}
                   required
-                  className="bg-[#334047] border-[#445057] text-white placeholder:text-[#71828A] rounded-r-none"
+                  className="bg-[#242833] border-[#445057] text-white placeholder:text-[#545454] rounded-r-none"
                 />
-                <span className="inline-flex items-center px-3 bg-[#445057] border border-l-0 border-[#445057] text-[#99C3D2] text-sm rounded-r-md">
+                <span className="inline-flex items-center px-3 bg-[#445057] border border-l-0 border-[#445057] text-[#929292] text-sm rounded-r-md">
                   .myshopify.com
                 </span>
               </div>
-              <p className="text-xs text-[#71828A]">
+              <p className="text-xs text-[#545454]">
                 Ejemplo: si tu tienda es shuless.myshopify.com, escribe "shuless"
               </p>
             </div>
 
             <Button
               type="submit"
-              className="w-full bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037] font-medium"
+              className="w-full bg-[#121212] hover:bg-[#121212]/90 text-[#121212] font-medium"
               disabled={loading || !shop.trim()}
             >
               {loading ? (

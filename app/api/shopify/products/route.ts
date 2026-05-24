@@ -3,7 +3,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
-async function getUserShopifyCredentials() {
+async function getShopifyCredentials() {
   const cookieStore = await cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -31,14 +31,14 @@ async function getUserShopifyCredentials() {
   const { data: integration } = await serviceClient
     .from('user_integrations')
     .select('shopify_shop, shopify_access_token')
-    .eq('user_id', user.id)
-    .single()
+    .limit(1)
+    .maybeSingle()
 
   return integration
 }
 
 export async function GET() {
-  const credentials = await getUserShopifyCredentials()
+  const credentials = await getShopifyCredentials()
   const shop = credentials?.shopify_shop
   const accessToken = credentials?.shopify_access_token
 

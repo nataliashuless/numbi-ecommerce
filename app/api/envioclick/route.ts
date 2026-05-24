@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAuth, getUserEnvioClickCredentials } from '@/lib/auth-helpers'
+import { requireAuth, getEnvioClickCredentials } from '@/lib/auth-helpers'
 
 const API_BASE = 'https://api.envioclickpro.com.co/api/v2'
 
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   const action = searchParams.get('action') // 'quote' or 'shipment'
 
   // Get user's EnvioClick credentials from database
-  const credentials = await getUserEnvioClickCredentials(user!.id)
+  const credentials = await getEnvioClickCredentials()
   const API_KEY = credentials?.envioclick_api_key
 
   if (!API_KEY) {

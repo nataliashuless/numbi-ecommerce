@@ -218,24 +218,24 @@ export default function DashboardPage() {
   }) || []
 
   return (
-    <div className="min-h-screen bg-[#F5F7F4]">
+    <div className="min-h-screen bg-[#FFFFFF]">
       {/* Header */}
-      <header className="bg-[#233037] border-b border-[#334047]">
+      <header className="bg-[#121212] border-b border-[#242833]">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-semibold text-white tracking-tight">numbi</span>
-              <span className="text-xs text-[#00D47F] font-medium bg-[#334047] px-2 py-1 rounded">E-commerce</span>
+              <span className="text-2xl font-semibold text-white tracking-tight">shuless</span>
+              <span className="text-xs text-[#121212] font-medium bg-[#242833] px-2 py-1 rounded">E-commerce</span>
             </div>
             {shop && (
-              <div className="flex items-center gap-2 text-[#99C3D2] text-sm">
+              <div className="flex items-center gap-2 text-[#929292] text-sm">
                 <Store className="h-4 w-4" />
                 <span>{shop}</span>
               </div>
             )}
           </div>
           <Link href="/">
-            <Button variant="ghost" className="text-[#99C3D2] hover:text-white hover:bg-[#334047]">
+            <Button variant="ghost" className="text-[#929292] hover:text-white hover:bg-[#242833]">
               <LogOut className="h-4 w-4 mr-2" />
               Cerrar sesión
             </Button>
@@ -247,42 +247,42 @@ export default function DashboardPage() {
       <div className="bg-white border-b">
         <div className="container mx-auto px-4">
           <nav className="flex gap-4">
-            <Button variant="ghost" className="rounded-none border-b-2 border-[#00D47F] text-[#00D47F] py-4">
+            <Button variant="ghost" className="rounded-none border-b-2 border-[#121212] text-[#121212] py-4">
               <BarChart3 className="h-4 w-4 mr-2" />
               Ventas
             </Button>
             <Link href="/dashboard/shopify">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <ShoppingCart className="h-4 w-4 mr-2" />
                 Shopify
               </Button>
             </Link>
             <Link href="/dashboard/whatsapp">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <MessageCircle className="h-4 w-4 mr-2" />
                 WhatsApp
               </Button>
             </Link>
             <Link href="/dashboard/tiendas">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <Store className="h-4 w-4 mr-2" />
                 Tiendas
               </Button>
             </Link>
             <Link href="/dashboard/productos">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <Package className="h-4 w-4 mr-2" />
                 Productos
               </Button>
             </Link>
             <Link href="/dashboard/inventario">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <Boxes className="h-4 w-4 mr-2" />
                 Inventario
               </Button>
             </Link>
             <Link href="/dashboard/configuracion">
-              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#121212] py-4">
                 <Settings className="h-4 w-4 mr-2" />
                 Configuración
               </Button>
@@ -295,8 +295,8 @@ export default function DashboardPage() {
       <main className="container mx-auto px-4 py-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-[#233037] mb-2">Ventas Consolidadas</h1>
-            <p className="text-[#71828A]">Resumen de todos los canales de venta</p>
+            <h1 className="text-3xl font-bold text-[#121212] mb-2">Ventas Consolidadas</h1>
+            <p className="text-[#545454]">Resumen de todos los canales de venta</p>
           </div>
           <div className="flex items-center gap-2 mt-4 md:mt-0">
             <DateRangePicker date={dateRange} onDateChange={setDateRange} />
@@ -313,41 +313,41 @@ export default function DashboardPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-[#00D47F]" />
-            <span className="ml-2 text-[#71828A]">Cargando datos...</span>
+            <Loader2 className="h-8 w-8 animate-spin text-[#121212]" />
+            <span className="ml-2 text-[#545454]">Cargando datos...</span>
           </div>
         ) : (
           <>
             {/* Total KPIs */}
             <div className="grid gap-4 md:grid-cols-3 mb-8">
-              <Card className="bg-[#233037] text-white">
+              <Card className="bg-[#121212] text-white">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#99C3D2]">Ventas Totales</CardTitle>
-                  <DollarSign className="h-4 w-4 text-[#00D47F]" />
+                  <CardTitle className="text-sm font-medium text-[#929292]">Ventas Totales</CardTitle>
+                  <DollarSign className="h-4 w-4 text-[#121212]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-[#00D47F]">{formatCurrency(data?.total.ventas || 0)}</div>
-                  <p className="text-xs text-[#99C3D2] mt-1">Todos los canales</p>
+                  <div className="text-3xl font-bold text-[#121212]">{formatCurrency(data?.total.ventas || 0)}</div>
+                  <p className="text-xs text-[#929292] mt-1">Todos los canales</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#71828A]">Total Órdenes</CardTitle>
-                  <ShoppingCart className="h-4 w-4 text-[#71828A]" />
+                  <CardTitle className="text-sm font-medium text-[#545454]">Total Órdenes</CardTitle>
+                  <ShoppingCart className="h-4 w-4 text-[#545454]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#233037]">{data?.total.ordenes || 0}</div>
+                  <div className="text-2xl font-bold text-[#121212]">{data?.total.ordenes || 0}</div>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#71828A]">Unidades Vendidas</CardTitle>
-                  <Box className="h-4 w-4 text-[#71828A]" />
+                  <CardTitle className="text-sm font-medium text-[#545454]">Unidades Vendidas</CardTitle>
+                  <Box className="h-4 w-4 text-[#545454]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#233037]">{data?.total.unidades || 0}</div>
+                  <div className="text-2xl font-bold text-[#121212]">{data?.total.unidades || 0}</div>
                 </CardContent>
               </Card>
             </div>
@@ -357,12 +357,12 @@ export default function DashboardPage() {
               <Link href="/dashboard/shopify">
                 <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-[#96bf48]">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-[#71828A]">Shopify</CardTitle>
+                    <CardTitle className="text-sm font-medium text-[#545454]">Shopify</CardTitle>
                     <ShoppingCart className="h-4 w-4 text-[#96bf48]" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-[#233037]">{formatCurrency(data?.shopify.ventas || 0)}</div>
-                    <p className="text-xs text-[#71828A]">{data?.shopify.ordenes || 0} órdenes · {data?.shopify.unidades || 0} unidades</p>
+                    <div className="text-2xl font-bold text-[#121212]">{formatCurrency(data?.shopify.ventas || 0)}</div>
+                    <p className="text-xs text-[#545454]">{data?.shopify.ordenes || 0} órdenes · {data?.shopify.unidades || 0} unidades</p>
                   </CardContent>
                 </Card>
               </Link>
@@ -370,12 +370,12 @@ export default function DashboardPage() {
               <Link href="/dashboard/whatsapp">
                 <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-[#25D366]">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-[#71828A]">WhatsApp</CardTitle>
+                    <CardTitle className="text-sm font-medium text-[#545454]">WhatsApp</CardTitle>
                     <MessageCircle className="h-4 w-4 text-[#25D366]" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-[#233037]">{formatCurrency(data?.whatsapp.ventas || 0)}</div>
-                    <p className="text-xs text-[#71828A]">{data?.whatsapp.ordenes || 0} ventas · {data?.whatsapp.unidades || 0} unidades</p>
+                    <div className="text-2xl font-bold text-[#121212]">{formatCurrency(data?.whatsapp.ventas || 0)}</div>
+                    <p className="text-xs text-[#545454]">{data?.whatsapp.ordenes || 0} ventas · {data?.whatsapp.unidades || 0} unidades</p>
                   </CardContent>
                 </Card>
               </Link>
@@ -383,12 +383,12 @@ export default function DashboardPage() {
               <Link href="/dashboard/tiendas">
                 <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-[#6366f1]">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-[#71828A]">Tiendas Terceros</CardTitle>
+                    <CardTitle className="text-sm font-medium text-[#545454]">Tiendas Terceros</CardTitle>
                     <Store className="h-4 w-4 text-[#6366f1]" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-[#233037]">{formatCurrency(data?.tiendas.ventas || 0)}</div>
-                    <p className="text-xs text-[#71828A]">{data?.tiendas.ordenes || 0} ventas pendientes</p>
+                    <div className="text-2xl font-bold text-[#121212]">{formatCurrency(data?.tiendas.ventas || 0)}</div>
+                    <p className="text-xs text-[#545454]">{data?.tiendas.ordenes || 0} ventas pendientes</p>
                   </CardContent>
                 </Card>
               </Link>
@@ -405,7 +405,7 @@ export default function DashboardPage() {
                       variant={groupBy === 'day' ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => setGroupBy('day')}
-                      className={groupBy === 'day' ? 'bg-[#00D47F] text-[#233037] hover:bg-[#00D47F]/90' : ''}
+                      className={groupBy === 'day' ? 'bg-[#121212] text-[#121212] hover:bg-[#121212]/90' : ''}
                     >
                       Día
                     </Button>
@@ -413,7 +413,7 @@ export default function DashboardPage() {
                       variant={groupBy === 'week' ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => setGroupBy('week')}
-                      className={groupBy === 'week' ? 'bg-[#00D47F] text-[#233037] hover:bg-[#00D47F]/90' : ''}
+                      className={groupBy === 'week' ? 'bg-[#121212] text-[#121212] hover:bg-[#121212]/90' : ''}
                     >
                       Semana
                     </Button>
@@ -421,7 +421,7 @@ export default function DashboardPage() {
                       variant={groupBy === 'month' ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => setGroupBy('month')}
-                      className={groupBy === 'month' ? 'bg-[#00D47F] text-[#233037] hover:bg-[#00D47F]/90' : ''}
+                      className={groupBy === 'month' ? 'bg-[#121212] text-[#121212] hover:bg-[#121212]/90' : ''}
                     >
                       Mes
                     </Button>
@@ -429,7 +429,7 @@ export default function DashboardPage() {
                       variant={groupBy === 'quarter' ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => setGroupBy('quarter')}
-                      className={groupBy === 'quarter' ? 'bg-[#00D47F] text-[#233037] hover:bg-[#00D47F]/90' : ''}
+                      className={groupBy === 'quarter' ? 'bg-[#121212] text-[#121212] hover:bg-[#121212]/90' : ''}
                     >
                       Trimestre
                     </Button>
@@ -441,8 +441,8 @@ export default function DashboardPage() {
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={formattedChartData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis dataKey="displayDate" tick={{ fontSize: 12 }} stroke="#71828A" />
-                          <YAxis tick={{ fontSize: 12 }} stroke="#71828A" tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
+                          <XAxis dataKey="displayDate" tick={{ fontSize: 12 }} stroke="#545454" />
+                          <YAxis tick={{ fontSize: 12 }} stroke="#545454" tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
                           <Tooltip
                             formatter={(value) => [formatCurrency(Number(value)), '']}
                             contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
@@ -454,7 +454,7 @@ export default function DashboardPage() {
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="flex items-center justify-center h-full text-[#71828A]">
+                      <div className="flex items-center justify-center h-full text-[#545454]">
                         No hay datos para mostrar
                       </div>
                     )}
@@ -491,7 +491,7 @@ export default function DashboardPage() {
                         </PieChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="flex items-center justify-center h-full text-[#71828A]">
+                      <div className="flex items-center justify-center h-full text-[#545454]">
                         No hay datos
                       </div>
                     )}

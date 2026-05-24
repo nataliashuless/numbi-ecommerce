@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAuth, getUserShopifyCredentials, getAdminClient } from '@/lib/auth-helpers'
+import { requireAuth, getShopifyCredentials, getAdminClient } from '@/lib/auth-helpers'
 
 interface InventarioItem {
   sku: string
@@ -18,7 +18,7 @@ export async function GET() {
   if (error) return error
 
   // Get Shopify credentials from database
-  const credentials = await getUserShopifyCredentials(user!.id)
+  const credentials = await getShopifyCredentials()
   const shop = credentials?.shopify_shop
   const accessToken = credentials?.shopify_access_token
 
@@ -70,11 +70,10 @@ export async function GET() {
       }
     }
 
-    // 2. Fetch all stores (filtered by user_id)
+    // 2. Fetch all active stores
     const { data: tiendas, error: tiendasError } = await supabase
       .from('tiendas_terceros')
       .select('id, nombre')
-      .eq('user_id', user!.id)
       .eq('activa', true)
       .order('nombre')
 
