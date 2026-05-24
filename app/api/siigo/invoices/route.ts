@@ -18,8 +18,41 @@ export async function GET(request: Request) {
     const invoices = await listInvoices(startDate, endDate)
     const supabase = getAdminClient()
 
-    const customerIds = invoices.map(i => i.customer?.id).filter(Boolean) as string[]
-    const namesMap = await getCustomersByIds(customerIds)
+    const customerIds = Array.from(
+      new Set(invoices.map(i => i.customer?.id).filter(Boolean) as string[])
+    )
+
+    const namesMap = new Map<string, string>()
+
+    if (customerIds.length > 0) {
+      const { data: cached } = await supabase
+        .from('siigo_customers')
+        .select('id, name')
+        .in('id', customerIds)
+      for (const row of (cached || []) as Array<{ id: string; name: string }>) {
+        if (row.name) namesMap.set(row.id, row.name)
+      }
+    }
+
+    const missing = customerIds.filter(id => !namesMap.has(id))
+    if (missing.length > 0) {
+      const freshNames = await getCustomersByIds(missing)
+      for (const [id, name] of freshNames) {
+        namesMap.set(id, name)
+      }
+      const rowsToUpsert = Array.from(freshNames.entries()).map(([id, name]) => {
+        const inv = invoices.find(i => i.customer?.id === id)
+        return {
+          id,
+          name,
+          identification: inv?.customer?.identification || null,
+          last_synced: new Date().toISOString(),
+        }
+      })
+      if (rowsToUpsert.length > 0) {
+        await supabase.from('siigo_customers').upsert(rowsToUpsert, { onConflict: 'id' })
+      }
+    }
 
     const { data: waVentas } = await supabase
       .from('ventas_whatsapp')
@@ -56,6 +89,10 @@ export async function GET(request: Request) {
       invoices: enriched,
       total: enriched.length,
       totalAmount: enriched.reduce((sum, i) => sum + i.total, 0),
+      cache: {
+        cached: customerIds.length - missing.length,
+        fetched: missing.length,
+      },
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error obteniendo facturas Siigo'

@@ -134,15 +134,27 @@ export function clearSiigoTokenCache(): void {
 
 async function siigoFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
   const token = await getSiigoToken()
-  return fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'Partner-Id': 'shuless',
-      ...options.headers,
-    },
-  })
+  const baseHeaders = {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    'Partner-Id': 'shuless',
+    ...options.headers,
+  }
+
+  let attempt = 0
+  const maxAttempts = 4
+  while (true) {
+    const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers: baseHeaders })
+    if (response.status !== 429 || attempt >= maxAttempts - 1) return response
+
+    const retryAfterHeader = response.headers.get('Retry-After')
+    const retryAfterSec = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN
+    const backoffMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0
+      ? retryAfterSec * 1000
+      : 1000 * Math.pow(2, attempt) + Math.floor(Math.random() * 250)
+    await new Promise(r => setTimeout(r, backoffMs))
+    attempt++
+  }
 }
 
 export async function getUserSiigoConfig(): Promise<SiigoConfig> {
@@ -365,7 +377,7 @@ export async function listInvoices(
 export async function getCustomersByIds(ids: string[]): Promise<Map<string, string>> {
   const unique = Array.from(new Set(ids))
   const result = new Map<string, string>()
-  const CONCURRENCY = 8
+  const CONCURRENCY = 3
 
   async function fetchOne(id: string): Promise<void> {
     try {
