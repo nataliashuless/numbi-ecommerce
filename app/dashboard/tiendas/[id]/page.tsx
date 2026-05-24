@@ -48,6 +48,8 @@ import {
   Clock,
   ArrowUpRight,
   ArrowDownLeft,
+  Settings,
+  Save,
 } from 'lucide-react'
 
 interface Tienda {
@@ -62,6 +64,38 @@ interface Tienda {
   comision_fijo: number | null
   notas: string | null
   activa: boolean
+  // Siigo config fields
+  siigo_cost_center_id: number | null
+  siigo_cost_center_name: string | null
+  siigo_seller_id: number | null
+  siigo_seller_name: string | null
+  siigo_iva_tax_id: number | null
+  siigo_default_document_id: number | null
+  siigo_default_document_name: string | null
+}
+
+interface SiigoCostCenter {
+  id: number
+  code?: string
+  name: string
+}
+
+interface SiigoSeller {
+  id: number
+  username: string
+  first_name: string
+  last_name: string
+}
+
+interface SiigoTax {
+  id: number
+  name: string
+  percentage: number
+}
+
+interface SiigoDocumentType {
+  id: number
+  name: string
 }
 
 interface Consignacion {
@@ -142,6 +176,24 @@ export default function TiendaDetallePage() {
   const [consignacionDialog, setConsignacionDialog] = useState(false)
   const [ventaDialog, setVentaDialog] = useState(false)
   const [liquidacionDialog, setLiquidacionDialog] = useState(false)
+
+  // Siigo states
+  const [siigoCostCenters, setSiigoCostCenters] = useState<SiigoCostCenter[]>([])
+  const [siigoSellers, setSiigoSellers] = useState<SiigoSeller[]>([])
+  const [siigoTaxes, setSiigoTaxes] = useState<SiigoTax[]>([])
+  const [siigoDocumentTypes, setSiigoDocumentTypes] = useState<SiigoDocumentType[]>([])
+  const [siigoLoading, setSiigoLoading] = useState(false)
+  const [siigoSaving, setSiigoSaving] = useState(false)
+  const [siigoConnected, setSiigoConnected] = useState(false)
+  const [siigoConfig, setSiigoConfig] = useState({
+    siigo_cost_center_id: null as number | null,
+    siigo_cost_center_name: null as string | null,
+    siigo_seller_id: null as number | null,
+    siigo_seller_name: null as string | null,
+    siigo_iva_tax_id: null as number | null,
+    siigo_default_document_id: null as number | null,
+    siigo_default_document_name: null as string | null,
+  })
 
   // Form states
   const [consignacionForm, setConsignacionForm] = useState({
@@ -284,6 +336,96 @@ export default function TiendaDetallePage() {
     }
   }
 
+  async function fetchSiigoOptions() {
+    setSiigoLoading(true)
+    try {
+      // Test connection first
+      const testRes = await fetch('/api/siigo?action=test-connection', { method: 'POST' })
+      const testData = await testRes.json()
+      setSiigoConnected(testData.connected)
+
+      if (!testData.connected) {
+        setSiigoLoading(false)
+        return
+      }
+
+      // Fetch all Siigo options in parallel
+      const [costCentersRes, sellersRes, taxesRes, docTypesRes] = await Promise.all([
+        fetch('/api/siigo?action=cost-centers'),
+        fetch('/api/siigo?action=sellers'),
+        fetch('/api/siigo?action=taxes'),
+        fetch('/api/siigo?action=document-types'),
+      ])
+
+      const [costCentersData, sellersData, taxesData, docTypesData] = await Promise.all([
+        costCentersRes.json(),
+        sellersRes.json(),
+        taxesRes.json(),
+        docTypesRes.json(),
+      ])
+
+      setSiigoCostCenters(costCentersData.costCenters || [])
+      setSiigoSellers(sellersData.sellers || [])
+      setSiigoTaxes(taxesData.taxes || [])
+      setSiigoDocumentTypes(docTypesData.documentTypes || [])
+    } catch (error) {
+      console.error('Error fetching Siigo options:', error)
+    } finally {
+      setSiigoLoading(false)
+    }
+  }
+
+  async function handleSaveSiigoConfig() {
+    setSiigoSaving(true)
+    try {
+      const res = await fetch('/api/tiendas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: tiendaId,
+          nombre: tienda?.nombre,
+          contacto_nombre: tienda?.contacto_nombre,
+          contacto_telefono: tienda?.contacto_telefono,
+          contacto_email: tienda?.contacto_email,
+          direccion: tienda?.direccion,
+          comision_tipo: tienda?.comision_tipo,
+          comision_porcentaje: tienda?.comision_porcentaje,
+          comision_fijo: tienda?.comision_fijo,
+          notas: tienda?.notas,
+          activa: tienda?.activa,
+          ...siigoConfig,
+        }),
+      })
+      if (res.ok) {
+        fetchData()
+        alert('Configuración Siigo guardada correctamente')
+      } else {
+        const error = await res.json()
+        alert(`Error: ${error.error}`)
+      }
+    } catch (error) {
+      console.error('Error saving Siigo config:', error)
+      alert('Error al guardar la configuración')
+    } finally {
+      setSiigoSaving(false)
+    }
+  }
+
+  // Initialize Siigo config when tienda data is loaded
+  useEffect(() => {
+    if (tienda) {
+      setSiigoConfig({
+        siigo_cost_center_id: tienda.siigo_cost_center_id,
+        siigo_cost_center_name: tienda.siigo_cost_center_name,
+        siigo_seller_id: tienda.siigo_seller_id,
+        siigo_seller_name: tienda.siigo_seller_name,
+        siigo_iva_tax_id: tienda.siigo_iva_tax_id,
+        siigo_default_document_id: tienda.siigo_default_document_id,
+        siigo_default_document_name: tienda.siigo_default_document_name,
+      })
+    }
+  }, [tienda])
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F5F7F4] flex items-center justify-center">
@@ -381,6 +523,10 @@ export default function TiendaDetallePage() {
             <TabsTrigger value="consignaciones">Consignaciones</TabsTrigger>
             <TabsTrigger value="ventas">Ventas</TabsTrigger>
             <TabsTrigger value="liquidaciones">Liquidaciones</TabsTrigger>
+            <TabsTrigger value="siigo" onClick={() => !siigoConnected && fetchSiigoOptions()}>
+              <Settings className="h-4 w-4 mr-1" />
+              Siigo
+            </TabsTrigger>
           </TabsList>
 
           {/* Inventario Tab */}
@@ -797,6 +943,195 @@ export default function TiendaDetallePage() {
                       ))}
                     </TableBody>
                   </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Siigo Tab */}
+          <TabsContent value="siigo">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Configuración Siigo</CardTitle>
+                  <p className="text-sm text-[#71828A] mt-1">
+                    Configura los parámetros de facturación Siigo para esta tienda
+                  </p>
+                </div>
+                <Button
+                  className="bg-[#00D47F] hover:bg-[#00D47F]/90 text-[#233037]"
+                  onClick={handleSaveSiigoConfig}
+                  disabled={siigoSaving || !siigoConnected}
+                >
+                  {siigoSaving ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4 mr-2" />
+                  )}
+                  Guardar
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {siigoLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-[#00D47F]" />
+                    <span className="ml-2 text-[#71828A]">Cargando opciones de Siigo...</span>
+                  </div>
+                ) : !siigoConnected ? (
+                  <div className="text-center py-8">
+                    <p className="text-[#71828A] mb-4">
+                      No hay conexión con Siigo. Configura tus credenciales en la página de configuración.
+                    </p>
+                    <Link href="/dashboard/configuracion">
+                      <Button variant="outline">
+                        <Settings className="h-4 w-4 mr-2" />
+                        Ir a Configuración
+                      </Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Centro de Costo */}
+                    <div className="grid gap-2">
+                      <Label>Centro de Costo</Label>
+                      <Select
+                        value={siigoConfig.siigo_cost_center_id?.toString() || ''}
+                        onValueChange={(v) => {
+                          const center = siigoCostCenters.find(c => c.id.toString() === v)
+                          setSiigoConfig({
+                            ...siigoConfig,
+                            siigo_cost_center_id: center ? center.id : null,
+                            siigo_cost_center_name: center ? center.name : null,
+                          })
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar centro de costo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {siigoCostCenters.map((center) => (
+                            <SelectItem key={center.id} value={center.id.toString()}>
+                              {center.code ? `${center.code} - ` : ''}{center.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-[#71828A]">
+                        Permite clasificar ingresos por tienda en Siigo
+                      </p>
+                    </div>
+
+                    {/* Vendedor */}
+                    <div className="grid gap-2">
+                      <Label>Vendedor</Label>
+                      <Select
+                        value={siigoConfig.siigo_seller_id?.toString() || ''}
+                        onValueChange={(v) => {
+                          const seller = siigoSellers.find(s => s.id.toString() === v)
+                          setSiigoConfig({
+                            ...siigoConfig,
+                            siigo_seller_id: seller ? seller.id : null,
+                            siigo_seller_name: seller ? `${seller.first_name} ${seller.last_name}` : null,
+                          })
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar vendedor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {siigoSellers.map((seller) => (
+                            <SelectItem key={seller.id} value={seller.id.toString()}>
+                              {seller.first_name} {seller.last_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-[#71828A]">
+                        Usuario de Siigo asociado a las facturas de esta tienda
+                      </p>
+                    </div>
+
+                    {/* IVA */}
+                    <div className="grid gap-2">
+                      <Label>Impuesto IVA</Label>
+                      <Select
+                        value={siigoConfig.siigo_iva_tax_id?.toString() || ''}
+                        onValueChange={(v) => {
+                          setSiigoConfig({
+                            ...siigoConfig,
+                            siigo_iva_tax_id: v ? parseInt(v) : null,
+                          })
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar impuesto" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {siigoTaxes
+                            .filter(t => t.percentage > 0)
+                            .map((tax) => (
+                              <SelectItem key={tax.id} value={tax.id.toString()}>
+                                {tax.name} ({tax.percentage}%)
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-[#71828A]">
+                        ID del impuesto IVA a aplicar (por defecto 19%)
+                      </p>
+                    </div>
+
+                    {/* Tipo de Documento */}
+                    <div className="grid gap-2">
+                      <Label>Tipo de Documento</Label>
+                      <Select
+                        value={siigoConfig.siigo_default_document_id?.toString() || ''}
+                        onValueChange={(v) => {
+                          const doc = siigoDocumentTypes.find(d => d.id.toString() === v)
+                          setSiigoConfig({
+                            ...siigoConfig,
+                            siigo_default_document_id: doc ? doc.id : null,
+                            siigo_default_document_name: doc ? doc.name : null,
+                          })
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Usar tipo por defecto" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {siigoDocumentTypes.map((doc) => (
+                            <SelectItem key={doc.id} value={doc.id.toString()}>
+                              {doc.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-[#71828A]">
+                        Tipo de documento/factura para ventas de esta tienda
+                      </p>
+                    </div>
+
+                    {/* Current Config Summary */}
+                    {(siigoConfig.siigo_cost_center_name || siigoConfig.siigo_seller_name) && (
+                      <div className="mt-6 p-4 bg-[#F5F7F4] rounded-lg">
+                        <p className="text-sm font-medium text-[#233037] mb-2">Configuración actual:</p>
+                        <ul className="text-sm text-[#71828A] space-y-1">
+                          {siigoConfig.siigo_cost_center_name && (
+                            <li>Centro de Costo: {siigoConfig.siigo_cost_center_name}</li>
+                          )}
+                          {siigoConfig.siigo_seller_name && (
+                            <li>Vendedor: {siigoConfig.siigo_seller_name}</li>
+                          )}
+                          {siigoConfig.siigo_iva_tax_id && (
+                            <li>IVA Tax ID: {siigoConfig.siigo_iva_tax_id}</li>
+                          )}
+                          {siigoConfig.siigo_default_document_name && (
+                            <li>Documento: {siigoConfig.siigo_default_document_name}</li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 )}
               </CardContent>
             </Card>

@@ -28,6 +28,7 @@ import {
   FolderOpen,
   MessageCircle,
   ShoppingCart,
+  Settings,
 } from 'lucide-react'
 
 interface Variant {
@@ -240,7 +241,7 @@ export default function ProductsPage() {
           <Link href="/">
             <Button variant="ghost" className="text-[#99C3D2] hover:text-white hover:bg-[#334047]">
               <LogOut className="h-4 w-4 mr-2" />
-              Desconectar
+              Cerrar sesión
             </Button>
           </Link>
         </div>
@@ -282,6 +283,12 @@ export default function ProductsPage() {
               <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
                 <Boxes className="h-4 w-4 mr-2" />
                 Inventario
+              </Button>
+            </Link>
+            <Link href="/dashboard/configuracion">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+                <Settings className="h-4 w-4 mr-2" />
+                Configuración
               </Button>
             </Link>
           </nav>

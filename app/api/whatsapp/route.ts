@@ -1,14 +1,39 @@
 import { NextResponse } from 'next/server'
-import { supabase, VentaWhatsApp } from '@/lib/supabase'
+import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
+
+interface VentaWhatsApp {
+  id: string
+  fecha: string
+  cliente_nombre: string | null
+  cliente_telefono: string | null
+  producto_nombre: string
+  producto_variante: string | null
+  producto_sku: string | null
+  cantidad: number
+  precio_unitario: number
+  total: number
+  notas: string | null
+  user_id: string
+}
 
 export async function GET(request: Request) {
+  // Require authentication
+  const { user, error } = await requireAuth()
+  if (error) return error
+
+  const supabase = getAdminClient()
   const { searchParams } = new URL(request.url)
   const startDate = searchParams.get('start_date')
   const endDate = searchParams.get('end_date')
+  const page = parseInt(searchParams.get('page') || '1')
+  const limit = Math.min(parseInt(searchParams.get('limit') || '100'), 100)
+  const offset = (page - 1) * limit
 
+  // Build query with user_id filter for multi-tenant isolation
   let query = supabase
     .from('ventas_whatsapp')
-    .select('*')
+    .select('*', { count: 'exact' })
+    .eq('user_id', user!.id)
     .order('fecha', { ascending: false })
 
   if (startDate) {
@@ -18,10 +43,13 @@ export async function GET(request: Request) {
     query = query.lte('fecha', endDate)
   }
 
-  const { data, error } = await query
+  // Apply pagination
+  query = query.range(offset, offset + limit - 1)
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  const { data, error: queryError, count } = await query
+
+  if (queryError) {
+    return NextResponse.json({ error: queryError.message }, { status: 500 })
   }
 
   const ventas = data as VentaWhatsApp[]
@@ -61,15 +89,28 @@ export async function GET(request: Request) {
       promedioVenta: numVentas > 0 ? totalVentas / numVentas : 0,
     },
     chartData,
+    pagination: {
+      page,
+      limit,
+      total: count || 0,
+      pages: Math.ceil((count || 0) / limit),
+    },
   })
 }
 
 export async function POST(request: Request) {
+  // Require authentication
+  const { user, error } = await requireAuth()
+  if (error) return error
+
+  const supabase = getAdminClient()
   const body = await request.json()
 
-  const { data, error } = await supabase
+  // Insert with user_id for multi-tenant isolation
+  const { data, error: insertError } = await supabase
     .from('ventas_whatsapp')
     .insert([{
+      user_id: user!.id,
       fecha: body.fecha,
       cliente_nombre: body.cliente_nombre || null,
       cliente_telefono: body.cliente_telefono || null,
@@ -88,14 +129,19 @@ export async function POST(request: Request) {
     .select()
     .single()
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  if (insertError) {
+    return NextResponse.json({ error: insertError.message }, { status: 500 })
   }
 
   return NextResponse.json(data)
 }
 
 export async function PATCH(request: Request) {
+  // Require authentication
+  const { user, error } = await requireAuth()
+  if (error) return error
+
+  const supabase = getAdminClient()
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
   const body = await request.json()
@@ -104,21 +150,38 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
   }
 
-  const { data, error } = await supabase
+  // Verify ownership before updating
+  const { data: existing } = await supabase
+    .from('ventas_whatsapp')
+    .select('user_id')
+    .eq('id', id)
+    .single()
+
+  if (!existing || existing.user_id !== user!.id) {
+    return NextResponse.json({ error: 'Venta no encontrada' }, { status: 404 })
+  }
+
+  const { data, error: updateError } = await supabase
     .from('ventas_whatsapp')
     .update(body)
     .eq('id', id)
+    .eq('user_id', user!.id) // Double-check ownership
     .select()
     .single()
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  if (updateError) {
+    return NextResponse.json({ error: updateError.message }, { status: 500 })
   }
 
   return NextResponse.json(data)
 }
 
 export async function DELETE(request: Request) {
+  // Require authentication
+  const { user, error } = await requireAuth()
+  if (error) return error
+
+  const supabase = getAdminClient()
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
 
@@ -126,13 +189,25 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
   }
 
-  const { error } = await supabase
+  // Verify ownership before deleting
+  const { data: existing } = await supabase
+    .from('ventas_whatsapp')
+    .select('user_id')
+    .eq('id', id)
+    .single()
+
+  if (!existing || existing.user_id !== user!.id) {
+    return NextResponse.json({ error: 'Venta no encontrada' }, { status: 404 })
+  }
+
+  const { error: deleteError } = await supabase
     .from('ventas_whatsapp')
     .delete()
     .eq('id', id)
+    .eq('user_id', user!.id) // Double-check ownership
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  if (deleteError) {
+    return NextResponse.json({ error: deleteError.message }, { status: 500 })
   }
 
   return NextResponse.json({ success: true })

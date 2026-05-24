@@ -1,11 +1,23 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { requireAuth, getAdminClient, verifyTiendaOwnership } from '@/lib/auth-helpers'
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Require authentication
+  const { user, error } = await requireAuth()
+  if (error) return error
+
   const { id } = await params
+  const supabase = getAdminClient()
+
+  // Verify ownership of the tienda
+  const isOwner = await verifyTiendaOwnership(id, user!.id)
+  if (!isOwner) {
+    return NextResponse.json({ error: 'Tienda no encontrada' }, { status: 404 })
+  }
+
   const body = await request.json()
 
   // Get all unsettled sales for this store in the period
@@ -72,21 +84,46 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Require authentication
+  const { user, error } = await requireAuth()
+  if (error) return error
+
+  const { id } = await params
+  const supabase = getAdminClient()
+
+  // Verify ownership of the tienda
+  const isOwner = await verifyTiendaOwnership(id, user!.id)
+  if (!isOwner) {
+    return NextResponse.json({ error: 'Tienda no encontrada' }, { status: 404 })
+  }
+
   const body = await request.json()
 
+  // Verify the liquidacion belongs to this tienda
+  const { data: existingLiquidacion } = await supabase
+    .from('liquidaciones')
+    .select('tienda_id')
+    .eq('id', body.liquidacion_id)
+    .single()
+
+  if (!existingLiquidacion || existingLiquidacion.tienda_id !== id) {
+    return NextResponse.json({ error: 'Liquidación no encontrada' }, { status: 404 })
+  }
+
   // Update settlement status (mark as paid)
-  const { data, error } = await supabase
+  const { data, error: updateError } = await supabase
     .from('liquidaciones')
     .update({
       estado: body.estado,
       notas: body.notas,
     })
     .eq('id', body.liquidacion_id)
+    .eq('tienda_id', id)
     .select()
     .single()
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  if (updateError) {
+    return NextResponse.json({ error: updateError.message }, { status: 500 })
   }
 
   return NextResponse.json(data)

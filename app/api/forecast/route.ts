@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { supabase } from '@/lib/supabase'
+import { requireAuth, getUserShopifyCredentials, getAdminClient } from '@/lib/auth-helpers'
 
 interface ForecastItem {
   sku: string
@@ -26,18 +25,25 @@ interface ForecastItem {
 }
 
 export async function GET(request: Request) {
+  // Require authentication
+  const { user, error } = await requireAuth()
+  if (error) return error
+
   const { searchParams } = new URL(request.url)
   const diasAnalisis = parseInt(searchParams.get('dias') || '30')  // Default 30 días
   const leadTimeDias = parseInt(searchParams.get('lead_time') || '14')  // Default 14 días producción
   const stockSeguridad = parseInt(searchParams.get('stock_seguridad') || '7')  // Default 7 días de stock de seguridad
 
-  const cookieStore = await cookies()
-  const shop = cookieStore.get('shopify_shop')?.value
-  const accessToken = cookieStore.get('shopify_token')?.value
+  // Get Shopify credentials from database
+  const credentials = await getUserShopifyCredentials(user!.id)
+  const shop = credentials?.shopify_shop
+  const accessToken = credentials?.shopify_access_token
 
   if (!shop || !accessToken) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    return NextResponse.json({ error: 'Shopify no conectado' }, { status: 401 })
   }
+
+  const supabase = getAdminClient()
 
   try {
     // Calculate date range for analysis
@@ -115,26 +121,41 @@ export async function GET(request: Request) {
       }
     }
 
-    // 3. Fetch WhatsApp sales from Supabase
+    // 3. Fetch WhatsApp sales from Supabase (filtered by user_id)
     const { data: ventasWA } = await supabase
       .from('ventas_whatsapp')
       .select('producto_sku, cantidad')
+      .eq('user_id', user!.id)
       .gte('fecha', startDateStr)
       .lte('fecha', endDateStr)
 
-    // 4. Fetch Tiendas sales from Supabase
-    const { data: ventasTiendas } = await supabase
-      .from('ventas_terceros')
-      .select('producto_sku, cantidad')
-      .gte('fecha', startDateStr)
-      .lte('fecha', endDateStr)
+    // 4. Get user's tiendas first, then fetch their sales
+    const { data: tiendas } = await supabase
+      .from('tiendas_terceros')
+      .select('id')
+      .eq('user_id', user!.id)
 
-    // 5. Fetch consignaciones for consigned inventory
-    const { data: consignaciones } = await supabase
-      .from('consignaciones')
-      .select('producto_sku, tipo, cantidad')
+    const tiendaIds = (tiendas || []).map(t => t.id)
 
-    // 6. Calculate sales per SKU from all channels
+    // 5. Fetch Tiendas sales from Supabase (filtered by user's tiendas)
+    const { data: ventasTiendas } = tiendaIds.length > 0
+      ? await supabase
+          .from('ventas_terceros')
+          .select('producto_sku, cantidad')
+          .in('tienda_id', tiendaIds)
+          .gte('fecha', startDateStr)
+          .lte('fecha', endDateStr)
+      : { data: [] }
+
+    // 6. Fetch consignaciones for consigned inventory (filtered by user's tiendas)
+    const { data: consignaciones } = tiendaIds.length > 0
+      ? await supabase
+          .from('consignaciones')
+          .select('producto_sku, tipo, cantidad')
+          .in('tienda_id', tiendaIds)
+      : { data: [] }
+
+    // 7. Calculate sales per SKU from all channels
     const ventasPorSku: { [sku: string]: { shopify: number; whatsapp: number; tiendas: number } } = {}
 
     // Shopify sales
@@ -166,7 +187,7 @@ export async function GET(request: Request) {
       ventasPorSku[venta.producto_sku].tiendas += venta.cantidad
     }
 
-    // 7. Calculate consigned inventory per SKU
+    // 8. Calculate consigned inventory per SKU
     const consignadoPorSku: { [sku: string]: number } = {}
     for (const c of consignaciones || []) {
       if (!c.producto_sku) continue
@@ -188,7 +209,7 @@ export async function GET(request: Request) {
       }
     }
 
-    // 8. Build forecast data
+    // 9. Build forecast data
     const forecast: ForecastItem[] = []
 
     for (const product of allProducts) {

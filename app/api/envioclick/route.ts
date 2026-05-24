@@ -1,26 +1,60 @@
 import { NextResponse } from 'next/server'
+import { requireAuth, getUserEnvioClickCredentials } from '@/lib/auth-helpers'
 
 const API_BASE = 'https://api.envioclickpro.com.co/api/v2'
-const API_KEY = process.env.ENVIOCLICKPRO_API_KEY
 
-// Origin address (your warehouse/store)
-const ORIGIN = {
+// Default origin address - used as fallback if user hasn't configured one
+const DEFAULT_ORIGIN = {
   daneCode: '11001000', // Bogotá
-  address: 'Calle 124 #19-46',
-  company: 'Shuless',
-  firstName: 'Carolina',
-  lastName: 'Castillo',
-  email: 'calzadoshuless@gmail.com',
-  phone: '3125317939',
+  address: 'Direccion no configurada',
+  company: 'Empresa',
+  firstName: 'Usuario',
+  lastName: 'Usuario',
+  email: 'usuario@example.com',
+  phone: '3000000000',
+}
+
+interface OriginAddress {
+  daneCode: string
+  address: string
+  company: string
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+  suburb?: string
+  crossStreet?: string
+  reference?: string
 }
 
 // POST /api/envioclick - Quote or create shipment
 export async function POST(request: Request) {
+  // Require authentication
+  const { user, error } = await requireAuth()
+  if (error) return error
+
   const { searchParams } = new URL(request.url)
   const action = searchParams.get('action') // 'quote' or 'shipment'
 
+  // Get user's EnvioClick credentials from database
+  const credentials = await getUserEnvioClickCredentials(user!.id)
+  const API_KEY = credentials?.envioclick_api_key
+
   if (!API_KEY) {
-    return NextResponse.json({ error: 'API key not configured' }, { status: 500 })
+    return NextResponse.json({ error: 'EnvioClick no configurado. Configure su API key en la configuración.' }, { status: 400 })
+  }
+
+  // Parse origin address from user's integration settings
+  let ORIGIN: OriginAddress = DEFAULT_ORIGIN
+  if (credentials?.envioclick_origin_address) {
+    try {
+      const parsed = typeof credentials.envioclick_origin_address === 'string'
+        ? JSON.parse(credentials.envioclick_origin_address)
+        : credentials.envioclick_origin_address
+      ORIGIN = { ...DEFAULT_ORIGIN, ...parsed }
+    } catch (e) {
+      console.error('Error parsing origin address:', e)
+    }
   }
 
   const body = await request.json()
@@ -35,7 +69,7 @@ export async function POST(request: Request) {
           width: body.width || 10,
           length: body.length || 15,
         }],
-        description: body.description || 'Producto Shuless',
+        description: body.description || 'Producto',
         contentValue: body.contentValue || 100000,
         origin: {
           daneCode: ORIGIN.daneCode,
@@ -48,12 +82,11 @@ export async function POST(request: Request) {
       }
 
       console.log('EnvioClick Quote Request:', JSON.stringify(quoteData, null, 2))
-      console.log('Using API Key:', API_KEY ? 'Set' : 'NOT SET')
 
       const response = await fetch(`${API_BASE}/quotation`, {
         method: 'POST',
         headers: {
-          'Authorization': API_KEY!,
+          'Authorization': API_KEY,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(quoteData),
@@ -98,7 +131,7 @@ export async function POST(request: Request) {
           width: body.width || 10,
           length: body.length || 15,
         }],
-        description: truncate(body.description || 'Producto Shuless', 25), // max 25
+        description: truncate(body.description || 'Producto', 25), // max 25
         contentValue: body.contentValue || 100000,
         origin: {
           daneCode: ORIGIN.daneCode,
@@ -107,10 +140,10 @@ export async function POST(request: Request) {
           firstName: truncate(ORIGIN.firstName, 14), // min 2, max 14
           lastName: truncate(ORIGIN.lastName, 14), // min 2, max 14
           email: ORIGIN.email, // min 8, max 60
-          phone: ORIGIN.phone, // exactly 10
-          suburb: 'Santa Barbara', // min 2, max 30
-          crossStreet: truncate('Calle 124 con Carrera 19', 35), // min 2, max 35
-          reference: 'Edificio Shuless', // min 2, max 25 - REQUIRED
+          phone: formatPhone(ORIGIN.phone), // exactly 10
+          suburb: ORIGIN.suburb || 'Centro', // min 2, max 30
+          crossStreet: truncate(ORIGIN.crossStreet || 'Calle principal', 35), // min 2, max 35
+          reference: ORIGIN.reference || 'Oficina', // min 2, max 25 - REQUIRED
         },
         destination: {
           daneCode: body.daneCode,
@@ -118,7 +151,7 @@ export async function POST(request: Request) {
           company: ensureMin(truncate(body.firstName || 'Cliente', 28), 2, 'Cliente'), // min 2, max 28
           firstName: ensureMin(truncate(body.firstName || 'Cliente', 14), 2, 'Cliente'), // min 2, max 14
           lastName: ensureMin(truncate(body.lastName || 'Cliente', 14), 2, 'Cliente'), // min 2, max 14
-          email: body.email || 'cliente@shuless.co', // min 8, max 60
+          email: body.email || 'cliente@example.com', // min 8, max 60
           phone: formatPhone(body.phone), // exactly 10
           suburb: ensureMin(truncate(body.suburb || 'Barrio', 30), 2, 'Barrio'), // min 2, max 30
           crossStreet: ensureMin(truncate(body.crossStreet || 'Calle principal', 35), 2, 'Calle principal'), // min 2, max 35
@@ -166,6 +199,10 @@ export async function POST(request: Request) {
 
 // GET /api/envioclick/dane - Get DANE codes (helper)
 export async function GET(request: Request) {
+  // Require authentication
+  const { error } = await requireAuth()
+  if (error) return error
+
   // Common DANE codes for Colombian cities
   const daneCodes: Record<string, string> = {
     'bogota': '11001000',

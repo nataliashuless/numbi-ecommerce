@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { supabase } from '@/lib/supabase'
+import { requireAuth, getUserShopifyCredentials, getAdminClient } from '@/lib/auth-helpers'
 
 interface InventarioItem {
   sku: string
@@ -14,13 +13,20 @@ interface InventarioItem {
 }
 
 export async function GET() {
-  const cookieStore = await cookies()
-  const shop = cookieStore.get('shopify_shop')?.value
-  const accessToken = cookieStore.get('shopify_token')?.value
+  // Require authentication
+  const { user, error } = await requireAuth()
+  if (error) return error
+
+  // Get Shopify credentials from database
+  const credentials = await getUserShopifyCredentials(user!.id)
+  const shop = credentials?.shopify_shop
+  const accessToken = credentials?.shopify_access_token
 
   if (!shop || !accessToken) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    return NextResponse.json({ error: 'Shopify no conectado' }, { status: 401 })
   }
+
+  const supabase = getAdminClient()
 
   try {
     // 1. Fetch products from Shopify (Bodega inventory)
@@ -64,10 +70,11 @@ export async function GET() {
       }
     }
 
-    // 2. Fetch all stores
+    // 2. Fetch all stores (filtered by user_id)
     const { data: tiendas, error: tiendasError } = await supabase
       .from('tiendas_terceros')
       .select('id, nombre')
+      .eq('user_id', user!.id)
       .eq('activa', true)
       .order('nombre')
 
@@ -76,20 +83,27 @@ export async function GET() {
     }
 
     const tiendasList = tiendas || []
+    const tiendaIds = tiendasList.map(t => t.id)
 
-    // 3. Fetch all consignaciones
-    const { data: consignaciones, error: consignacionesError } = await supabase
-      .from('consignaciones')
-      .select('tienda_id, producto_sku, tipo, cantidad')
+    // 3. Fetch all consignaciones for user's tiendas
+    const { data: consignaciones, error: consignacionesError } = tiendaIds.length > 0
+      ? await supabase
+          .from('consignaciones')
+          .select('tienda_id, producto_sku, tipo, cantidad')
+          .in('tienda_id', tiendaIds)
+      : { data: [], error: null }
 
     if (consignacionesError) {
       console.error('Error fetching consignaciones:', consignacionesError)
     }
 
-    // 4. Fetch all ventas_terceros (to subtract from consigned)
-    const { data: ventasTerceros, error: ventasError } = await supabase
-      .from('ventas_terceros')
-      .select('tienda_id, producto_sku, cantidad')
+    // 4. Fetch all ventas_terceros for user's tiendas (to subtract from consigned)
+    const { data: ventasTerceros, error: ventasError } = tiendaIds.length > 0
+      ? await supabase
+          .from('ventas_terceros')
+          .select('tienda_id, producto_sku, cantidad')
+          .in('tienda_id', tiendaIds)
+      : { data: [], error: null }
 
     if (ventasError) {
       console.error('Error fetching ventas_terceros:', ventasError)

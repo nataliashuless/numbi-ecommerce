@@ -38,6 +38,8 @@ import {
   ShoppingCart,
   Boxes,
   TrendingUp,
+  Settings,
+  LogOut,
 } from 'lucide-react'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 import {
@@ -252,6 +254,12 @@ export default function TiendasPage() {
               <span className="text-xs text-[#00D47F] font-medium bg-[#334047] px-2 py-1 rounded">E-commerce</span>
             </div>
           </div>
+          <Link href="/">
+            <Button variant="ghost" className="text-[#99C3D2] hover:text-white hover:bg-[#334047]">
+              <LogOut className="h-4 w-4 mr-2" />
+              Cerrar sesión
+            </Button>
+          </Link>
         </div>
       </header>
 
@@ -291,6 +299,12 @@ export default function TiendasPage() {
               <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
                 <Boxes className="h-4 w-4 mr-2" />
                 Inventario
+              </Button>
+            </Link>
+            <Link href="/dashboard/configuracion">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#00D47F] py-4">
+                <Settings className="h-4 w-4 mr-2" />
+                Configuración
               </Button>
             </Link>
           </nav>

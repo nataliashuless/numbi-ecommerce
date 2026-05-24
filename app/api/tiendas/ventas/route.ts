@@ -1,16 +1,49 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 
 export async function GET(request: Request) {
+  // Require authentication
+  const { user, error } = await requireAuth()
+  if (error) return error
+
+  const supabase = getAdminClient()
   const { searchParams } = new URL(request.url)
   const startDate = searchParams.get('start_date')
   const endDate = searchParams.get('end_date')
   const groupBy = searchParams.get('group_by') || 'day'
 
-  // Build query
+  // First get user's tiendas
+  const { data: userTiendas } = await supabase
+    .from('tiendas_terceros')
+    .select('id, nombre')
+    .eq('user_id', user!.id)
+
+  const tiendaIds = (userTiendas || []).map(t => t.id)
+  const tiendaNames: { [id: string]: string } = {}
+  userTiendas?.forEach(t => {
+    tiendaNames[t.id] = t.nombre
+  })
+
+  // If user has no tiendas, return empty data
+  if (tiendaIds.length === 0) {
+    return NextResponse.json({
+      chartData: [],
+      chartDataByStore: [],
+      stats: {
+        totalVentas: 0,
+        totalNeto: 0,
+        totalComision: 0,
+        totalUnidades: 0,
+        totalTransacciones: 0,
+      },
+    })
+  }
+
+  // Build query - filter by user's tiendas
   let query = supabase
     .from('ventas_terceros')
     .select('fecha, precio_venta, neto, comision, cantidad, tienda_id')
+    .in('tienda_id', tiendaIds)
     .order('fecha')
 
   if (startDate) {
@@ -20,21 +53,11 @@ export async function GET(request: Request) {
     query = query.lte('fecha', endDate)
   }
 
-  const { data: ventas, error } = await query
+  const { data: ventas, error: queryError } = await query
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  if (queryError) {
+    return NextResponse.json({ error: queryError.message }, { status: 500 })
   }
-
-  // Get store names
-  const { data: tiendas } = await supabase
-    .from('tiendas_terceros')
-    .select('id, nombre')
-
-  const tiendaNames: { [id: string]: string } = {}
-  tiendas?.forEach(t => {
-    tiendaNames[t.id] = t.nombre
-  })
 
   // Helper to get group key
   const getGroupKey = (dateStr: string): string => {

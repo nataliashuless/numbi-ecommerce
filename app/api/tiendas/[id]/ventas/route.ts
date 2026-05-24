@@ -1,11 +1,23 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { requireAuth, getAdminClient, verifyTiendaOwnership } from '@/lib/auth-helpers'
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Require authentication
+  const { user, error } = await requireAuth()
+  if (error) return error
+
   const { id } = await params
+  const supabase = getAdminClient()
+
+  // Verify ownership of the tienda
+  const isOwner = await verifyTiendaOwnership(id, user!.id)
+  if (!isOwner) {
+    return NextResponse.json({ error: 'Tienda no encontrada' }, { status: 404 })
+  }
+
   const body = await request.json()
 
   // Get store commission config
@@ -13,6 +25,7 @@ export async function POST(
     .from('tiendas_terceros')
     .select('comision_tipo, comision_porcentaje, comision_fijo')
     .eq('id', id)
+    .eq('user_id', user!.id)
     .single()
 
   if (!tienda) {
@@ -38,7 +51,7 @@ export async function POST(
 
   const neto = precioVenta - comision
 
-  const { data, error } = await supabase
+  const { data, error: insertError } = await supabase
     .from('ventas_terceros')
     .insert([{
       tienda_id: id,
@@ -54,8 +67,8 @@ export async function POST(
     .select()
     .single()
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  if (insertError) {
+    return NextResponse.json({ error: insertError.message }, { status: 500 })
   }
 
   return NextResponse.json(data)
@@ -65,6 +78,19 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Require authentication
+  const { user, error } = await requireAuth()
+  if (error) return error
+
+  const { id } = await params
+  const supabase = getAdminClient()
+
+  // Verify ownership of the tienda
+  const isOwner = await verifyTiendaOwnership(id, user!.id)
+  if (!isOwner) {
+    return NextResponse.json({ error: 'Tienda no encontrada' }, { status: 404 })
+  }
+
   const { searchParams } = new URL(request.url)
   const ventaId = searchParams.get('venta_id')
 
@@ -72,13 +98,25 @@ export async function DELETE(
     return NextResponse.json({ error: 'venta_id requerido' }, { status: 400 })
   }
 
-  const { error } = await supabase
+  // Verify the venta belongs to this tienda
+  const { data: venta } = await supabase
+    .from('ventas_terceros')
+    .select('tienda_id')
+    .eq('id', ventaId)
+    .single()
+
+  if (!venta || venta.tienda_id !== id) {
+    return NextResponse.json({ error: 'Venta no encontrada' }, { status: 404 })
+  }
+
+  const { error: deleteError } = await supabase
     .from('ventas_terceros')
     .delete()
     .eq('id', ventaId)
+    .eq('tienda_id', id)
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  if (deleteError) {
+    return NextResponse.json({ error: deleteError.message }, { status: 500 })
   }
 
   return NextResponse.json({ success: true })
