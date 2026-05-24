@@ -115,6 +115,7 @@ export default function ConciliacionPage() {
   const [createTiendaOpen, setCreateTiendaOpen] = useState(false)
   const [tiendaForm, setTiendaForm] = useState({
     nombre: '',
+    nombre_corto: '',
     siigo_customer_identification: '',
   })
   const [tiendaInvoiceContext, setTiendaInvoiceContext] = useState<SiigoInvoice | null>(null)
@@ -122,8 +123,11 @@ export default function ConciliacionPage() {
   const [tiendaError, setTiendaError] = useState<string | null>(null)
 
   function openCreateTienda(invoice: SiigoInvoice) {
+    const legalName = invoice.customer_name || ''
+    const firstWord = legalName.split(/\s+/)[0] || ''
     setTiendaForm({
-      nombre: invoice.customer_name || '',
+      nombre: legalName,
+      nombre_corto: firstWord,
       siigo_customer_identification: invoice.customer.identification || '',
     })
     setTiendaInvoiceContext(invoice)
@@ -141,6 +145,7 @@ export default function ConciliacionPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nombre: tiendaForm.nombre,
+          nombre_corto: tiendaForm.nombre_corto,
           siigo_customer_identification: tiendaForm.siigo_customer_identification,
         }),
       })
@@ -534,13 +539,15 @@ export default function ConciliacionPage() {
             <form onSubmit={submitCreateTienda} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="tienda-nombre">Nombre de la tienda *</Label>
+                  <Label htmlFor="tienda-nombre-corto">Nombre corto *</Label>
                   <Input
-                    id="tienda-nombre"
-                    value={tiendaForm.nombre}
-                    onChange={e => setTiendaForm({ ...tiendaForm, nombre: e.target.value })}
+                    id="tienda-nombre-corto"
+                    value={tiendaForm.nombre_corto}
+                    onChange={e => setTiendaForm({ ...tiendaForm, nombre_corto: e.target.value })}
+                    placeholder="Ej: TITI"
                     required
                   />
+                  <p className="text-xs text-[#545454] mt-1">Cómo se muestra en listas y badges</p>
                 </div>
                 <div>
                   <Label htmlFor="tienda-nit">NIT en Siigo *</Label>
@@ -551,6 +558,16 @@ export default function ConciliacionPage() {
                     required
                   />
                 </div>
+              </div>
+              <div>
+                <Label htmlFor="tienda-nombre">Razón social (Siigo)</Label>
+                <Input
+                  id="tienda-nombre"
+                  value={tiendaForm.nombre}
+                  onChange={e => setTiendaForm({ ...tiendaForm, nombre: e.target.value })}
+                  placeholder="Ej: TITI AND VAL SAS"
+                  required
+                />
               </div>
               <p className="text-xs text-[#545454]">
                 Facturas Siigo (pasadas y futuras) con este NIT se asocian automáticamente a esta tienda. Cada factura representa una entrega/venta de productos a esta tienda con sus precios negociados.

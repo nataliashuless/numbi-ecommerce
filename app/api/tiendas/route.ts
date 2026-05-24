@@ -79,6 +79,7 @@ export async function POST(request: Request) {
     .from('tiendas_terceros')
     .insert([{
       nombre: body.nombre,
+      nombre_corto: body.nombre_corto || null,
       contacto_nombre: body.contacto_nombre || null,
       contacto_telefono: body.contacto_telefono || null,
       contacto_email: body.contacto_email || null,
@@ -121,6 +122,7 @@ export async function PUT(request: Request) {
     updated_at: new Date().toISOString(),
   }
 
+  if ('nombre_corto' in body) updateData.nombre_corto = body.nombre_corto || null
   if ('siigo_customer_identification' in body) updateData.siigo_customer_identification = body.siigo_customer_identification || null
   if ('siigo_cost_center_id' in body) updateData.siigo_cost_center_id = body.siigo_cost_center_id
   if ('siigo_cost_center_name' in body) updateData.siigo_cost_center_name = body.siigo_cost_center_name

@@ -62,11 +62,11 @@ export async function GET(request: Request) {
 
     const { data: tiendasWithSiigo } = await supabase
       .from('tiendas_terceros')
-      .select('id, nombre, siigo_customer_identification')
+      .select('id, nombre, nombre_corto, siigo_customer_identification')
       .not('siigo_customer_identification', 'is', null)
     const tiendasByNit = new Map<string, { id: string; nombre: string }>()
-    for (const t of (tiendasWithSiigo || []) as Array<{ id: string; nombre: string; siigo_customer_identification: string }>) {
-      tiendasByNit.set(t.siigo_customer_identification, { id: t.id, nombre: t.nombre })
+    for (const t of (tiendasWithSiigo || []) as Array<{ id: string; nombre: string; nombre_corto: string | null; siigo_customer_identification: string }>) {
+      tiendasByNit.set(t.siigo_customer_identification, { id: t.id, nombre: t.nombre_corto || t.nombre })
     }
 
     const enriched = invoices.map(inv => {

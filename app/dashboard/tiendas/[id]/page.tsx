@@ -1,31 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useEffect, useState, useMemo, use } from 'react'
 import Link from 'next/link'
-import { format } from 'date-fns'
-import { es } from 'date-fns/locale'
+import { DateRange } from 'react-day-picker'
+import { subDays, format } from 'date-fns'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import {
   Table,
   TableBody,
@@ -35,120 +19,55 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
-  Store,
-  Package,
-  DollarSign,
-  Loader2,
-  Plus,
-  ArrowLeft,
-  Truck,
   ShoppingCart,
-  FileText,
-  CheckCircle,
-  Clock,
-  ArrowUpRight,
-  ArrowDownLeft,
+  Package,
+  Loader2,
+  LogOut,
+  RefreshCw,
+  Boxes,
+  BarChart3,
+  MessageCircle,
   Settings,
-  Save,
+  FileText,
+  Store,
+  ChevronLeft,
+  DollarSign,
+  TrendingUp,
+  Calendar,
+  Pencil,
 } from 'lucide-react'
+import { DateRangePicker } from '@/components/ui/date-range-picker'
 
 interface Tienda {
   id: string
   nombre: string
+  nombre_corto: string | null
   contacto_nombre: string | null
   contacto_telefono: string | null
-  contacto_email: string | null
   direccion: string | null
-  comision_tipo: 'porcentaje' | 'fijo' | 'mixto'
-  comision_porcentaje: number | null
-  comision_fijo: number | null
-  notas: string | null
   activa: boolean
-  // Siigo config fields
-  siigo_cost_center_id: number | null
-  siigo_cost_center_name: string | null
-  siigo_seller_id: number | null
-  siigo_seller_name: string | null
-  siigo_iva_tax_id: number | null
-  siigo_default_document_id: number | null
-  siigo_default_document_name: string | null
+  siigo_customer_identification: string | null
 }
 
-interface SiigoCostCenter {
-  id: number
-  code?: string
-  name: string
+interface SiigoItem {
+  code: string
+  description: string
+  quantity: number
+  price: number
+  total?: number
 }
 
-interface SiigoSeller {
-  id: number
-  username: string
-  first_name: string
-  last_name: string
-}
-
-interface SiigoTax {
-  id: number
-  name: string
-  percentage: number
-}
-
-interface SiigoDocumentType {
-  id: number
-  name: string
-}
-
-interface Consignacion {
+interface SiigoInvoice {
   id: string
-  fecha: string
-  tipo: 'envio' | 'devolucion'
-  producto_nombre: string
-  producto_sku: string | null
-  cantidad: number
-  precio_unitario: number
-  notas: string | null
-}
-
-interface Venta {
-  id: string
-  fecha: string
-  producto_nombre: string
-  producto_sku: string | null
-  cantidad: number
-  precio_venta: number
-  comision: number
-  neto: number
-  liquidacion_id: string | null
-}
-
-interface Liquidacion {
-  id: string
-  fecha: string
-  periodo_inicio: string
-  periodo_fin: string
-  total_ventas: number
-  total_comisiones: number
-  total_neto: number
-  estado: 'pendiente' | 'pagada'
-  notas: string | null
-}
-
-interface InventarioItem {
-  producto: string
-  sku: string | null
-  cantidad: number
-  precio: number
-}
-
-interface Stats {
-  inventarioActual: number
-  totalConsignado: number
-  totalDevuelto: number
-  totalVendido: number
-  ventasPendientes: number
-  montoPendiente: number
-  totalVentas: number
-  totalComisiones: number
+  number: number
+  name: string
+  date: string
+  total: number
+  observations: string
+  customer: { id: string; identification: string }
+  customer_name: string | null
+  tienda_id: string | null
+  items: SiigoItem[]
 }
 
 function formatCurrency(value: number): string {
@@ -156,987 +75,386 @@ function formatCurrency(value: number): string {
     style: 'currency',
     currency: 'COP',
     minimumFractionDigits: 0,
-    maximumFractionDigits: 0
+    maximumFractionDigits: 0,
   }).format(value)
 }
 
-export default function TiendaDetallePage() {
-  const params = useParams()
-  const tiendaId = params.id as string
+export default function TiendaDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
 
   const [tienda, setTienda] = useState<Tienda | null>(null)
-  const [consignaciones, setConsignaciones] = useState<Consignacion[]>([])
-  const [ventas, setVentas] = useState<Venta[]>([])
-  const [liquidaciones, setLiquidaciones] = useState<Liquidacion[]>([])
-  const [inventario, setInventario] = useState<InventarioItem[]>([])
-  const [stats, setStats] = useState<Stats | null>(null)
+  const [invoices, setInvoices] = useState<SiigoInvoice[]>([])
   const [loading, setLoading] = useState(true)
-
-  // Dialog states
-  const [consignacionDialog, setConsignacionDialog] = useState(false)
-  const [ventaDialog, setVentaDialog] = useState(false)
-  const [liquidacionDialog, setLiquidacionDialog] = useState(false)
-
-  // Siigo states
-  const [siigoCostCenters, setSiigoCostCenters] = useState<SiigoCostCenter[]>([])
-  const [siigoSellers, setSiigoSellers] = useState<SiigoSeller[]>([])
-  const [siigoTaxes, setSiigoTaxes] = useState<SiigoTax[]>([])
-  const [siigoDocumentTypes, setSiigoDocumentTypes] = useState<SiigoDocumentType[]>([])
-  const [siigoLoading, setSiigoLoading] = useState(false)
-  const [siigoSaving, setSiigoSaving] = useState(false)
-  const [siigoConnected, setSiigoConnected] = useState(false)
-  const [siigoConfig, setSiigoConfig] = useState({
-    siigo_cost_center_id: null as number | null,
-    siigo_cost_center_name: null as string | null,
-    siigo_seller_id: null as number | null,
-    siigo_seller_name: null as string | null,
-    siigo_iva_tax_id: null as number | null,
-    siigo_default_document_id: null as number | null,
-    siigo_default_document_name: null as string | null,
+  const [error, setError] = useState<string | null>(null)
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 90),
+    to: new Date(),
   })
 
-  // Form states
-  const [consignacionForm, setConsignacionForm] = useState({
-    fecha: format(new Date(), 'yyyy-MM-dd'),
-    tipo: 'envio' as 'envio' | 'devolucion',
-    producto_nombre: '',
-    producto_sku: '',
-    cantidad: 1,
-    precio_unitario: 0,
-    notas: '',
+  const [editOpen, setEditOpen] = useState(false)
+  const [editForm, setEditForm] = useState({
+    nombre: '',
+    nombre_corto: '',
+    siigo_customer_identification: '',
   })
+  const [saving, setSaving] = useState(false)
 
-  const [ventaForm, setVentaForm] = useState({
-    fecha: format(new Date(), 'yyyy-MM-dd'),
-    producto_nombre: '',
-    producto_sku: '',
-    cantidad: 1,
-    precio_venta: 0,
-  })
-
-  const [liquidacionForm, setLiquidacionForm] = useState({
-    periodo_inicio: format(new Date(new Date().setDate(1)), 'yyyy-MM-dd'),
-    periodo_fin: format(new Date(), 'yyyy-MM-dd'),
-    notas: '',
-  })
-
-  async function fetchData() {
-    setLoading(true)
+  async function fetchTienda() {
     try {
-      const res = await fetch(`/api/tiendas/${tiendaId}`)
-      if (res.ok) {
-        const data = await res.json()
-        setTienda(data.tienda)
-        setConsignaciones(data.consignaciones)
-        setVentas(data.ventas)
-        setLiquidaciones(data.liquidaciones)
-        setInventario(data.inventario)
-        setStats(data.stats)
-      }
-    } catch (error) {
-      console.error('Error fetching data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (tiendaId) {
-      fetchData()
-    }
-  }, [tiendaId])
-
-  async function handleConsignacion(e: React.FormEvent) {
-    e.preventDefault()
-    try {
-      const res = await fetch(`/api/tiendas/${tiendaId}/consignaciones`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(consignacionForm),
-      })
-      if (res.ok) {
-        setConsignacionDialog(false)
-        setConsignacionForm({
-          fecha: format(new Date(), 'yyyy-MM-dd'),
-          tipo: 'envio',
-          producto_nombre: '',
-          producto_sku: '',
-          cantidad: 1,
-          precio_unitario: 0,
-          notas: '',
-        })
-        fetchData()
-      }
-    } catch (error) {
-      console.error('Error:', error)
-    }
-  }
-
-  async function handleVenta(e: React.FormEvent) {
-    e.preventDefault()
-    try {
-      const res = await fetch(`/api/tiendas/${tiendaId}/ventas`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(ventaForm),
-      })
-      if (res.ok) {
-        setVentaDialog(false)
-        setVentaForm({
-          fecha: format(new Date(), 'yyyy-MM-dd'),
-          producto_nombre: '',
-          producto_sku: '',
-          cantidad: 1,
-          precio_venta: 0,
-        })
-        fetchData()
-      }
-    } catch (error) {
-      console.error('Error:', error)
-    }
-  }
-
-  async function handleLiquidacion(e: React.FormEvent) {
-    e.preventDefault()
-    try {
-      const res = await fetch(`/api/tiendas/${tiendaId}/liquidaciones`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(liquidacionForm),
-      })
-      if (res.ok) {
-        setLiquidacionDialog(false)
-        setLiquidacionForm({
-          periodo_inicio: format(new Date(new Date().setDate(1)), 'yyyy-MM-dd'),
-          periodo_fin: format(new Date(), 'yyyy-MM-dd'),
-          notas: '',
-        })
-        fetchData()
-      } else {
-        const error = await res.json()
-        alert(error.error)
-      }
-    } catch (error) {
-      console.error('Error:', error)
-    }
-  }
-
-  async function marcarPagada(liquidacionId: string) {
-    try {
-      const res = await fetch(`/api/tiendas/${tiendaId}/liquidaciones`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ liquidacion_id: liquidacionId, estado: 'pagada' }),
-      })
-      if (res.ok) {
-        fetchData()
-      }
-    } catch (error) {
-      console.error('Error:', error)
-    }
-  }
-
-  async function fetchSiigoOptions() {
-    setSiigoLoading(true)
-    try {
-      // Test connection first
-      const testRes = await fetch('/api/siigo?action=test-connection', { method: 'POST' })
-      const testData = await testRes.json()
-      setSiigoConnected(testData.connected)
-
-      if (!testData.connected) {
-        setSiigoLoading(false)
+      const res = await fetch(`/api/tiendas/${id}`)
+      if (!res.ok) {
+        setError('Tienda no encontrada')
         return
       }
-
-      // Fetch all Siigo options in parallel
-      const [costCentersRes, sellersRes, taxesRes, docTypesRes] = await Promise.all([
-        fetch('/api/siigo?action=cost-centers'),
-        fetch('/api/siigo?action=sellers'),
-        fetch('/api/siigo?action=taxes'),
-        fetch('/api/siigo?action=document-types'),
-      ])
-
-      const [costCentersData, sellersData, taxesData, docTypesData] = await Promise.all([
-        costCentersRes.json(),
-        sellersRes.json(),
-        taxesRes.json(),
-        docTypesRes.json(),
-      ])
-
-      setSiigoCostCenters(costCentersData.costCenters || [])
-      setSiigoSellers(sellersData.sellers || [])
-      setSiigoTaxes(taxesData.taxes || [])
-      setSiigoDocumentTypes(docTypesData.documentTypes || [])
-    } catch (error) {
-      console.error('Error fetching Siigo options:', error)
-    } finally {
-      setSiigoLoading(false)
+      const data = await res.json()
+      setTienda(data.tienda)
+    } catch {
+      setError('Error cargando tienda')
     }
   }
 
-  async function handleSaveSiigoConfig() {
-    setSiigoSaving(true)
+  async function fetchInvoices() {
+    if (!dateRange?.from || !dateRange?.to) return
     try {
-      const res = await fetch('/api/tiendas', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: tiendaId,
-          nombre: tienda?.nombre,
-          contacto_nombre: tienda?.contacto_nombre,
-          contacto_telefono: tienda?.contacto_telefono,
-          contacto_email: tienda?.contacto_email,
-          direccion: tienda?.direccion,
-          comision_tipo: tienda?.comision_tipo,
-          comision_porcentaje: tienda?.comision_porcentaje,
-          comision_fijo: tienda?.comision_fijo,
-          notas: tienda?.notas,
-          activa: tienda?.activa,
-          ...siigoConfig,
-        }),
-      })
-      if (res.ok) {
-        fetchData()
-        alert('Configuración Siigo guardada correctamente')
-      } else {
-        const error = await res.json()
-        alert(`Error: ${error.error}`)
-      }
-    } catch (error) {
-      console.error('Error saving Siigo config:', error)
-      alert('Error al guardar la configuración')
-    } finally {
-      setSiigoSaving(false)
+      const start = format(dateRange.from, 'yyyy-MM-dd')
+      const end = format(dateRange.to, 'yyyy-MM-dd')
+      const res = await fetch(`/api/siigo/invoices?start_date=${start}&end_date=${end}`)
+      if (!res.ok) return
+      const data = await res.json()
+      const filtered = (data.invoices || []).filter((i: SiigoInvoice) => i.tienda_id === id)
+      setInvoices(filtered)
+    } catch (e) {
+      console.error(e)
     }
   }
 
-  // Initialize Siigo config when tienda data is loaded
   useEffect(() => {
-    if (tienda) {
-      setSiigoConfig({
-        siigo_cost_center_id: tienda.siigo_cost_center_id,
-        siigo_cost_center_name: tienda.siigo_cost_center_name,
-        siigo_seller_id: tienda.siigo_seller_id,
-        siigo_seller_name: tienda.siigo_seller_name,
-        siigo_iva_tax_id: tienda.siigo_iva_tax_id,
-        siigo_default_document_id: tienda.siigo_default_document_id,
-        siigo_default_document_name: tienda.siigo_default_document_name,
+    setLoading(true)
+    Promise.all([fetchTienda(), fetchInvoices()]).finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, dateRange])
+
+  function openEdit() {
+    if (!tienda) return
+    setEditForm({
+      nombre: tienda.nombre,
+      nombre_corto: tienda.nombre_corto || '',
+      siigo_customer_identification: tienda.siigo_customer_identification || '',
+    })
+    setEditOpen(true)
+  }
+
+  async function submitEdit(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/tiendas/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm),
       })
+      if (!res.ok) throw new Error('Error guardando')
+      setEditOpen(false)
+      await fetchTienda()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error')
+    } finally {
+      setSaving(false)
     }
-  }, [tienda])
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[#1A2238]" />
-      </div>
-    )
   }
 
-  if (!tienda) {
-    return (
-      <div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center">
-        <p>Tienda no encontrada</p>
-      </div>
+  const stats = useMemo(() => {
+    const totalVentas = invoices.reduce((s, i) => s + i.total, 0)
+    const totalUnidades = invoices.reduce(
+      (s, i) =>
+        s +
+        (i.items || [])
+          .filter(it => it.code !== 'ENVIO')
+          .reduce((u, it) => u + (it.quantity || 0), 0),
+      0
     )
-  }
+    const ultimaFactura =
+      invoices.length > 0 ? invoices.map(i => i.date).sort().reverse()[0] : null
+    return {
+      facturas: invoices.length,
+      totalVentas,
+      totalUnidades,
+      ultimaFactura,
+    }
+  }, [invoices])
+
+  const productosPorSku = useMemo(() => {
+    const map = new Map<
+      string,
+      { code: string; description: string; quantity: number; total: number }
+    >()
+    for (const inv of invoices) {
+      for (const it of inv.items || []) {
+        if (it.code === 'ENVIO') continue
+        const existing = map.get(it.code)
+        const itemTotal = it.total ?? it.quantity * it.price
+        if (existing) {
+          existing.quantity += it.quantity
+          existing.total += itemTotal
+        } else {
+          map.set(it.code, {
+            code: it.code,
+            description: it.description,
+            quantity: it.quantity,
+            total: itemTotal,
+          })
+        }
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.quantity - a.quantity)
+  }, [invoices])
+
+  const displayName = tienda?.nombre_corto || tienda?.nombre || ''
 
   return (
     <div className="min-h-screen bg-[#FFFFFF]">
-      {/* Header */}
       <header className="bg-[#1A2238] border-b border-[#2A3550]">
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/dashboard/tiendas">
-              <Button variant="ghost" size="icon" className="text-white hover:bg-[#1A2238]">
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-xl font-semibold text-white">{tienda.nombre}</h1>
-              <p className="text-sm text-[#929292]">
-                Comisión: {tienda.comision_tipo === 'porcentaje' && tienda.comision_porcentaje
-                  ? `${tienda.comision_porcentaje}%`
-                  : tienda.comision_tipo === 'fijo' && tienda.comision_fijo
-                  ? formatCurrency(tienda.comision_fijo) + '/u'
-                  : 'Mixto'}
-              </p>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-bold tracking-tight text-[#1DA9EF]">shuless</span>
+              <span className="text-[10px] text-white font-bold bg-[#1DA9EF] px-2 py-0.5 rounded-full uppercase tracking-wider">Admin</span>
             </div>
           </div>
+          <Link href="/">
+            <Button variant="ghost" className="text-[#9CA3AF] hover:text-white hover:bg-[#2A3550]">
+              <LogOut className="h-4 w-4 mr-2" />Cerrar sesión
+            </Button>
+          </Link>
         </div>
       </header>
 
-      {/* Main */}
-      <main className="container mx-auto px-4 py-8">
-        {/* KPIs */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-[#545454]">Inventario Actual</CardTitle>
-              <Package className="h-4 w-4 text-[#545454]" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-[#1A2238]">{stats?.inventarioActual || 0}</div>
-              <p className="text-xs text-[#545454]">unidades en tienda</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-[#545454]">Ventas Totales</CardTitle>
-              <ShoppingCart className="h-4 w-4 text-[#545454]" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-[#1A2238]">{formatCurrency(stats?.totalVentas || 0)}</div>
-              <p className="text-xs text-[#545454]">{stats?.totalVendido || 0} unidades</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-[#545454]">Por Liquidar</CardTitle>
-              <DollarSign className="h-4 w-4 text-[#545454]" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-[#1A2238]">{formatCurrency(stats?.montoPendiente || 0)}</div>
-              <p className="text-xs text-[#545454]">{stats?.ventasPendientes || 0} ventas</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-[#545454]">Comisiones</CardTitle>
-              <FileText className="h-4 w-4 text-[#545454]" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-[#1A2238]">{formatCurrency(stats?.totalComisiones || 0)}</div>
-              <p className="text-xs text-[#545454]">total acumulado</p>
-            </CardContent>
-          </Card>
+      <div className="bg-white border-b">
+        <div className="container mx-auto px-4">
+          <nav className="flex gap-4 overflow-x-auto">
+            <Link href="/dashboard"><Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4"><BarChart3 className="h-4 w-4 mr-2" />Ventas</Button></Link>
+            <Link href="/dashboard/shopify"><Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4"><ShoppingCart className="h-4 w-4 mr-2" />Shopify</Button></Link>
+            <Link href="/dashboard/whatsapp"><Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4"><MessageCircle className="h-4 w-4 mr-2" />WhatsApp</Button></Link>
+            <Link href="/dashboard/tiendas"><Button variant="ghost" className="rounded-none border-b-2 border-[#1DA9EF] text-[#1A2238] py-4"><Store className="h-4 w-4 mr-2" />Tiendas</Button></Link>
+            <Link href="/dashboard/conciliacion"><Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4"><FileText className="h-4 w-4 mr-2" />Conciliación</Button></Link>
+            <Link href="/dashboard/productos"><Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4"><Package className="h-4 w-4 mr-2" />Productos</Button></Link>
+            <Link href="/dashboard/inventario"><Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4"><Boxes className="h-4 w-4 mr-2" />Inventario</Button></Link>
+            <Link href="/dashboard/configuracion"><Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4"><Settings className="h-4 w-4 mr-2" />Configuración</Button></Link>
+          </nav>
         </div>
+      </div>
 
-        {/* Tabs */}
-        <Tabs defaultValue="inventario" className="space-y-4">
-          <TabsList className="bg-white">
-            <TabsTrigger value="inventario">Inventario</TabsTrigger>
-            <TabsTrigger value="consignaciones">Consignaciones</TabsTrigger>
-            <TabsTrigger value="ventas">Ventas</TabsTrigger>
-            <TabsTrigger value="liquidaciones">Liquidaciones</TabsTrigger>
-            <TabsTrigger value="siigo" onClick={() => !siigoConnected && fetchSiigoOptions()}>
-              <Settings className="h-4 w-4 mr-1" />
-              Siigo
-            </TabsTrigger>
-          </TabsList>
+      <main className="container mx-auto px-4 py-8">
+        <Link href="/dashboard/tiendas" className="inline-flex items-center text-sm text-[#545454] hover:text-[#1DA9EF] mb-4">
+          <ChevronLeft className="h-4 w-4 mr-1" /> Volver a tiendas
+        </Link>
 
-          {/* Inventario Tab */}
-          <TabsContent value="inventario">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Stock en Tienda</CardTitle>
-                <Dialog open={consignacionDialog} onOpenChange={setConsignacionDialog}>
-                  <DialogTrigger asChild>
-                    <Button className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Consignar
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Registrar Consignación</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handleConsignacion} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label>Fecha</Label>
-                          <Input
-                            type="date"
-                            value={consignacionForm.fecha}
-                            onChange={e => setConsignacionForm({ ...consignacionForm, fecha: e.target.value })}
-                            required
-                          />
-                        </div>
-                        <div>
-                          <Label>Tipo</Label>
-                          <Select
-                            value={consignacionForm.tipo}
-                            onValueChange={(v: 'envio' | 'devolucion') => setConsignacionForm({ ...consignacionForm, tipo: v })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="envio">Envío a tienda</SelectItem>
-                              <SelectItem value="devolucion">Devolución</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div>
-                        <Label>Producto *</Label>
-                        <Input
-                          value={consignacionForm.producto_nombre}
-                          onChange={e => setConsignacionForm({ ...consignacionForm, producto_nombre: e.target.value })}
-                          placeholder="Nombre del producto"
-                          required
-                        />
-                      </div>
-                      <div className="grid grid-cols-3 gap-4">
-                        <div>
-                          <Label>SKU</Label>
-                          <Input
-                            value={consignacionForm.producto_sku}
-                            onChange={e => setConsignacionForm({ ...consignacionForm, producto_sku: e.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <Label>Cantidad *</Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={consignacionForm.cantidad}
-                            onChange={e => setConsignacionForm({ ...consignacionForm, cantidad: parseInt(e.target.value) || 1 })}
-                            required
-                          />
-                        </div>
-                        <div>
-                          <Label>Precio Unit. *</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={consignacionForm.precio_unitario}
-                            onChange={e => setConsignacionForm({ ...consignacionForm, precio_unitario: parseFloat(e.target.value) || 0 })}
-                            required
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <Label>Notas</Label>
-                        <Textarea
-                          value={consignacionForm.notas}
-                          onChange={e => setConsignacionForm({ ...consignacionForm, notas: e.target.value })}
-                        />
-                      </div>
-                      <div className="flex justify-end">
-                        <Button type="submit" className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]">
-                          Guardar
-                        </Button>
-                      </div>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              </CardHeader>
-              <CardContent>
-                {inventario.length === 0 ? (
-                  <p className="text-[#545454] text-center py-8">No hay inventario en esta tienda</p>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Producto</TableHead>
-                        <TableHead>SKU</TableHead>
-                        <TableHead className="text-center">Cantidad</TableHead>
-                        <TableHead className="text-right">Precio Unit.</TableHead>
-                        <TableHead className="text-right">Valor Total</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {inventario.map((item, i) => (
-                        <TableRow key={i}>
-                          <TableCell className="font-medium">{item.producto}</TableCell>
-                          <TableCell className="text-[#545454]">{item.sku || '-'}</TableCell>
-                          <TableCell className="text-center">{item.cantidad}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.precio)}</TableCell>
-                          <TableCell className="text-right font-medium">{formatCurrency(item.cantidad * item.precio)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Consignaciones Tab */}
-          <TabsContent value="consignaciones">
-            <Card>
-              <CardHeader>
-                <CardTitle>Historial de Consignaciones</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {consignaciones.length === 0 ? (
-                  <p className="text-[#545454] text-center py-8">No hay consignaciones registradas</p>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead>Tipo</TableHead>
-                        <TableHead>Producto</TableHead>
-                        <TableHead className="text-center">Cantidad</TableHead>
-                        <TableHead className="text-right">Precio Unit.</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {consignaciones.map((c) => (
-                        <TableRow key={c.id}>
-                          <TableCell className="text-[#545454]">
-                            {format(new Date(c.fecha), 'dd MMM yyyy', { locale: es })}
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={c.tipo === 'envio' ? 'bg-blue-500' : 'bg-orange-500'}>
-                              {c.tipo === 'envio' ? (
-                                <><ArrowUpRight className="h-3 w-3 mr-1" />Envío</>
-                              ) : (
-                                <><ArrowDownLeft className="h-3 w-3 mr-1" />Devolución</>
-                              )}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium">{c.producto_nombre}</div>
-                            {c.producto_sku && <div className="text-xs text-[#545454]">SKU: {c.producto_sku}</div>}
-                          </TableCell>
-                          <TableCell className="text-center">{c.cantidad}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(c.precio_unitario)}</TableCell>
-                          <TableCell className="text-right font-medium">
-                            {formatCurrency(c.cantidad * c.precio_unitario)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Ventas Tab */}
-          <TabsContent value="ventas">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Ventas Reportadas</CardTitle>
-                <Dialog open={ventaDialog} onOpenChange={setVentaDialog}>
-                  <DialogTrigger asChild>
-                    <Button className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Registrar Venta
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Registrar Venta</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handleVenta} className="space-y-4">
-                      <div>
-                        <Label>Fecha</Label>
-                        <Input
-                          type="date"
-                          value={ventaForm.fecha}
-                          onChange={e => setVentaForm({ ...ventaForm, fecha: e.target.value })}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label>Producto *</Label>
-                        <Input
-                          value={ventaForm.producto_nombre}
-                          onChange={e => setVentaForm({ ...ventaForm, producto_nombre: e.target.value })}
-                          placeholder="Nombre del producto"
-                          required
-                        />
-                      </div>
-                      <div className="grid grid-cols-3 gap-4">
-                        <div>
-                          <Label>SKU</Label>
-                          <Input
-                            value={ventaForm.producto_sku}
-                            onChange={e => setVentaForm({ ...ventaForm, producto_sku: e.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <Label>Cantidad *</Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={ventaForm.cantidad}
-                            onChange={e => setVentaForm({ ...ventaForm, cantidad: parseInt(e.target.value) || 1 })}
-                            required
-                          />
-                        </div>
-                        <div>
-                          <Label>Precio Venta *</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            value={ventaForm.precio_venta}
-                            onChange={e => setVentaForm({ ...ventaForm, precio_venta: parseFloat(e.target.value) || 0 })}
-                            required
-                          />
-                        </div>
-                      </div>
-                      <p className="text-sm text-[#545454]">
-                        La comisión se calculará automáticamente según la configuración de la tienda.
-                      </p>
-                      <div className="flex justify-end">
-                        <Button type="submit" className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]">
-                          Guardar
-                        </Button>
-                      </div>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              </CardHeader>
-              <CardContent>
-                {ventas.length === 0 ? (
-                  <p className="text-[#545454] text-center py-8">No hay ventas registradas</p>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead>Producto</TableHead>
-                        <TableHead className="text-center">Cant.</TableHead>
-                        <TableHead className="text-right">Venta</TableHead>
-                        <TableHead className="text-right">Comisión</TableHead>
-                        <TableHead className="text-right">Neto</TableHead>
-                        <TableHead>Estado</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {ventas.map((v) => (
-                        <TableRow key={v.id}>
-                          <TableCell className="text-[#545454]">
-                            {format(new Date(v.fecha), 'dd MMM yyyy', { locale: es })}
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium">{v.producto_nombre}</div>
-                            {v.producto_sku && <div className="text-xs text-[#545454]">SKU: {v.producto_sku}</div>}
-                          </TableCell>
-                          <TableCell className="text-center">{v.cantidad}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(v.precio_venta)}</TableCell>
-                          <TableCell className="text-right text-red-500">-{formatCurrency(v.comision)}</TableCell>
-                          <TableCell className="text-right font-medium text-[#1A2238]">{formatCurrency(v.neto)}</TableCell>
-                          <TableCell>
-                            {v.liquidacion_id ? (
-                              <Badge className="bg-green-500"><CheckCircle className="h-3 w-3 mr-1" />Liquidada</Badge>
-                            ) : (
-                              <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" />Pendiente</Badge>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Liquidaciones Tab */}
-          <TabsContent value="liquidaciones">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Liquidaciones</CardTitle>
-                <Dialog open={liquidacionDialog} onOpenChange={setLiquidacionDialog}>
-                  <DialogTrigger asChild>
-                    <Button
-                      className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]"
-                      disabled={stats?.ventasPendientes === 0}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Nueva Liquidación
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Crear Liquidación</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handleLiquidacion} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label>Desde</Label>
-                          <Input
-                            type="date"
-                            value={liquidacionForm.periodo_inicio}
-                            onChange={e => setLiquidacionForm({ ...liquidacionForm, periodo_inicio: e.target.value })}
-                            required
-                          />
-                        </div>
-                        <div>
-                          <Label>Hasta</Label>
-                          <Input
-                            type="date"
-                            value={liquidacionForm.periodo_fin}
-                            onChange={e => setLiquidacionForm({ ...liquidacionForm, periodo_fin: e.target.value })}
-                            required
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <Label>Notas</Label>
-                        <Textarea
-                          value={liquidacionForm.notas}
-                          onChange={e => setLiquidacionForm({ ...liquidacionForm, notas: e.target.value })}
-                          placeholder="Observaciones de la liquidación..."
-                        />
-                      </div>
-                      <p className="text-sm text-[#545454]">
-                        Se liquidarán todas las ventas pendientes en el período seleccionado.
-                      </p>
-                      <div className="flex justify-end">
-                        <Button type="submit" className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]">
-                          Crear Liquidación
-                        </Button>
-                      </div>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              </CardHeader>
-              <CardContent>
-                {liquidaciones.length === 0 ? (
-                  <p className="text-[#545454] text-center py-8">No hay liquidaciones registradas</p>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead>Período</TableHead>
-                        <TableHead className="text-right">Ventas</TableHead>
-                        <TableHead className="text-right">Comisiones</TableHead>
-                        <TableHead className="text-right">Neto a Pagar</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {liquidaciones.map((l) => (
-                        <TableRow key={l.id}>
-                          <TableCell className="text-[#545454]">
-                            {format(new Date(l.fecha), 'dd MMM yyyy', { locale: es })}
-                          </TableCell>
-                          <TableCell>
-                            {format(new Date(l.periodo_inicio), 'dd MMM', { locale: es })} - {format(new Date(l.periodo_fin), 'dd MMM yyyy', { locale: es })}
-                          </TableCell>
-                          <TableCell className="text-right">{formatCurrency(l.total_ventas)}</TableCell>
-                          <TableCell className="text-right text-red-500">-{formatCurrency(l.total_comisiones)}</TableCell>
-                          <TableCell className="text-right font-medium text-[#1A2238]">{formatCurrency(l.total_neto)}</TableCell>
-                          <TableCell>
-                            {l.estado === 'pagada' ? (
-                              <Badge className="bg-green-500"><CheckCircle className="h-3 w-3 mr-1" />Pagada</Badge>
-                            ) : (
-                              <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" />Pendiente</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {l.estado === 'pendiente' && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => marcarPagada(l.id)}
-                              >
-                                Marcar Pagada
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Siigo Tab */}
-          <TabsContent value="siigo">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>Configuración Siigo</CardTitle>
-                  <p className="text-sm text-[#545454] mt-1">
-                    Configura los parámetros de facturación Siigo para esta tienda
-                  </p>
-                </div>
-                <Button
-                  className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]"
-                  onClick={handleSaveSiigoConfig}
-                  disabled={siigoSaving || !siigoConnected}
-                >
-                  {siigoSaving ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-2" />
+        {loading && !tienda ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-[#1DA9EF]" />
+          </div>
+        ) : error ? (
+          <Card className="border-red-200 bg-red-50">
+            <CardContent className="pt-6 text-red-700 text-sm">{error}</CardContent>
+          </Card>
+        ) : tienda ? (
+          <>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
+              <div>
+                <div className="flex items-center gap-3 mb-1">
+                  <h1 className="text-3xl font-bold text-[#1A2238]">{displayName}</h1>
+                  {!tienda.activa && <Badge variant="secondary">Inactiva</Badge>}
+                  {!tienda.siigo_customer_identification && (
+                    <Badge variant="outline" className="text-amber-700 border-amber-300">Sin NIT Siigo</Badge>
                   )}
-                  Guardar
+                </div>
+                <p className="text-[#545454] text-sm">
+                  {tienda.nombre_corto && tienda.nombre !== tienda.nombre_corto ? `${tienda.nombre} · ` : ''}
+                  <span className="font-mono">{tienda.siigo_customer_identification || 'Sin NIT'}</span>
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <DateRangePicker date={dateRange} onDateChange={setDateRange} />
+                <Button variant="outline" size="icon" onClick={fetchInvoices} disabled={loading}>
+                  <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
-              </CardHeader>
-              <CardContent>
-                {siigoLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-[#1A2238]" />
-                    <span className="ml-2 text-[#545454]">Cargando opciones de Siigo...</span>
-                  </div>
-                ) : !siigoConnected ? (
-                  <div className="text-center py-8">
-                    <p className="text-[#545454] mb-4">
-                      No hay conexión con Siigo. Configura tus credenciales en la página de configuración.
-                    </p>
-                    <Link href="/dashboard/configuracion">
-                      <Button variant="outline">
-                        <Settings className="h-4 w-4 mr-2" />
-                        Ir a Configuración
-                      </Button>
-                    </Link>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {/* Centro de Costo */}
-                    <div className="grid gap-2">
-                      <Label>Centro de Costo</Label>
-                      <Select
-                        value={siigoConfig.siigo_cost_center_id?.toString() || ''}
-                        onValueChange={(v) => {
-                          const center = siigoCostCenters.find(c => c.id.toString() === v)
-                          setSiigoConfig({
-                            ...siigoConfig,
-                            siigo_cost_center_id: center ? center.id : null,
-                            siigo_cost_center_name: center ? center.name : null,
-                          })
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar centro de costo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {siigoCostCenters.map((center) => (
-                            <SelectItem key={center.id} value={center.id.toString()}>
-                              {center.code ? `${center.code} - ` : ''}{center.name}
-                            </SelectItem>
+                <Button variant="outline" onClick={openEdit}>
+                  <Pencil className="h-4 w-4 mr-2" />Editar
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-4 mb-8">
+              <Card className="border-t-4 border-t-[#1DA9EF]">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-[#545454] flex items-center gap-1">
+                    <DollarSign className="h-4 w-4" /> Ventas
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-[#1A2238]">{formatCurrency(stats.totalVentas)}</div>
+                  <p className="text-xs text-[#545454]">total facturado</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-[#545454] flex items-center gap-1">
+                    <FileText className="h-4 w-4" /> Facturas
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-[#1A2238]">{stats.facturas}</div>
+                  <p className="text-xs text-[#545454]">en el período</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-[#545454] flex items-center gap-1">
+                    <Boxes className="h-4 w-4" /> Unidades
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-[#1A2238]">{stats.totalUnidades}</div>
+                  <p className="text-xs text-[#545454]">vendidas</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-[#545454] flex items-center gap-1">
+                    <Calendar className="h-4 w-4" /> Última factura
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-[#1A2238]">{stats.ultimaFactura || '—'}</div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2 mb-8">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5" /> Productos vendidos
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {productosPorSku.length === 0 ? (
+                    <p className="text-center text-[#545454] py-8 text-sm">Sin productos en este período</p>
+                  ) : (
+                    <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-white">
+                          <TableRow>
+                            <TableHead>SKU</TableHead>
+                            <TableHead>Producto</TableHead>
+                            <TableHead className="text-right">Cant.</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {productosPorSku.map(p => (
+                            <TableRow key={p.code}>
+                              <TableCell className="font-mono text-xs">{p.code}</TableCell>
+                              <TableCell className="text-sm">{p.description}</TableCell>
+                              <TableCell className="text-right">{p.quantity}</TableCell>
+                              <TableCell className="text-right font-mono text-sm">{formatCurrency(p.total)}</TableCell>
+                            </TableRow>
                           ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-[#545454]">
-                        Permite clasificar ingresos por tienda en Siigo
-                      </p>
+                        </TableBody>
+                      </Table>
                     </div>
+                  )}
+                </CardContent>
+              </Card>
 
-                    {/* Vendedor */}
-                    <div className="grid gap-2">
-                      <Label>Vendedor</Label>
-                      <Select
-                        value={siigoConfig.siigo_seller_id?.toString() || ''}
-                        onValueChange={(v) => {
-                          const seller = siigoSellers.find(s => s.id.toString() === v)
-                          setSiigoConfig({
-                            ...siigoConfig,
-                            siigo_seller_id: seller ? seller.id : null,
-                            siigo_seller_name: seller ? `${seller.first_name} ${seller.last_name}` : null,
-                          })
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar vendedor" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {siigoSellers.map((seller) => (
-                            <SelectItem key={seller.id} value={seller.id.toString()}>
-                              {seller.first_name} {seller.last_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-[#545454]">
-                        Usuario de Siigo asociado a las facturas de esta tienda
-                      </p>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" /> Facturas Siigo
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {invoices.length === 0 ? (
+                    <p className="text-center text-[#545454] py-8 text-sm">Sin facturas en este período</p>
+                  ) : (
+                    <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-white">
+                          <TableRow>
+                            <TableHead>Fecha</TableHead>
+                            <TableHead>Factura</TableHead>
+                            <TableHead className="text-right">Items</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {invoices
+                            .slice()
+                            .sort((a, b) => b.date.localeCompare(a.date))
+                            .map(inv => {
+                              const itemCount = (inv.items || []).filter(it => it.code !== 'ENVIO').length
+                              return (
+                                <TableRow key={inv.id}>
+                                  <TableCell className="text-sm text-[#545454]">{inv.date}</TableCell>
+                                  <TableCell className="font-mono text-xs">{inv.name}</TableCell>
+                                  <TableCell className="text-right text-sm">{itemCount}</TableCell>
+                                  <TableCell className="text-right font-mono text-sm">{formatCurrency(inv.total)}</TableCell>
+                                </TableRow>
+                              )
+                            })}
+                        </TableBody>
+                      </Table>
                     </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        ) : null}
 
-                    {/* IVA */}
-                    <div className="grid gap-2">
-                      <Label>Impuesto IVA</Label>
-                      <Select
-                        value={siigoConfig.siigo_iva_tax_id?.toString() || ''}
-                        onValueChange={(v) => {
-                          setSiigoConfig({
-                            ...siigoConfig,
-                            siigo_iva_tax_id: v ? parseInt(v) : null,
-                          })
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar impuesto" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {siigoTaxes
-                            .filter(t => t.percentage > 0)
-                            .map((tax) => (
-                              <SelectItem key={tax.id} value={tax.id.toString()}>
-                                {tax.name} ({tax.percentage}%)
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-[#545454]">
-                        ID del impuesto IVA a aplicar (por defecto 19%)
-                      </p>
-                    </div>
-
-                    {/* Tipo de Documento */}
-                    <div className="grid gap-2">
-                      <Label>Tipo de Documento</Label>
-                      <Select
-                        value={siigoConfig.siigo_default_document_id?.toString() || ''}
-                        onValueChange={(v) => {
-                          const doc = siigoDocumentTypes.find(d => d.id.toString() === v)
-                          setSiigoConfig({
-                            ...siigoConfig,
-                            siigo_default_document_id: doc ? doc.id : null,
-                            siigo_default_document_name: doc ? doc.name : null,
-                          })
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Usar tipo por defecto" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {siigoDocumentTypes.map((doc) => (
-                            <SelectItem key={doc.id} value={doc.id.toString()}>
-                              {doc.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-[#545454]">
-                        Tipo de documento/factura para ventas de esta tienda
-                      </p>
-                    </div>
-
-                    {/* Current Config Summary */}
-                    {(siigoConfig.siigo_cost_center_name || siigoConfig.siigo_seller_name) && (
-                      <div className="mt-6 p-4 bg-[#FFFFFF] rounded-lg">
-                        <p className="text-sm font-medium text-[#1A2238] mb-2">Configuración actual:</p>
-                        <ul className="text-sm text-[#545454] space-y-1">
-                          {siigoConfig.siigo_cost_center_name && (
-                            <li>Centro de Costo: {siigoConfig.siigo_cost_center_name}</li>
-                          )}
-                          {siigoConfig.siigo_seller_name && (
-                            <li>Vendedor: {siigoConfig.siigo_seller_name}</li>
-                          )}
-                          {siigoConfig.siigo_iva_tax_id && (
-                            <li>IVA Tax ID: {siigoConfig.siigo_iva_tax_id}</li>
-                          )}
-                          {siigoConfig.siigo_default_document_name && (
-                            <li>Documento: {siigoConfig.siigo_default_document_name}</li>
-                          )}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Editar tienda</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={submitEdit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="edit-corto">Nombre corto *</Label>
+                  <Input
+                    id="edit-corto"
+                    value={editForm.nombre_corto}
+                    onChange={e => setEditForm({ ...editForm, nombre_corto: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-nombre">Razón social *</Label>
+                  <Input
+                    id="edit-nombre"
+                    value={editForm.nombre}
+                    onChange={e => setEditForm({ ...editForm, nombre: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="edit-nit">NIT en Siigo</Label>
+                <Input
+                  id="edit-nit"
+                  value={editForm.siigo_customer_identification}
+                  onChange={e => setEditForm({ ...editForm, siigo_customer_identification: e.target.value })}
+                />
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setEditOpen(false)} disabled={saving}>Cancelar</Button>
+                <Button type="submit" disabled={saving} className="bg-[#1DA9EF] hover:bg-[#0073D1]">
+                  {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Guardando</> : 'Guardar'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   )

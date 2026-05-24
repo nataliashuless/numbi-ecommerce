@@ -105,3 +105,55 @@ export async function GET(
     },
   })
 }
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { error } = await requireAuth()
+  if (error) return error
+
+  const { id } = await params
+  const supabase = getAdminClient()
+  const body = await request.json()
+
+  const ALLOWED = [
+    'nombre',
+    'nombre_corto',
+    'contacto_nombre',
+    'contacto_telefono',
+    'contacto_email',
+    'direccion',
+    'comision_tipo',
+    'comision_porcentaje',
+    'comision_fijo',
+    'notas',
+    'activa',
+    'siigo_customer_identification',
+    'siigo_cost_center_id',
+    'siigo_cost_center_name',
+    'siigo_seller_id',
+    'siigo_seller_name',
+    'siigo_iva_tax_id',
+    'siigo_default_document_id',
+    'siigo_default_document_name',
+  ] as const
+  const update: Record<string, unknown> = {}
+  for (const key of ALLOWED) {
+    if (key in body) update[key] = body[key] ?? null
+  }
+  update.updated_at = new Date().toISOString()
+
+  const { data, error: updateError } = await supabase
+    .from('tiendas_terceros')
+    .update(update)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (updateError) {
+    return NextResponse.json({ error: updateError.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ tienda: data })
+}

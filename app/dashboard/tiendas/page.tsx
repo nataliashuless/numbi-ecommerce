@@ -57,6 +57,7 @@ import {
 interface TiendaConStats {
   id: string
   nombre: string
+  nombre_corto: string | null
   contacto_nombre: string | null
   contacto_telefono: string | null
   contacto_email: string | null
@@ -154,6 +155,7 @@ export default function TiendasPage() {
   // Form state
   const [formData, setFormData] = useState({
     nombre: '',
+    nombre_corto: '',
     contacto_nombre: '',
     contacto_telefono: '',
     contacto_email: '',
@@ -328,6 +330,7 @@ export default function TiendasPage() {
         setDialogOpen(false)
         setFormData({
           nombre: '',
+          nombre_corto: '',
           contacto_nombre: '',
           contacto_telefono: '',
           contacto_email: '',
@@ -444,15 +447,28 @@ export default function TiendasPage() {
                 <DialogTitle>Agregar Tienda</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="nombre">Nombre de la Tienda *</Label>
-                  <Input
-                    id="nombre"
-                    value={formData.nombre}
-                    onChange={e => setFormData({ ...formData, nombre: e.target.value })}
-                    placeholder="Ej: Boutique Centro"
-                    required
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="nombre_corto">Nombre corto *</Label>
+                    <Input
+                      id="nombre_corto"
+                      value={formData.nombre_corto}
+                      onChange={e => setFormData({ ...formData, nombre_corto: e.target.value })}
+                      placeholder="Ej: TITI"
+                      required
+                    />
+                    <p className="text-xs text-[#545454] mt-1">Cómo se muestra en listas</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="nombre">Razón social *</Label>
+                    <Input
+                      id="nombre"
+                      value={formData.nombre}
+                      onChange={e => setFormData({ ...formData, nombre: e.target.value })}
+                      placeholder="Ej: TITI AND VAL SAS"
+                      required
+                    />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -774,7 +790,7 @@ export default function TiendasPage() {
                               </div>
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <span className="font-semibold text-[#1A2238]">{tienda.nombre}</span>
+                                  <span className="font-semibold text-[#1A2238]">{tienda.nombre_corto || tienda.nombre}</span>
                                   {!tienda.activa && (
                                     <Badge variant="secondary">Inactiva</Badge>
                                   )}
@@ -782,8 +798,9 @@ export default function TiendasPage() {
                                     <Badge variant="outline" className="text-amber-700 border-amber-300">Sin NIT Siigo</Badge>
                                   )}
                                 </div>
-                                <div className="text-xs text-[#545454] font-mono">
-                                  {tienda.siigo_customer_identification || 'Sin NIT'}
+                                <div className="text-xs text-[#545454]">
+                                  {tienda.nombre_corto ? `${tienda.nombre} · ` : ''}
+                                  <span className="font-mono">{tienda.siigo_customer_identification || 'Sin NIT'}</span>
                                 </div>
                               </div>
                             </div>
