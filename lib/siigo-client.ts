@@ -35,6 +35,25 @@ export interface SiigoInvoice {
   total: number
 }
 
+export interface SiigoInvoiceListItem {
+  id: string
+  number: number
+  name: string
+  prefix: string
+  date: string
+  total: number
+  balance: number
+  customer: { id: string; identification: string; branch_office: number }
+  observations: string
+  items: Array<{
+    code: string
+    description: string
+    quantity: number
+    price: number
+    total: number
+  }>
+}
+
 export interface CreateCustomerData {
   nit: string
   checkDigit: string
@@ -313,6 +332,34 @@ export async function createInvoice(
   }
 
   return response.json()
+}
+
+export async function listInvoices(
+  startDate: string,
+  endDate: string
+): Promise<SiigoInvoiceListItem[]> {
+  const all: SiigoInvoiceListItem[] = []
+  const pageSize = 100
+  let page = 1
+
+  while (true) {
+    const url = `/invoices?created_start=${startDate}&created_end=${endDate}&page_size=${pageSize}&page=${page}`
+    const response = await siigoFetch(url)
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.Message || `Error listando facturas Siigo: ${response.status}`)
+    }
+    const data = await response.json()
+    const results: SiigoInvoiceListItem[] = data.results || []
+    all.push(...results)
+
+    const total = data.pagination?.total_results ?? all.length
+    if (all.length >= total || results.length < pageSize) break
+    page++
+    if (page > 50) break
+  }
+
+  return all
 }
 
 export async function getDocumentTypes(): Promise<Array<{ id: number; name: string }>> {

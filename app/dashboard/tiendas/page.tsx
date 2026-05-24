@@ -40,6 +40,7 @@ import {
   TrendingUp,
   Settings,
   LogOut,
+  FileText,
 } from 'lucide-react'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 import {
@@ -289,6 +290,12 @@ export default function TiendasPage() {
               <Store className="h-4 w-4 mr-2" />
               Tiendas
             </Button>
+            <Link href="/dashboard/conciliacion">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
+                <FileText className="h-4 w-4 mr-2" />
+                Conciliación
+              </Button>
+            </Link>
             <Link href="/dashboard/productos">
               <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Package className="h-4 w-4 mr-2" />

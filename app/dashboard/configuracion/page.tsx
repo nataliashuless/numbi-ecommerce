@@ -30,6 +30,7 @@ import {
   LogOut,
   Plus,
   Trash2,
+  FileText,
 } from 'lucide-react'
 
 interface SiigoPaymentMethod {
@@ -409,6 +410,12 @@ export default function ConfiguracionPage() {
               <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Store className="h-4 w-4 mr-2" />
                 Tiendas
+              </Button>
+            </Link>
+            <Link href="/dashboard/conciliacion">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
+                <FileText className="h-4 w-4 mr-2" />
+                Conciliación
               </Button>
             </Link>
             <Link href="/dashboard/productos">
