@@ -60,7 +60,7 @@ function formatCurrency(value: number): string {
   }).format(value)
 }
 
-const COLORS = ['#96bf48', '#25D366', '#6366f1']
+const COLORS = ['#96bf48', '#25D366', '#1DA9EF']
 
 function getGroupKey(dateStr: string, groupBy: 'day' | 'week' | 'month' | 'quarter'): string {
   const date = new Date(dateStr + 'T12:00:00')
@@ -199,7 +199,7 @@ export default function DashboardPage() {
   const pieData = data ? [
     { name: 'Shopify', value: data.shopify.ventas, color: '#96bf48' },
     { name: 'WhatsApp', value: data.whatsapp.ventas, color: '#25D366' },
-    { name: 'Tiendas', value: data.tiendas.ventas, color: '#6366f1' },
+    { name: 'Tiendas', value: data.tiendas.ventas, color: '#1DA9EF' },
   ].filter(d => d.value > 0) : []
 
   const formattedChartData = data?.chartData.map(d => {
@@ -220,22 +220,22 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#FFFFFF]">
       {/* Header */}
-      <header className="bg-[#1DA9EF] border-b border-[#E5E7EB]">
+      <header className="bg-[#1A2238] border-b border-[#2A3550]">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-semibold text-white tracking-tight">shuless</span>
-              <span className="text-xs text-[#1A2238] font-medium bg-[#1A2238] px-2 py-1 rounded">E-commerce</span>
+              <span className="text-2xl font-bold tracking-tight text-[#1DA9EF]">shuless</span>
+              <span className="text-[10px] text-white font-bold bg-[#1DA9EF] px-2 py-0.5 rounded-full uppercase tracking-wider">Admin</span>
             </div>
             {shop && (
-              <div className="flex items-center gap-2 text-[#929292] text-sm">
+              <div className="flex items-center gap-2 text-[#9CA3AF] text-sm">
                 <Store className="h-4 w-4" />
                 <span>{shop}</span>
               </div>
             )}
           </div>
           <Link href="/">
-            <Button variant="ghost" className="text-[#929292] hover:text-white hover:bg-[#1A2238]">
+            <Button variant="ghost" className="text-[#9CA3AF] hover:text-white hover:bg-[#2A3550]">
               <LogOut className="h-4 w-4 mr-2" />
               Cerrar sesión
             </Button>
@@ -320,14 +320,14 @@ export default function DashboardPage() {
           <>
             {/* Total KPIs */}
             <div className="grid gap-4 md:grid-cols-3 mb-8">
-              <Card className="bg-[#1DA9EF] text-white">
+              <Card className="border-t-4 border-t-[#1DA9EF]">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#929292]">Ventas Totales</CardTitle>
-                  <DollarSign className="h-4 w-4 text-[#1A2238]" />
+                  <CardTitle className="text-sm font-medium text-[#545454]">Ventas Totales</CardTitle>
+                  <DollarSign className="h-4 w-4 text-[#1DA9EF]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-[#1A2238]">{formatCurrency(data?.total.ventas || 0)}</div>
-                  <p className="text-xs text-[#929292] mt-1">Todos los canales</p>
+                  <div className="text-3xl font-bold text-[#1DA9EF]">{formatCurrency(data?.total.ventas || 0)}</div>
+                  <p className="text-xs text-[#545454] mt-1">Todos los canales</p>
                 </CardContent>
               </Card>
 
@@ -381,10 +381,10 @@ export default function DashboardPage() {
               </Link>
 
               <Link href="/dashboard/tiendas">
-                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-[#6366f1]">
+                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-[#1DA9EF]">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium text-[#545454]">Tiendas Terceros</CardTitle>
-                    <Store className="h-4 w-4 text-[#6366f1]" />
+                    <Store className="h-4 w-4 text-[#1DA9EF]" />
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold text-[#1A2238]">{formatCurrency(data?.tiendas.ventas || 0)}</div>
@@ -450,7 +450,7 @@ export default function DashboardPage() {
                           <Legend />
                           <Bar dataKey="shopify" name="Shopify" stackId="a" fill="#96bf48" />
                           <Bar dataKey="whatsapp" name="WhatsApp" stackId="a" fill="#25D366" />
-                          <Bar dataKey="tiendas" name="Tiendas" stackId="a" fill="#6366f1" />
+                          <Bar dataKey="tiendas" name="Tiendas" stackId="a" fill="#1DA9EF" />
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (

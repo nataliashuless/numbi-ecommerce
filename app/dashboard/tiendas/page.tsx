@@ -246,16 +246,16 @@ export default function TiendasPage() {
   return (
     <div className="min-h-screen bg-[#FFFFFF]">
       {/* Header */}
-      <header className="bg-[#1DA9EF] border-b border-[#E5E7EB]">
+      <header className="bg-[#1A2238] border-b border-[#2A3550]">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-semibold text-white tracking-tight">shuless</span>
-              <span className="text-xs text-[#1A2238] font-medium bg-[#1A2238] px-2 py-1 rounded">E-commerce</span>
+              <span className="text-2xl font-bold tracking-tight text-[#1DA9EF]">shuless</span>
+              <span className="text-[10px] text-white font-bold bg-[#1DA9EF] px-2 py-0.5 rounded-full uppercase tracking-wider">Admin</span>
             </div>
           </div>
           <Link href="/">
-            <Button variant="ghost" className="text-[#929292] hover:text-white hover:bg-[#1A2238]">
+            <Button variant="ghost" className="text-[#9CA3AF] hover:text-white hover:bg-[#2A3550]">
               <LogOut className="h-4 w-4 mr-2" />
               Cerrar sesión
             </Button>
@@ -563,7 +563,7 @@ export default function TiendasPage() {
                         />
                         <Legend />
                         <Bar dataKey="neto" name="Neto" fill="#1DA9EF" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="comision" name="Comision" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="comision" name="Comision" fill="#1DA9EF" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (

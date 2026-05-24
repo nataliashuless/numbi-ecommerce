@@ -445,7 +445,7 @@ export default function TiendaDetallePage() {
   return (
     <div className="min-h-screen bg-[#FFFFFF]">
       {/* Header */}
-      <header className="bg-[#1DA9EF] border-b border-[#E5E7EB]">
+      <header className="bg-[#1A2238] border-b border-[#2A3550]">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <Link href="/dashboard/tiendas">
