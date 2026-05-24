@@ -66,6 +66,7 @@ interface TiendaConStats {
   comision_fijo: number | null
   notas: string | null
   activa: boolean
+  siigo_customer_identification: string | null
   inventarioActual: number
   ventasPendientes: number
   montoPendiente: number
@@ -81,17 +82,19 @@ interface Stats {
 interface ChartDataItem {
   date: string
   ventas: number
-  neto: number
-  comision: number
   unidades: number
 }
 
 interface VentasStats {
   totalVentas: number
-  totalNeto: number
-  totalComision: number
   totalUnidades: number
   totalTransacciones: number
+}
+
+interface TiendaSalesStat {
+  total: number
+  unidades: number
+  facturas: number
 }
 
 function formatCurrency(value: number): string {
@@ -146,6 +149,7 @@ export default function TiendasPage() {
   const [chartData, setChartData] = useState<ChartDataItem[]>([])
   const [ventasStats, setVentasStats] = useState<VentasStats | null>(null)
   const [chartLoading, setChartLoading] = useState(false)
+  const [tiendaSales, setTiendaSales] = useState<Record<string, TiendaSalesStat>>({})
 
   // Form state
   const [formData, setFormData] = useState({
@@ -222,14 +226,77 @@ export default function TiendasPage() {
       const startDate = format(dateRange.from, 'yyyy-MM-dd')
       const endDate = format(dateRange.to, 'yyyy-MM-dd')
 
-      const res = await fetch(`/api/tiendas/ventas?start_date=${startDate}&end_date=${endDate}&group_by=${groupBy}`)
-      if (res.ok) {
-        const data = await res.json()
-        setChartData(data.chartData)
-        setVentasStats(data.stats)
+      const res = await fetch(`/api/siigo/invoices?start_date=${startDate}&end_date=${endDate}`)
+      if (!res.ok) {
+        setChartData([])
+        setVentasStats({ totalVentas: 0, totalUnidades: 0, totalTransacciones: 0 })
+        setTiendaSales({})
+        return
       }
+      const data = await res.json()
+      type Item = { code: string; quantity: number }
+      type Inv = {
+        id: string
+        date: string
+        total: number
+        tienda_id: string | null
+        items: Item[]
+      }
+      const invoices: Inv[] = (data.invoices || []).filter((i: Inv) => i.tienda_id)
+
+      const groupKey = (dateStr: string): string => {
+        if (groupBy === 'month') {
+          const [y, m] = dateStr.split('-')
+          return `${y}-${m}`
+        }
+        if (groupBy === 'week') {
+          const d = new Date(dateStr + 'T12:00:00')
+          d.setHours(0, 0, 0, 0)
+          d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7)
+          const week1 = new Date(d.getFullYear(), 0, 4)
+          const weekNum = 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7)
+          return `${d.getFullYear()}-W${String(weekNum).padStart(2, '0')}`
+        }
+        return dateStr
+      }
+
+      const buckets: Record<string, { ventas: number; unidades: number }> = {}
+      const byTienda: Record<string, TiendaSalesStat> = {}
+      let totalVentas = 0
+      let totalUnidades = 0
+
+      for (const inv of invoices) {
+        const key = groupKey(inv.date)
+        const units = (inv.items || [])
+          .filter(it => it.code !== 'ENVIO')
+          .reduce((s, it) => s + (it.quantity || 0), 0)
+        if (!buckets[key]) buckets[key] = { ventas: 0, unidades: 0 }
+        buckets[key].ventas += inv.total
+        buckets[key].unidades += units
+        totalVentas += inv.total
+        totalUnidades += units
+
+        if (inv.tienda_id) {
+          if (!byTienda[inv.tienda_id]) byTienda[inv.tienda_id] = { total: 0, unidades: 0, facturas: 0 }
+          byTienda[inv.tienda_id].total += inv.total
+          byTienda[inv.tienda_id].unidades += units
+          byTienda[inv.tienda_id].facturas += 1
+        }
+      }
+
+      const chart = Object.entries(buckets)
+        .map(([date, v]) => ({ date, ventas: v.ventas, unidades: v.unidades }))
+        .sort((a, b) => a.date.localeCompare(b.date))
+
+      setChartData(chart)
+      setVentasStats({
+        totalVentas,
+        totalUnidades,
+        totalTransacciones: invoices.length,
+      })
+      setTiendaSales(byTienda)
     } catch (error) {
-      console.error('Error fetching chart data:', error)
+      console.error('Error fetching siigo invoices for tiendas:', error)
     } finally {
       setChartLoading(false)
     }
@@ -552,23 +619,29 @@ export default function TiendasPage() {
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#545454]">Inventario Consignado</CardTitle>
+                  <CardTitle className="text-sm font-medium text-[#545454]">Conectadas a Siigo</CardTitle>
                   <Package className="h-4 w-4 text-[#545454]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#1A2238]">{stats.inventarioTotal}</div>
-                  <p className="text-xs text-[#545454]">unidades en tiendas</p>
+                  <div className="text-2xl font-bold text-[#1A2238]">
+                    {tiendas.filter(t => t.siigo_customer_identification).length}
+                  </div>
+                  <p className="text-xs text-[#545454]">de {tiendas.length} con NIT</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#545454]">Por Liquidar</CardTitle>
+                  <CardTitle className="text-sm font-medium text-[#545454]">Facturas (Periodo)</CardTitle>
                   <DollarSign className="h-4 w-4 text-[#545454]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#1A2238]">{formatCurrency(stats.montoPendienteTotal)}</div>
-                  <p className="text-xs text-[#545454]">ventas pendientes</p>
+                  <div className="text-2xl font-bold text-[#1A2238]">
+                    {ventasStats ? ventasStats.totalTransacciones : '-'}
+                  </div>
+                  <p className="text-xs text-[#545454]">
+                    {ventasStats ? `${ventasStats.totalUnidades} unidades vendidas` : 'desde Siigo'}
+                  </p>
                 </CardContent>
               </Card>
 
@@ -579,10 +652,10 @@ export default function TiendasPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-[#1A2238]">
-                    {ventasStats ? formatCurrency(ventasStats.totalNeto) : '-'}
+                    {ventasStats ? formatCurrency(ventasStats.totalVentas) : '-'}
                   </div>
                   <p className="text-xs text-[#545454]">
-                    {ventasStats ? `${ventasStats.totalUnidades} unidades` : 'neto a recibir'}
+                    facturas Siigo a tiendas
                   </p>
                 </CardContent>
               </Card>
@@ -641,8 +714,7 @@ export default function TiendasPage() {
                           contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
                         />
                         <Legend />
-                        <Bar dataKey="neto" name="Neto" fill="#1DA9EF" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="comision" name="Comision" fill="#1DA9EF" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="ventas" name="Ventas" fill="#1DA9EF" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
@@ -654,16 +726,16 @@ export default function TiendasPage() {
                 {ventasStats && ventasStats.totalTransacciones > 0 && (
                   <div className="mt-4 pt-4 border-t flex justify-end gap-8 text-sm">
                     <div>
-                      <span className="text-[#545454]">Ventas brutas: </span>
-                      <span className="font-bold">{formatCurrency(ventasStats.totalVentas)}</span>
+                      <span className="text-[#545454]">Ventas: </span>
+                      <span className="font-bold text-[#1A2238]">{formatCurrency(ventasStats.totalVentas)}</span>
                     </div>
                     <div>
-                      <span className="text-[#545454]">Comision: </span>
-                      <span className="font-bold text-purple-600">{formatCurrency(ventasStats.totalComision)}</span>
+                      <span className="text-[#545454]">Unidades: </span>
+                      <span className="font-bold">{ventasStats.totalUnidades}</span>
                     </div>
                     <div>
-                      <span className="text-[#545454]">Neto: </span>
-                      <span className="font-bold text-[#1A2238]">{formatCurrency(ventasStats.totalNeto)}</span>
+                      <span className="text-[#545454]">Facturas: </span>
+                      <span className="font-bold">{ventasStats.totalTransacciones}</span>
                     </div>
                   </div>
                 )}
@@ -690,13 +762,15 @@ export default function TiendasPage() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {tiendas.map((tienda) => (
+                    {tiendas.map((tienda) => {
+                      const siigoStat = tiendaSales[tienda.id]
+                      return (
                       <Link key={tienda.id} href={`/dashboard/tiendas/${tienda.id}`}>
                         <div className="border rounded-lg p-4 hover:bg-gray-50 transition-colors cursor-pointer">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
                               <div className="h-10 w-10 rounded-full bg-[#1DA9EF] flex items-center justify-center">
-                                <Store className="h-5 w-5 text-[#1A2238]" />
+                                <Store className="h-5 w-5 text-white" />
                               </div>
                               <div>
                                 <div className="flex items-center gap-2">
@@ -704,21 +778,28 @@ export default function TiendasPage() {
                                   {!tienda.activa && (
                                     <Badge variant="secondary">Inactiva</Badge>
                                   )}
+                                  {!tienda.siigo_customer_identification && (
+                                    <Badge variant="outline" className="text-amber-700 border-amber-300">Sin NIT Siigo</Badge>
+                                  )}
                                 </div>
-                                <div className="text-sm text-[#545454]">
-                                  Comision: {formatComision(tienda)}
+                                <div className="text-xs text-[#545454] font-mono">
+                                  {tienda.siigo_customer_identification || 'Sin NIT'}
                                 </div>
                               </div>
                             </div>
                             <div className="flex items-center gap-6">
                               <div className="text-right">
-                                <div className="text-sm text-[#545454]">Inventario</div>
-                                <div className="font-semibold">{tienda.inventarioActual} uds</div>
+                                <div className="text-sm text-[#545454]">Facturas</div>
+                                <div className="font-semibold">{siigoStat?.facturas ?? 0}</div>
                               </div>
                               <div className="text-right">
-                                <div className="text-sm text-[#545454]">Por Liquidar</div>
+                                <div className="text-sm text-[#545454]">Unidades</div>
+                                <div className="font-semibold">{siigoStat?.unidades ?? 0}</div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm text-[#545454]">Ventas</div>
                                 <div className="font-semibold text-[#1A2238]">
-                                  {formatCurrency(tienda.montoPendiente)}
+                                  {formatCurrency(siigoStat?.total ?? 0)}
                                 </div>
                               </div>
                               <ChevronRight className="h-5 w-5 text-[#545454]" />
@@ -726,7 +807,7 @@ export default function TiendasPage() {
                           </div>
                         </div>
                       </Link>
-                    ))}
+                    )})}
                   </div>
                 )}
               </CardContent>
