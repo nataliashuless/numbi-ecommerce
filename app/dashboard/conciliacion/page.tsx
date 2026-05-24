@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -47,6 +46,15 @@ interface ShopifyOrder {
   customerName: string
 }
 
+interface SiigoInvoiceItem {
+  code: string
+  description: string
+  quantity: number
+  price: number
+  total?: number
+  discount?: { percentage?: number; value?: number }
+}
+
 interface SiigoInvoice {
   id: string
   number: number
@@ -60,6 +68,7 @@ interface SiigoInvoice {
   tienda_id: string | null
   tienda_nombre: string | null
   observations: string
+  items: SiigoInvoiceItem[]
 }
 
 type MatchStatus = 'matched' | 'shopify_only' | 'siigo_only'
@@ -107,11 +116,8 @@ export default function ConciliacionPage() {
   const [tiendaForm, setTiendaForm] = useState({
     nombre: '',
     siigo_customer_identification: '',
-    comision_tipo: 'porcentaje' as 'porcentaje' | 'fijo' | 'mixto',
-    comision_porcentaje: '',
-    comision_fijo: '',
-    notas: '',
   })
+  const [tiendaInvoiceContext, setTiendaInvoiceContext] = useState<SiigoInvoice | null>(null)
   const [tiendaSaving, setTiendaSaving] = useState(false)
   const [tiendaError, setTiendaError] = useState<string | null>(null)
 
@@ -119,11 +125,8 @@ export default function ConciliacionPage() {
     setTiendaForm({
       nombre: invoice.customer_name || '',
       siigo_customer_identification: invoice.customer.identification || '',
-      comision_tipo: 'porcentaje',
-      comision_porcentaje: '',
-      comision_fijo: '',
-      notas: '',
     })
+    setTiendaInvoiceContext(invoice)
     setTiendaError(null)
     setCreateTiendaOpen(true)
   }
@@ -137,9 +140,8 @@ export default function ConciliacionPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...tiendaForm,
-          comision_porcentaje: tiendaForm.comision_porcentaje ? parseFloat(tiendaForm.comision_porcentaje) : null,
-          comision_fijo: tiendaForm.comision_fijo ? parseFloat(tiendaForm.comision_fijo) : null,
+          nombre: tiendaForm.nombre,
+          siigo_customer_identification: tiendaForm.siigo_customer_identification,
         }),
       })
       const data = await res.json()
@@ -525,84 +527,82 @@ export default function ConciliacionPage() {
         </Card>
 
         <Dialog open={createTiendaOpen} onOpenChange={setCreateTiendaOpen}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Crear tienda desde factura Siigo</DialogTitle>
             </DialogHeader>
             <form onSubmit={submitCreateTienda} className="space-y-4">
-              <div>
-                <Label htmlFor="tienda-nombre">Nombre de la tienda *</Label>
-                <Input
-                  id="tienda-nombre"
-                  value={tiendaForm.nombre}
-                  onChange={e => setTiendaForm({ ...tiendaForm, nombre: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="tienda-nit">NIT en Siigo *</Label>
-                <Input
-                  id="tienda-nit"
-                  value={tiendaForm.siigo_customer_identification}
-                  onChange={e => setTiendaForm({ ...tiendaForm, siigo_customer_identification: e.target.value })}
-                  required
-                />
-                <p className="text-xs text-[#545454] mt-1">
-                  Identificación del cliente en Siigo. Facturas futuras con este NIT se asociarán automáticamente a esta tienda.
-                </p>
-              </div>
-
-              <div className="border-t pt-4">
-                <Label className="text-base font-semibold">Comisión</Label>
-                <div className="space-y-3 mt-2">
-                  <div>
-                    <Label htmlFor="tienda-comision-tipo" className="text-sm">Tipo</Label>
-                    <Select
-                      value={tiendaForm.comision_tipo}
-                      onValueChange={(value: 'porcentaje' | 'fijo' | 'mixto') =>
-                        setTiendaForm({ ...tiendaForm, comision_tipo: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="porcentaje">Porcentaje (%)</SelectItem>
-                        <SelectItem value="fijo">Monto fijo por unidad</SelectItem>
-                        <SelectItem value="mixto">Mixto (% + fijo)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {(tiendaForm.comision_tipo === 'porcentaje' || tiendaForm.comision_tipo === 'mixto') && (
-                    <div>
-                      <Label htmlFor="tienda-comision-pct" className="text-sm">Porcentaje (%)</Label>
-                      <Input
-                        id="tienda-comision-pct"
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        value={tiendaForm.comision_porcentaje}
-                        onChange={e => setTiendaForm({ ...tiendaForm, comision_porcentaje: e.target.value })}
-                        placeholder="Ej: 30"
-                      />
-                    </div>
-                  )}
-                  {(tiendaForm.comision_tipo === 'fijo' || tiendaForm.comision_tipo === 'mixto') && (
-                    <div>
-                      <Label htmlFor="tienda-comision-fijo" className="text-sm">Monto fijo (COP)</Label>
-                      <Input
-                        id="tienda-comision-fijo"
-                        type="number"
-                        min="0"
-                        value={tiendaForm.comision_fijo}
-                        onChange={e => setTiendaForm({ ...tiendaForm, comision_fijo: e.target.value })}
-                        placeholder="Ej: 5000"
-                      />
-                    </div>
-                  )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="tienda-nombre">Nombre de la tienda *</Label>
+                  <Input
+                    id="tienda-nombre"
+                    value={tiendaForm.nombre}
+                    onChange={e => setTiendaForm({ ...tiendaForm, nombre: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="tienda-nit">NIT en Siigo *</Label>
+                  <Input
+                    id="tienda-nit"
+                    value={tiendaForm.siigo_customer_identification}
+                    onChange={e => setTiendaForm({ ...tiendaForm, siigo_customer_identification: e.target.value })}
+                    required
+                  />
                 </div>
               </div>
+              <p className="text-xs text-[#545454]">
+                Facturas Siigo (pasadas y futuras) con este NIT se asocian automáticamente a esta tienda. Cada factura representa una entrega/venta de productos a esta tienda con sus precios negociados.
+              </p>
+
+              {tiendaInvoiceContext && tiendaInvoiceContext.items?.length > 0 && (
+                <div className="border-t pt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-base font-semibold">
+                      Productos en esta factura ({tiendaInvoiceContext.name})
+                    </Label>
+                    <span className="text-xs text-[#545454]">{tiendaInvoiceContext.date}</span>
+                  </div>
+                  <div className="border rounded-lg overflow-hidden max-h-64 overflow-y-auto">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-[#F4F8FA]">
+                        <TableRow>
+                          <TableHead className="h-9">SKU</TableHead>
+                          <TableHead className="h-9">Producto</TableHead>
+                          <TableHead className="h-9 text-right">Cant.</TableHead>
+                          <TableHead className="h-9 text-right">Precio</TableHead>
+                          <TableHead className="h-9 text-right">Subtotal</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {tiendaInvoiceContext.items
+                          .filter(it => it.code !== 'ENVIO')
+                          .map((it, i) => {
+                            const subtotal = it.total ?? (it.quantity * it.price)
+                            return (
+                              <TableRow key={i}>
+                                <TableCell className="font-mono text-xs">{it.code}</TableCell>
+                                <TableCell className="text-sm">
+                                  {it.description}
+                                  {it.discount?.percentage ? (
+                                    <span className="ml-1 text-xs text-amber-700">−{it.discount.percentage}%</span>
+                                  ) : null}
+                                </TableCell>
+                                <TableCell className="text-right text-sm">{it.quantity}</TableCell>
+                                <TableCell className="text-right font-mono text-xs">{formatCurrency(it.price)}</TableCell>
+                                <TableCell className="text-right font-mono text-xs">{formatCurrency(subtotal)}</TableCell>
+                              </TableRow>
+                            )
+                          })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <p className="text-xs text-[#545454] mt-2">
+                    Estos precios son los que esta tienda paga por cada producto. Se mantienen por factura — Shuless aún no centraliza catálogo por tienda (próximo paso).
+                  </p>
+                </div>
+              )}
 
               {tiendaError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
