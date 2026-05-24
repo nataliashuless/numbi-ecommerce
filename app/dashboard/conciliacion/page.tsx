@@ -7,6 +7,10 @@ import { subDays, format } from 'date-fns'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -30,6 +34,7 @@ import {
   CheckCircle2,
   AlertCircle,
   XCircle,
+  Plus,
 } from 'lucide-react'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 
@@ -97,6 +102,56 @@ export default function ConciliacionPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | MatchStatus>('all')
+
+  const [createTiendaOpen, setCreateTiendaOpen] = useState(false)
+  const [tiendaForm, setTiendaForm] = useState({
+    nombre: '',
+    siigo_customer_identification: '',
+    comision_tipo: 'porcentaje' as 'porcentaje' | 'fijo' | 'mixto',
+    comision_porcentaje: '',
+    comision_fijo: '',
+    notas: '',
+  })
+  const [tiendaSaving, setTiendaSaving] = useState(false)
+  const [tiendaError, setTiendaError] = useState<string | null>(null)
+
+  function openCreateTienda(invoice: SiigoInvoice) {
+    setTiendaForm({
+      nombre: invoice.customer_name || '',
+      siigo_customer_identification: invoice.customer.identification || '',
+      comision_tipo: 'porcentaje',
+      comision_porcentaje: '',
+      comision_fijo: '',
+      notas: '',
+    })
+    setTiendaError(null)
+    setCreateTiendaOpen(true)
+  }
+
+  async function submitCreateTienda(e: React.FormEvent) {
+    e.preventDefault()
+    setTiendaSaving(true)
+    setTiendaError(null)
+    try {
+      const res = await fetch('/api/tiendas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...tiendaForm,
+          comision_porcentaje: tiendaForm.comision_porcentaje ? parseFloat(tiendaForm.comision_porcentaje) : null,
+          comision_fijo: tiendaForm.comision_fijo ? parseFloat(tiendaForm.comision_fijo) : null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error creando tienda')
+      setCreateTiendaOpen(false)
+      await fetchData()
+    } catch (e) {
+      setTiendaError(e instanceof Error ? e.message : 'Error')
+    } finally {
+      setTiendaSaving(false)
+    }
+  }
 
   async function fetchData() {
     if (!dateRange?.from || !dateRange?.to) return
@@ -406,6 +461,7 @@ export default function ConciliacionPage() {
                       <TableHead className="text-right">Shopify</TableHead>
                       <TableHead className="text-right">Siigo</TableHead>
                       <TableHead className="text-right">Diferencia</TableHead>
+                      <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -446,6 +502,19 @@ export default function ConciliacionPage() {
                         }`}>
                           {row.status === 'matched' ? formatCurrency(row.diff) : '—'}
                         </TableCell>
+                        <TableCell className="text-right">
+                          {row.status === 'siigo_only' && row.source === 'otra' && row.siigo && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openCreateTienda(row.siigo!)}
+                              className="text-[#1DA9EF] border-[#1DA9EF] hover:bg-[#1DA9EF]/10"
+                            >
+                              <Plus className="h-3 w-3 mr-1" />
+                              Crear tienda
+                            </Button>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -454,6 +523,108 @@ export default function ConciliacionPage() {
             )}
           </CardContent>
         </Card>
+
+        <Dialog open={createTiendaOpen} onOpenChange={setCreateTiendaOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Crear tienda desde factura Siigo</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={submitCreateTienda} className="space-y-4">
+              <div>
+                <Label htmlFor="tienda-nombre">Nombre de la tienda *</Label>
+                <Input
+                  id="tienda-nombre"
+                  value={tiendaForm.nombre}
+                  onChange={e => setTiendaForm({ ...tiendaForm, nombre: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="tienda-nit">NIT en Siigo *</Label>
+                <Input
+                  id="tienda-nit"
+                  value={tiendaForm.siigo_customer_identification}
+                  onChange={e => setTiendaForm({ ...tiendaForm, siigo_customer_identification: e.target.value })}
+                  required
+                />
+                <p className="text-xs text-[#545454] mt-1">
+                  Identificación del cliente en Siigo. Facturas futuras con este NIT se asociarán automáticamente a esta tienda.
+                </p>
+              </div>
+
+              <div className="border-t pt-4">
+                <Label className="text-base font-semibold">Comisión</Label>
+                <div className="space-y-3 mt-2">
+                  <div>
+                    <Label htmlFor="tienda-comision-tipo" className="text-sm">Tipo</Label>
+                    <Select
+                      value={tiendaForm.comision_tipo}
+                      onValueChange={(value: 'porcentaje' | 'fijo' | 'mixto') =>
+                        setTiendaForm({ ...tiendaForm, comision_tipo: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="porcentaje">Porcentaje (%)</SelectItem>
+                        <SelectItem value="fijo">Monto fijo por unidad</SelectItem>
+                        <SelectItem value="mixto">Mixto (% + fijo)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {(tiendaForm.comision_tipo === 'porcentaje' || tiendaForm.comision_tipo === 'mixto') && (
+                    <div>
+                      <Label htmlFor="tienda-comision-pct" className="text-sm">Porcentaje (%)</Label>
+                      <Input
+                        id="tienda-comision-pct"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={tiendaForm.comision_porcentaje}
+                        onChange={e => setTiendaForm({ ...tiendaForm, comision_porcentaje: e.target.value })}
+                        placeholder="Ej: 30"
+                      />
+                    </div>
+                  )}
+                  {(tiendaForm.comision_tipo === 'fijo' || tiendaForm.comision_tipo === 'mixto') && (
+                    <div>
+                      <Label htmlFor="tienda-comision-fijo" className="text-sm">Monto fijo (COP)</Label>
+                      <Input
+                        id="tienda-comision-fijo"
+                        type="number"
+                        min="0"
+                        value={tiendaForm.comision_fijo}
+                        onChange={e => setTiendaForm({ ...tiendaForm, comision_fijo: e.target.value })}
+                        placeholder="Ej: 5000"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {tiendaError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
+                  {tiendaError}
+                </div>
+              )}
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setCreateTiendaOpen(false)} disabled={tiendaSaving}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={tiendaSaving} className="bg-[#1DA9EF] hover:bg-[#0073D1]">
+                  {tiendaSaving ? (
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Guardando...</>
+                  ) : (
+                    'Crear tienda'
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   )
