@@ -112,6 +112,38 @@ export default function ConciliacionPage() {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | MatchStatus>('all')
 
+  const [syncing, setSyncing] = useState(false)
+  const [syncStatus, setSyncStatus] = useState<{ cached: number; earliest: string | null; latest: string | null; last_sync: string | null } | null>(null)
+
+  async function fetchSyncStatus() {
+    try {
+      const res = await fetch('/api/siigo/sync-invoices')
+      if (res.ok) setSyncStatus(await res.json())
+    } catch {}
+  }
+
+  async function runSync(startOverride?: string) {
+    if (syncing || !dateRange?.from || !dateRange?.to) return
+    setSyncing(true)
+    setError(null)
+    try {
+      const start = startOverride || format(dateRange.from, 'yyyy-MM-dd')
+      const end = format(dateRange.to, 'yyyy-MM-dd')
+      const res = await fetch('/api/siigo/sync-invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ start_date: start, end_date: end }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error sincronizando')
+      await Promise.all([fetchData(), fetchSyncStatus()])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error sincronizando')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   const [createTiendaOpen, setCreateTiendaOpen] = useState(false)
   const [tiendaForm, setTiendaForm] = useState({
     nombre: '',
@@ -193,6 +225,10 @@ export default function ConciliacionPage() {
     fetchData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange])
+
+  useEffect(() => {
+    fetchSyncStatus()
+  }, [])
 
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = []
@@ -355,8 +391,27 @@ export default function ConciliacionPage() {
             <Button variant="outline" size="icon" onClick={fetchData} disabled={loading}>
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
+            <Button variant="outline" onClick={() => runSync()} disabled={syncing || loading}>
+              {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+              {syncing ? 'Sincronizando...' : 'Sincronizar Siigo'}
+            </Button>
           </div>
         </div>
+        {syncStatus && (
+          <div className="text-xs text-[#545454] mb-4">
+            Cache: {syncStatus.cached.toLocaleString()} facturas · Rango {syncStatus.earliest || '—'} → {syncStatus.latest || '—'}
+            {syncStatus.last_sync && ` · Última sync ${new Date(syncStatus.last_sync).toLocaleString('es-CO')}`}
+            <Button
+              variant="link"
+              size="sm"
+              className="text-[#1DA9EF] h-auto p-0 ml-2"
+              onClick={() => runSync('2023-01-01')}
+              disabled={syncing}
+            >
+              Sincronizar desde 2023
+            </Button>
+          </div>
+        )}
 
         {error && (
           <Card className="mb-6 border-red-200 bg-red-50">
