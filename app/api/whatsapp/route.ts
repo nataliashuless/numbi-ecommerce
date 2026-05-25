@@ -38,6 +38,7 @@ export async function GET(request: Request) {
     customer_identification: string | null
     observations: string | null
     items: Array<{ code: string; description: string; quantity: number; price: number; total?: number }>
+    credited_amount: number | null
   }
   const allInvoices: CachedInv[] = []
   const pageSize = 1000
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
   for (let i = 0; i < 50; i++) {
     let q = supabase
       .from('siigo_invoices')
-      .select('id, number, name, date, total, customer_id, customer_identification, observations, items')
+      .select('id, number, name, date, total, customer_id, customer_identification, observations, items, credited_amount')
       .order('date', { ascending: false })
       .range(pageStart, pageStart + pageSize - 1)
     if (startDate) q = q.gte('date', startDate)
@@ -55,7 +56,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: qErr.message }, { status: 500 })
     }
     if (!page || page.length === 0) break
-    allInvoices.push(...(page as CachedInv[]))
+    const fresh = (page as CachedInv[]).filter(p => (p.credited_amount || 0) < p.total)
+    allInvoices.push(...fresh)
     if (page.length < pageSize) break
     pageStart += pageSize
   }

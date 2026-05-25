@@ -16,6 +16,7 @@ interface CachedInvoice {
   customer_identification: string | null
   observations: string | null
   items: Item[]
+  credited_amount: number | null
 }
 
 function extractOrderNumber(observations: string | null): number | null {
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
     for (let i = 0; i < 50; i++) {
       const { data: page, error: pErr } = await supabase
         .from('siigo_invoices')
-        .select('id, date, total, customer_identification, observations, items')
+        .select('id, date, total, customer_identification, observations, items, credited_amount')
         .gte('date', startDate)
         .lte('date', endDate)
         .range(pageStart, pageStart + pageSize - 1)
@@ -53,7 +54,9 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: pErr.message }, { status: 500 })
       }
       if (!page || page.length === 0) break
-      allInvoices.push(...(page as CachedInvoice[]))
+      // Skip fully-credited invoices entirely
+      const fresh = (page as CachedInvoice[]).filter(p => (p.credited_amount || 0) < p.total)
+      allInvoices.push(...fresh)
       if (page.length < pageSize) break
       pageStart += pageSize
     }

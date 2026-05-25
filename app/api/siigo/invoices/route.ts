@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     for (let i = 0; i < 50; i++) {
       const { data: page, error: pErr } = await supabase
         .from('siigo_invoices')
-        .select('id, number, prefix, name, date, total, balance, customer_id, customer_identification, observations, items')
+        .select('id, number, prefix, name, date, total, balance, customer_id, customer_identification, observations, items, credited_amount')
         .gte('date', startDate)
         .lte('date', endDate)
         .order('date', { ascending: false })
@@ -50,8 +50,10 @@ export async function GET(request: Request) {
       customer_identification: string | null
       observations: string
       items: Array<{ code: string; description: string; quantity: number; price: number; total?: number; discount?: { percentage?: number; value?: number } }>
+      credited_amount: number | null
     }
-    const rows = (cached || []) as Cached[]
+    // Exclude fully credited invoices (credited_amount >= total)
+    const rows = ((cached || []) as Cached[]).filter(r => (r.credited_amount || 0) < r.total)
 
     const refreshCustomers = searchParams.get('refresh_customers') === 'true'
     const customerIds = Array.from(
@@ -109,13 +111,16 @@ export async function GET(request: Request) {
       // Source: tienda if NIT registered, else whatsapp (default for direct sales)
       // Frontend can still override to 'shopify' when matched to an order
       const source: 'whatsapp' | 'tienda' = tiendaMatch ? 'tienda' : 'whatsapp'
+      const effectiveTotal = inv.total - (inv.credited_amount || 0)
       return {
         id: inv.id,
         number: inv.number,
         prefix: inv.prefix,
         name: inv.name,
         date: inv.date,
-        total: inv.total,
+        total: effectiveTotal,
+        original_total: inv.total,
+        credited_amount: inv.credited_amount || 0,
         balance: inv.balance,
         observations: inv.observations,
         items: inv.items,
