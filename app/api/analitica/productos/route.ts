@@ -44,7 +44,7 @@ export async function GET(request: Request) {
       .select('id, date, total, customer_identification, observations, items')
       .gte('date', startDate)
       .lte('date', endDate)
-      .limit(50000)
+      .range(0, 49999)
 
     if (invErr) {
       return NextResponse.json({ error: invErr.message }, { status: 500 })
