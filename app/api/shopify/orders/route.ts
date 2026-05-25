@@ -1,206 +1,101 @@
 import { NextResponse } from 'next/server'
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
-
-async function getShopifyCredentials() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-          } catch { }
-        },
-      },
-    }
-  )
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-
-  const serviceClient = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-
-  const { data: integration } = await serviceClient
-    .from('user_integrations')
-    .select('shopify_shop, shopify_access_token')
-    .limit(1)
-    .maybeSingle()
-
-  return integration
-}
+import { requireAuth, getAdminClient, getShopifyCredentials } from '@/lib/auth-helpers'
 
 export async function GET(request: Request) {
+  const { error } = await requireAuth()
+  if (error) return error
+
   const { searchParams } = new URL(request.url)
   const startDate = searchParams.get('start_date')
   const endDate = searchParams.get('end_date')
-  const groupBy = searchParams.get('group_by') || 'day' // day, week, month
+  const groupBy = searchParams.get('group_by') || 'day'
 
   const credentials = await getShopifyCredentials()
   const shop = credentials?.shopify_shop
-  const accessToken = credentials?.shopify_access_token
-
-  if (!shop || !accessToken) {
-    return NextResponse.json({ error: 'Shopify not connected' }, { status: 401 })
-  }
 
   try {
-    // Build URL with properly encoded parameters
-    const params = new URLSearchParams()
-    params.set('status', 'any')
-    params.set('limit', '250')
-    // Include archived orders
-    params.set('archived_status', 'any')
+    const supabase = getAdminClient()
+    let query = supabase
+      .from('shopify_orders')
+      .select('id, order_number, name, created_at, total_price, currency, financial_status, fulfillment_status, customer_name, customer_email, item_count')
+      .order('created_at', { ascending: false })
 
-    // Set date range - if no start date, use a very old date to get all orders
-    const effectiveStartDate = startDate || '2020-01-01'
-    params.set('created_at_min', `${effectiveStartDate}T00:00:00-05:00`)
+    if (startDate) query = query.gte('created_at', `${startDate}T00:00:00-05:00`)
+    if (endDate) query = query.lte('created_at', `${endDate}T23:59:59-05:00`)
 
-    if (endDate) {
-      params.set('created_at_max', `${endDate}T23:59:59-05:00`)
+    const { data: ordersRows, error: qErr } = await query
+    if (qErr) {
+      return NextResponse.json({ error: qErr.message }, { status: 500 })
     }
 
-    // Fetch all orders with pagination
-    let allOrders: Array<{
+    type Row = {
       id: number
       order_number: number
       name: string
       created_at: string
-      total_price: string
+      total_price: number
       currency: string
       financial_status: string
       fulfillment_status: string | null
-      customer: { first_name?: string; last_name?: string; email?: string } | null
-      line_items: { quantity: number }[]
-    }> = []
-
-    // Use API version 2024-10 for better support
-    let nextUrl: string | null = `https://${shop}/admin/api/2024-10/orders.json?${params.toString()}`
-    let pageCount = 0
-
-    while (nextUrl && pageCount < 100) { // Safety limit of 100 pages (25000 orders max)
-      pageCount++
-      const ordersResponse: Response = await fetch(nextUrl, {
-        headers: {
-          'X-Shopify-Access-Token': accessToken,
-          'Content-Type': 'application/json',
-        },
-        cache: 'no-store',
-      })
-
-      if (!ordersResponse.ok) {
-        const error = await ordersResponse.json()
-        return NextResponse.json({ error: error.errors || 'Failed to fetch orders' }, { status: ordersResponse.status })
-      }
-
-      const ordersData = await ordersResponse.json()
-      allOrders = allOrders.concat(ordersData.orders || [])
-
-      // Check for next page in Link header
-      const linkHeader = ordersResponse.headers.get('Link')
-      nextUrl = null
-      if (linkHeader) {
-        const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/)
-        if (nextMatch) {
-          nextUrl = nextMatch[1]
-        }
-      }
+      customer_name: string
+      customer_email: string | null
+      item_count: number
     }
+    const orders = (ordersRows || []) as Row[]
 
-    const orders = allOrders
-
-    // Get date range of fetched orders for debugging
-    const orderDates = orders.map(o => o.created_at).sort()
-    const oldestOrder = orderDates[0] || null
-    const newestOrder = orderDates[orderDates.length - 1] || null
-
-    // Calculate stats
-    const totalRevenue = orders.reduce((sum: number, order: { total_price: string }) =>
-      sum + parseFloat(order.total_price || '0'), 0)
+    const totalRevenue = orders.reduce((sum, o) => sum + Number(o.total_price || 0), 0)
     const totalOrders = orders.length
-    const paidOrders = orders.filter((o: { financial_status: string }) =>
-      o.financial_status === 'paid').length
-    const pendingOrders = orders.filter((o: { financial_status: string }) =>
-      o.financial_status === 'pending').length
-    const totalUnits = orders.reduce((sum: number, order: { line_items: { quantity: number }[] }) =>
-      sum + order.line_items.reduce((s: number, item: { quantity: number }) => s + item.quantity, 0), 0)
+    const paidOrders = orders.filter(o => o.financial_status === 'paid').length
+    const pendingOrders = orders.filter(o => o.financial_status === 'pending').length
+    const totalUnits = orders.reduce((s, o) => s + (o.item_count || 0), 0)
 
-    // Helper function to get group key based on groupBy parameter
     const getGroupKey = (dateStr: string): string => {
       const date = new Date(dateStr)
       if (groupBy === 'month') {
         return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-      } else if (groupBy === 'week') {
-        // Get ISO week number
-        const tempDate = new Date(date.getTime())
-        tempDate.setHours(0, 0, 0, 0)
-        tempDate.setDate(tempDate.getDate() + 3 - (tempDate.getDay() + 6) % 7)
-        const week1 = new Date(tempDate.getFullYear(), 0, 4)
-        const weekNum = 1 + Math.round(((tempDate.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7)
-        return `${tempDate.getFullYear()}-W${String(weekNum).padStart(2, '0')}`
       }
-      return dateStr.split('T')[0] // day
+      if (groupBy === 'week') {
+        const d = new Date(date.getTime())
+        d.setHours(0, 0, 0, 0)
+        d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7)
+        const week1 = new Date(d.getFullYear(), 0, 4)
+        const weekNum = 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7)
+        return `${d.getFullYear()}-W${String(weekNum).padStart(2, '0')}`
+      }
+      return dateStr.split('T')[0]
     }
 
-    // Aggregate data for charts
-    const aggregatedData: Record<string, { sales: number; orders: number; units: number }> = {}
-    orders.forEach((order: {
-      created_at: string
-      total_price: string
-      line_items: { quantity: number }[]
-    }) => {
-      const key = getGroupKey(order.created_at)
-      if (!aggregatedData[key]) {
-        aggregatedData[key] = { sales: 0, orders: 0, units: 0 }
-      }
-      aggregatedData[key].sales += parseFloat(order.total_price || '0')
-      aggregatedData[key].orders += 1
-      aggregatedData[key].units += order.line_items.reduce((s: number, item: { quantity: number }) => s + item.quantity, 0)
-    })
-
-    // Convert to sorted array for charts
-    const chartData = Object.entries(aggregatedData)
-      .map(([date, data]) => ({
+    const aggregated: Record<string, { sales: number; orders: number; units: number }> = {}
+    for (const o of orders) {
+      const k = getGroupKey(o.created_at)
+      if (!aggregated[k]) aggregated[k] = { sales: 0, orders: 0, units: 0 }
+      aggregated[k].sales += Number(o.total_price || 0)
+      aggregated[k].orders += 1
+      aggregated[k].units += o.item_count || 0
+    }
+    const chartData = Object.entries(aggregated)
+      .map(([date, d]) => ({
         date,
-        sales: Math.round(data.sales),
-        orders: data.orders,
-        units: data.units,
+        sales: Math.round(d.sales),
+        orders: d.orders,
+        units: d.units,
       }))
       .sort((a, b) => a.date.localeCompare(b.date))
 
+    const dates = orders.map(o => o.created_at).sort()
     return NextResponse.json({
-      orders: orders.map((order: {
-        id: number
-        order_number: number
-        name: string
-        created_at: string
-        total_price: string
-        currency: string
-        financial_status: string
-        fulfillment_status: string | null
-        customer: { first_name?: string; last_name?: string; email?: string } | null
-        line_items: { quantity: number }[]
-      }) => ({
-        id: order.id,
-        orderNumber: order.order_number,
-        name: order.name,
-        createdAt: order.created_at,
-        totalPrice: parseFloat(order.total_price),
-        currency: order.currency,
-        financialStatus: order.financial_status,
-        fulfillmentStatus: order.fulfillment_status,
-        customerName: order.customer
-          ? `${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim()
-          : 'Cliente anónimo',
-        customerEmail: order.customer?.email || null,
-        itemCount: order.line_items.reduce((sum: number, item: { quantity: number }) => sum + item.quantity, 0),
+      orders: orders.map(o => ({
+        id: o.id,
+        orderNumber: o.order_number,
+        name: o.name,
+        createdAt: o.created_at,
+        totalPrice: Number(o.total_price),
+        currency: o.currency,
+        financialStatus: o.financial_status,
+        fulfillmentStatus: o.fulfillment_status,
+        customerName: o.customer_name,
+        customerEmail: o.customer_email,
+        itemCount: o.item_count,
       })),
       stats: {
         totalRevenue,
@@ -211,18 +106,17 @@ export async function GET(request: Request) {
         averageOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
       },
       debug: {
-        pagesFetched: pageCount,
-        oldestOrder,
-        newestOrder,
+        oldestOrder: dates[0] || null,
+        newestOrder: dates[dates.length - 1] || null,
         requestedStartDate: startDate,
         requestedEndDate: endDate,
+        source: 'cache',
       },
       chartData,
-      shop,
+      shop: shop || null,
     })
-
-  } catch (error) {
-    console.error('Shopify API error:', error)
-    return NextResponse.json({ error: 'Failed to fetch orders' }, { status: 500 })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error obteniendo órdenes'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

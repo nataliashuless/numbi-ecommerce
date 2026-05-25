@@ -144,19 +144,24 @@ export default function ConciliacionPage() {
     )
   }
 
-  const [syncing, setSyncing] = useState(false)
-  const [syncStatus, setSyncStatus] = useState<{ cached: number; earliest: string | null; latest: string | null; last_sync: string | null } | null>(null)
+  const [syncing, setSyncing] = useState<null | 'siigo' | 'shopify'>(null)
+  const [siigoStatus, setSiigoStatus] = useState<{ cached: number; earliest: string | null; latest: string | null; last_sync: string | null } | null>(null)
+  const [shopifyStatus, setShopifyStatus] = useState<{ cached: number; earliest: string | null; latest: string | null; last_sync: string | null } | null>(null)
 
   async function fetchSyncStatus() {
     try {
-      const res = await fetch('/api/siigo/sync-invoices')
-      if (res.ok) setSyncStatus(await res.json())
+      const [s, sh] = await Promise.all([
+        fetch('/api/siigo/sync-invoices'),
+        fetch('/api/shopify/sync-orders'),
+      ])
+      if (s.ok) setSiigoStatus(await s.json())
+      if (sh.ok) setShopifyStatus(await sh.json())
     } catch {}
   }
 
-  async function runSync(startOverride?: string) {
+  async function runSiigoSync(startOverride?: string) {
     if (syncing || !dateRange?.from || !dateRange?.to) return
-    setSyncing(true)
+    setSyncing('siigo')
     setError(null)
     try {
       const start = startOverride || format(dateRange.from, 'yyyy-MM-dd')
@@ -172,7 +177,29 @@ export default function ConciliacionPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error sincronizando')
     } finally {
-      setSyncing(false)
+      setSyncing(null)
+    }
+  }
+
+  async function runShopifySync(startOverride?: string) {
+    if (syncing || !dateRange?.from || !dateRange?.to) return
+    setSyncing('shopify')
+    setError(null)
+    try {
+      const start = startOverride || format(dateRange.from, 'yyyy-MM-dd')
+      const end = format(dateRange.to, 'yyyy-MM-dd')
+      const res = await fetch('/api/shopify/sync-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ start_date: start, end_date: end }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error sincronizando Shopify')
+      await Promise.all([fetchData(), fetchSyncStatus()])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error sincronizando Shopify')
+    } finally {
+      setSyncing(null)
     }
   }
 
@@ -446,32 +473,37 @@ export default function ConciliacionPage() {
             <h1 className="text-3xl font-bold text-[#1A2238] mb-2">Conciliación Shopify ↔ Siigo</h1>
             <p className="text-[#545454]">Órdenes Shopify cruzadas con facturas Siigo por # de pedido. Facturas sin orden Shopify se categorizan por fuente (WhatsApp o Otra).</p>
           </div>
-          <div className="flex items-center gap-2 mt-4 md:mt-0">
+          <div className="flex items-center gap-2 mt-4 md:mt-0 flex-wrap">
             <DateRangePicker date={dateRange} onDateChange={setDateRange} />
             <Button variant="outline" size="icon" onClick={fetchData} disabled={loading}>
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
-            <Button variant="outline" onClick={() => runSync()} disabled={syncing || loading}>
-              {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-              {syncing ? 'Sincronizando...' : 'Sincronizar Siigo'}
+            <Button variant="outline" onClick={() => runSiigoSync()} disabled={!!syncing || loading}>
+              {syncing === 'siigo' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+              {syncing === 'siigo' ? 'Sync Siigo...' : 'Sync Siigo'}
+            </Button>
+            <Button variant="outline" onClick={() => runShopifySync()} disabled={!!syncing || loading}>
+              {syncing === 'shopify' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+              {syncing === 'shopify' ? 'Sync Shopify...' : 'Sync Shopify'}
             </Button>
           </div>
         </div>
-        {syncStatus && (
-          <div className="text-xs text-[#545454] mb-4">
-            Cache: {syncStatus.cached.toLocaleString()} facturas · Rango {syncStatus.earliest || '—'} → {syncStatus.latest || '—'}
-            {syncStatus.last_sync && ` · Última sync ${new Date(syncStatus.last_sync).toLocaleString('es-CO')}`}
-            <Button
-              variant="link"
-              size="sm"
-              className="text-[#1DA9EF] h-auto p-0 ml-2"
-              onClick={() => runSync('2023-01-01')}
-              disabled={syncing}
-            >
-              Sincronizar desde 2023
-            </Button>
-          </div>
-        )}
+        <div className="text-xs text-[#545454] mb-4 space-y-1">
+          {siigoStatus && (
+            <div>
+              <strong>Siigo:</strong> {siigoStatus.cached.toLocaleString()} facturas · {siigoStatus.earliest || '—'} → {siigoStatus.latest || '—'}
+              {siigoStatus.last_sync && ` · sync ${new Date(siigoStatus.last_sync).toLocaleString('es-CO')}`}
+            </div>
+          )}
+          {shopifyStatus && (
+            <div>
+              <strong>Shopify:</strong> {shopifyStatus.cached.toLocaleString()} órdenes
+              {shopifyStatus.earliest && ` · ${shopifyStatus.earliest.slice(0,10)}`}
+              {shopifyStatus.latest && ` → ${shopifyStatus.latest.slice(0,10)}`}
+              {shopifyStatus.last_sync && ` · sync ${new Date(shopifyStatus.last_sync).toLocaleString('es-CO')}`}
+            </div>
+          )}
+        </div>
 
         {error && (
           <Card className="mb-6 border-red-200 bg-red-50">
