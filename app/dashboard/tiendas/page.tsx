@@ -142,10 +142,11 @@ export default function TiendasPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
 
   // Chart state
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  })
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
+
+  useEffect(() => {
+    setDateRange({ from: subDays(new Date(), 30), to: new Date() })
+  }, [])
   const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month'>('day')
   const [chartData, setChartData] = useState<ChartDataItem[]>([])
   const [ventasStats, setVentasStats] = useState<VentasStats | null>(null)

@@ -105,10 +105,11 @@ function extractOrderNumber(observations: string): number | null {
 }
 
 export default function ConciliacionPage() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  })
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
+
+  useEffect(() => {
+    setDateRange({ from: subDays(new Date(), 30), to: new Date() })
+  }, [])
   const [orders, setOrders] = useState<ShopifyOrder[]>([])
   const [invoices, setInvoices] = useState<SiigoInvoice[]>([])
   const [loading, setLoading] = useState(true)

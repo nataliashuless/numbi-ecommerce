@@ -194,10 +194,11 @@ export default function WhatsAppPage() {
   const [quoteOptions, setQuoteOptions] = useState<QuoteOption[]>([])
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [shipmentLoading, setShipmentLoading] = useState(false)
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  })
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
+
+  useEffect(() => {
+    setDateRange({ from: subDays(new Date(), 30), to: new Date() })
+  }, [])
   const [products, setProducts] = useState<Product[]>([])
   const [selectedProduct, setSelectedProduct] = useState<string>('')
   const [selectedVariant, setSelectedVariant] = useState<string>('')

@@ -86,10 +86,11 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
   const [invoices, setInvoices] = useState<SiigoInvoice[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 90),
-    to: new Date(),
-  })
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
+
+  useEffect(() => {
+    setDateRange({ from: subDays(new Date(), 90), to: new Date() })
+  }, [])
 
   const [editOpen, setEditOpen] = useState(false)
   const [editForm, setEditForm] = useState({

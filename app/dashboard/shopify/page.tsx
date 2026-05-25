@@ -133,10 +133,11 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [groupBy, setGroupBy] = useState<GroupBy>('day')
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  })
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
+
+  useEffect(() => {
+    setDateRange({ from: subDays(new Date(), 30), to: new Date() })
+  }, [])
 
   async function fetchData() {
     setLoading(true)

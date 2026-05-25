@@ -85,11 +85,12 @@ export default function DashboardPage() {
   const [data, setData] = useState<ConsolidatedData | null>(null)
   const [loading, setLoading] = useState(true)
   const [shop, setShop] = useState('')
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  })
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month' | 'quarter'>('day')
+
+  useEffect(() => {
+    setDateRange({ from: subDays(new Date(), 30), to: new Date() })
+  }, [])
 
   async function fetchData() {
     if (!dateRange?.from || !dateRange?.to) return

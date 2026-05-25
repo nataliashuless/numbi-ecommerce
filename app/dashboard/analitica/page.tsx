@@ -72,10 +72,11 @@ function formatCurrency(value: number): string {
 const EMPTY_STATS: ChannelStats = { qty: 0, amount: 0, invoices: 0 }
 
 export default function AnaliticaPage() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 90),
-    to: new Date(),
-  })
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
+
+  useEffect(() => {
+    setDateRange({ from: subDays(new Date(), 90), to: new Date() })
+  }, [])
   const [data, setData] = useState<AnalyticsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
