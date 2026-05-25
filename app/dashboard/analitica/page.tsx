@@ -43,7 +43,6 @@ interface ProductStat {
   byChannel: {
     shopify: ChannelStats
     whatsapp: ChannelStats
-    otra: ChannelStats
     tiendas: Record<string, ChannelStats>
   }
 }
@@ -56,7 +55,7 @@ interface AnalyticsResponse {
     unidades: number
     monto: number
     facturas: number
-    byChannel: { shopify: number; whatsapp: number; tienda: number; otra: number }
+    byChannel: { shopify: number; whatsapp: number; tienda: number }
   }
 }
 
@@ -130,7 +129,6 @@ export default function AnaliticaPage() {
       if (sortKey === 'total') return showAmount ? p.totalAmount : p.totalQty
       if (sortKey === 'shopify') return showAmount ? p.byChannel.shopify.amount : p.byChannel.shopify.qty
       if (sortKey === 'whatsapp') return showAmount ? p.byChannel.whatsapp.amount : p.byChannel.whatsapp.qty
-      if (sortKey === 'otra') return showAmount ? p.byChannel.otra.amount : p.byChannel.otra.qty
       if (sortKey.startsWith('tienda:')) {
         const tiendaId = sortKey.slice(7)
         const stat = p.byChannel.tiendas[tiendaId]
@@ -254,7 +252,6 @@ export default function AnaliticaPage() {
                 <div className="flex justify-between"><span className="text-[#5a7a2a]">Shopify</span><span className="font-mono">{formatCurrency(totals.byChannel.shopify)}</span></div>
                 <div className="flex justify-between"><span className="text-[#0e7a3e]">WhatsApp</span><span className="font-mono">{formatCurrency(totals.byChannel.whatsapp)}</span></div>
                 <div className="flex justify-between"><span className="text-[#0073D1]">Tiendas</span><span className="font-mono">{formatCurrency(totals.byChannel.tienda)}</span></div>
-                <div className="flex justify-between"><span className="text-[#545454]">Otra</span><span className="font-mono">{formatCurrency(totals.byChannel.otra)}</span></div>
               </CardContent>
             </Card>
           </div>
@@ -311,7 +308,6 @@ export default function AnaliticaPage() {
                       {tiendas.map(t => (
                         <SortHead key={t.id} k={`tienda:${t.id}`} label={t.nombre} className="text-right bg-[#1DA9EF]/5 text-[#0073D1]" />
                       ))}
-                      <SortHead k="otra" label="Otra" className="text-right text-[#545454]" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -329,7 +325,6 @@ export default function AnaliticaPage() {
                             {renderStat(p.byChannel.tiendas[t.id])}
                           </TableCell>
                         ))}
-                        <TableCell className="text-right font-mono text-sm">{renderStat(p.byChannel.otra)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

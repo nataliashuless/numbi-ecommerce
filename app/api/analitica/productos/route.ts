@@ -59,12 +59,6 @@ export async function GET(request: Request) {
     }
     const invoices = allInvoices
 
-    const { data: waVentas } = await supabase
-      .from('ventas_whatsapp')
-      .select('siigo_invoice_id')
-      .not('siigo_invoice_id', 'is', null)
-    const whatsappInvoiceIds = new Set((waVentas || []).map(v => v.siigo_invoice_id))
-
     const { data: tiendasWithSiigo } = await supabase
       .from('tiendas_terceros')
       .select('id, nombre, nombre_corto, siigo_customer_identification')
@@ -86,7 +80,6 @@ export async function GET(request: Request) {
       byChannel: {
         shopify: ChannelStats
         whatsapp: ChannelStats
-        otra: ChannelStats
         tiendas: Record<string, ChannelStats>
       }
     }
@@ -95,7 +88,6 @@ export async function GET(request: Request) {
     let totalShopify = 0
     let totalWhatsApp = 0
     let totalTienda = 0
-    let totalOtra = 0
 
     function bump(s: ChannelStats, qty: number, amount: number) {
       s.qty += qty
@@ -105,15 +97,14 @@ export async function GET(request: Request) {
 
     for (const inv of invoices) {
       const hasShopifyTag = extractOrderNumber(inv.observations) !== null
-      const isWhatsApp = whatsappInvoiceIds.has(inv.id)
       const tiendaMatch = inv.customer_identification
         ? tiendasByNit.get(inv.customer_identification)
         : undefined
 
-      let channel: 'shopify' | 'whatsapp' | 'tienda' | 'otra' = 'otra'
-      if (isWhatsApp) channel = 'whatsapp'
+      // Priority: tienda (registered NIT) → shopify (tagged order) → whatsapp (default)
+      let channel: 'shopify' | 'whatsapp' | 'tienda' = 'whatsapp'
+      if (tiendaMatch) channel = 'tienda'
       else if (hasShopifyTag) channel = 'shopify'
-      else if (tiendaMatch) channel = 'tienda'
 
       for (const it of inv.items || []) {
         if (it.code === 'ENVIO' || !it.code) continue
@@ -130,7 +121,6 @@ export async function GET(request: Request) {
             byChannel: {
               shopify: { qty: 0, amount: 0, invoices: 0 },
               whatsapp: { qty: 0, amount: 0, invoices: 0 },
-              otra: { qty: 0, amount: 0, invoices: 0 },
               tiendas: {},
             },
           }
@@ -143,9 +133,6 @@ export async function GET(request: Request) {
         if (channel === 'shopify') {
           bump(stats.byChannel.shopify, qty, itemTotal)
           totalShopify += itemTotal
-        } else if (channel === 'whatsapp') {
-          bump(stats.byChannel.whatsapp, qty, itemTotal)
-          totalWhatsApp += itemTotal
         } else if (channel === 'tienda' && tiendaMatch) {
           if (!stats.byChannel.tiendas[tiendaMatch.id]) {
             stats.byChannel.tiendas[tiendaMatch.id] = { qty: 0, amount: 0, invoices: 0 }
@@ -153,8 +140,8 @@ export async function GET(request: Request) {
           bump(stats.byChannel.tiendas[tiendaMatch.id], qty, itemTotal)
           totalTienda += itemTotal
         } else {
-          bump(stats.byChannel.otra, qty, itemTotal)
-          totalOtra += itemTotal
+          bump(stats.byChannel.whatsapp, qty, itemTotal)
+          totalWhatsApp += itemTotal
         }
       }
     }
@@ -173,7 +160,6 @@ export async function GET(request: Request) {
           shopify: totalShopify,
           whatsapp: totalWhatsApp,
           tienda: totalTienda,
-          otra: totalOtra,
         },
       },
     })

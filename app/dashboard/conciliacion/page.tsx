@@ -67,7 +67,7 @@ interface SiigoInvoice {
   total: number
   customer: { id: string; identification: string }
   customer_name: string | null
-  source: 'whatsapp' | 'tienda' | 'unknown'
+  source: 'whatsapp' | 'tienda'
   tienda_id: string | null
   tienda_nombre: string | null
   observations: string
@@ -75,7 +75,7 @@ interface SiigoInvoice {
 }
 
 type MatchStatus = 'matched' | 'shopify_only' | 'siigo_only'
-type InvoiceSource = 'shopify' | 'whatsapp' | 'tienda' | 'otra'
+type InvoiceSource = 'shopify' | 'whatsapp' | 'tienda'
 
 interface Row {
   status: MatchStatus
@@ -334,12 +334,9 @@ export default function ConciliacionPage() {
 
     for (const inv of invoices) {
       if (usedInvoiceIds.has(inv.id)) continue
-      let source: InvoiceSource = 'otra'
-      if (inv.source === 'whatsapp') source = 'whatsapp'
-      else if (inv.source === 'tienda') source = 'tienda'
       out.push({
         status: 'siigo_only',
-        source,
+        source: inv.source,
         tiendaNombre: inv.tienda_nombre,
         date: inv.date,
         orderNumber: extractOrderNumber(inv.observations),
@@ -387,16 +384,14 @@ export default function ConciliacionPage() {
     const siigoBySource = {
       whatsapp: rows.filter(r => r.status === 'siigo_only' && r.source === 'whatsapp').length,
       tienda: rows.filter(r => r.status === 'siigo_only' && r.source === 'tienda').length,
-      otra: rows.filter(r => r.status === 'siigo_only' && r.source === 'otra').length,
     }
     return { totalShopify, totalSiigo, matched, shopifyOnly, siigoOnly, siigoBySource }
   }, [orders, invoices, rows])
 
   const sourceBadge = (source: InvoiceSource, tiendaNombre: string | null) => {
     if (source === 'shopify') return <Badge className="bg-[#96bf48]/15 text-[#5a7a2a] hover:bg-[#96bf48]/15">Shopify</Badge>
-    if (source === 'whatsapp') return <Badge className="bg-[#25D366]/15 text-[#0e7a3e] hover:bg-[#25D366]/15">WhatsApp</Badge>
     if (source === 'tienda') return <Badge className="bg-[#1DA9EF]/15 text-[#0073D1] hover:bg-[#1DA9EF]/15">Tienda: {tiendaNombre}</Badge>
-    return <Badge className="bg-[#1A2238]/10 text-[#1A2238] hover:bg-[#1A2238]/10">Otra</Badge>
+    return <Badge className="bg-[#25D366]/15 text-[#0e7a3e] hover:bg-[#25D366]/15">WhatsApp</Badge>
   }
 
   return (
@@ -560,13 +555,13 @@ export default function ConciliacionPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-[#545454] font-medium flex items-center gap-1">
-                <AlertCircle className="h-4 w-4 text-amber-600" /> Facturas otras
+                <AlertCircle className="h-4 w-4 text-amber-600" /> Sólo Siigo
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-amber-700">{stats.siigoOnly}</div>
               <p className="text-xs text-[#545454]">
-                {stats.siigoBySource.tienda} tienda · {stats.siigoBySource.whatsapp} WA · {stats.siigoBySource.otra} otras
+                {stats.siigoBySource.tienda} tienda · {stats.siigoBySource.whatsapp} WhatsApp
               </p>
             </CardContent>
           </Card>
@@ -581,7 +576,7 @@ export default function ConciliacionPage() {
                   ['all', `Todas (${rows.length})`],
                   ['matched', `Pareadas (${stats.matched})`],
                   ['shopify_only', `Sin facturar (${stats.shopifyOnly})`],
-                  ['siigo_only', `Facturas otras (${stats.siigoOnly})`],
+                  ['siigo_only', `Sólo Siigo (${stats.siigoOnly})`],
                 ] as const).map(([key, label]) => (
                   <Button
                     key={key}
@@ -658,7 +653,7 @@ export default function ConciliacionPage() {
                           {row.status === 'matched' ? formatCurrency(row.diff) : '—'}
                         </TableCell>
                         <TableCell className="text-right">
-                          {row.status === 'siigo_only' && row.source === 'otra' && row.siigo && (
+                          {row.status === 'siigo_only' && row.source === 'whatsapp' && row.siigo && (
                             <Button
                               size="sm"
                               variant="outline"

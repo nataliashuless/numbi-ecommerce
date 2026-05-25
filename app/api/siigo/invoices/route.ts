@@ -93,12 +93,6 @@ export async function GET(request: Request) {
       }
     }
 
-    const { data: waVentas } = await supabase
-      .from('ventas_whatsapp')
-      .select('siigo_invoice_id')
-      .not('siigo_invoice_id', 'is', null)
-    const whatsappInvoiceIds = new Set((waVentas || []).map(v => v.siigo_invoice_id))
-
     const { data: tiendasWithSiigo } = await supabase
       .from('tiendas_terceros')
       .select('id, nombre, nombre_corto, siigo_customer_identification')
@@ -112,9 +106,9 @@ export async function GET(request: Request) {
       const tiendaMatch = inv.customer_identification
         ? tiendasByNit.get(inv.customer_identification)
         : undefined
-      let source: 'whatsapp' | 'tienda' | 'unknown' = 'unknown'
-      if (whatsappInvoiceIds.has(inv.id)) source = 'whatsapp'
-      else if (tiendaMatch) source = 'tienda'
+      // Source: tienda if NIT registered, else whatsapp (default for direct sales)
+      // Frontend can still override to 'shopify' when matched to an order
+      const source: 'whatsapp' | 'tienda' = tiendaMatch ? 'tienda' : 'whatsapp'
       return {
         id: inv.id,
         number: inv.number,
