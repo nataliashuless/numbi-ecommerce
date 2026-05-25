@@ -15,6 +15,10 @@ interface VentaWhatsApp {
   notas: string | null
 }
 
+// WhatsApp tab now reads from Siigo invoices flagged as WhatsApp source
+// (i.e. invoices whose customer NIT is NOT a registered tienda AND whose
+// observations do NOT reference a Shopify order number). Each Siigo invoice
+// renders as one row in the WhatsApp view.
 export async function GET(request: Request) {
   const { error } = await requireAuth()
   if (error) return error
@@ -23,27 +27,112 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const startDate = searchParams.get('start_date')
   const endDate = searchParams.get('end_date')
-  const page = parseInt(searchParams.get('page') || '1')
-  const limit = Math.min(parseInt(searchParams.get('limit') || '100'), 100)
-  const offset = (page - 1) * limit
 
-  let query = supabase
-    .from('ventas_whatsapp')
-    .select('*', { count: 'exact' })
-    .order('fecha', { ascending: false })
-
-  if (startDate) query = query.gte('fecha', startDate)
-  if (endDate) query = query.lte('fecha', endDate)
-
-  query = query.range(offset, offset + limit - 1)
-
-  const { data, error: queryError, count } = await query
-
-  if (queryError) {
-    return NextResponse.json({ error: queryError.message }, { status: 500 })
+  type CachedInv = {
+    id: string
+    number: number
+    name: string
+    date: string
+    total: number
+    customer_id: string | null
+    customer_identification: string | null
+    observations: string | null
+    items: Array<{ code: string; description: string; quantity: number; price: number; total?: number }>
+  }
+  const allInvoices: CachedInv[] = []
+  const pageSize = 1000
+  let pageStart = 0
+  for (let i = 0; i < 50; i++) {
+    let q = supabase
+      .from('siigo_invoices')
+      .select('id, number, name, date, total, customer_id, customer_identification, observations, items')
+      .order('date', { ascending: false })
+      .range(pageStart, pageStart + pageSize - 1)
+    if (startDate) q = q.gte('date', startDate)
+    if (endDate) q = q.lte('date', endDate)
+    const { data: page, error: qErr } = await q
+    if (qErr) {
+      return NextResponse.json({ error: qErr.message }, { status: 500 })
+    }
+    if (!page || page.length === 0) break
+    allInvoices.push(...(page as CachedInv[]))
+    if (page.length < pageSize) break
+    pageStart += pageSize
   }
 
-  const ventas = data as VentaWhatsApp[]
+  const { data: tiendasWithSiigo } = await supabase
+    .from('tiendas_terceros')
+    .select('siigo_customer_identification')
+    .not('siigo_customer_identification', 'is', null)
+  const tiendaNits = new Set(
+    (tiendasWithSiigo || []).map((t: { siigo_customer_identification: string }) => t.siigo_customer_identification)
+  )
+
+  const { data: shopifyOrders } = await supabase
+    .from('shopify_orders')
+    .select('order_number')
+    .range(0, 49999)
+  const shopifyOrderNumbers = new Set(
+    (shopifyOrders || []).map((o: { order_number: number }) => o.order_number)
+  )
+
+  const extractOrderNum = (obs: string | null): number | null => {
+    if (!obs) return null
+    const m = obs.match(/#(\d+)/)
+    return m ? parseInt(m[1], 10) : null
+  }
+
+  const whatsappInvoices = allInvoices.filter(inv => {
+    if (inv.customer_identification && tiendaNits.has(inv.customer_identification)) return false
+    const orderNum = extractOrderNum(inv.observations)
+    if (orderNum && shopifyOrderNumbers.has(orderNum)) return false
+    return true
+  })
+
+  const customerIds = Array.from(
+    new Set(whatsappInvoices.map(i => i.customer_id).filter(Boolean) as string[])
+  )
+  const namesMap = new Map<string, string>()
+  if (customerIds.length > 0) {
+    const CHUNK = 500
+    for (let i = 0; i < customerIds.length; i += CHUNK) {
+      const ids = customerIds.slice(i, i + CHUNK)
+      const { data: cachedCustomers } = await supabase
+        .from('siigo_customers')
+        .select('id, name')
+        .in('id', ids)
+      for (const row of (cachedCustomers || []) as Array<{ id: string; name: string }>) {
+        if (row.name) namesMap.set(row.id, row.name)
+      }
+    }
+  }
+
+  const ventas = whatsappInvoices.map(inv => {
+    const realItems = (inv.items || []).filter(it => it.code !== 'ENVIO')
+    const cantidad = realItems.reduce((s, it) => s + (it.quantity || 0), 0)
+    const productSummary =
+      realItems.length === 0
+        ? '—'
+        : realItems.length === 1
+          ? realItems[0].description
+          : `${realItems[0].description} +${realItems.length - 1} más`
+    return {
+      id: inv.id,
+      fecha: inv.date,
+      cliente_nombre: inv.customer_id ? namesMap.get(inv.customer_id) || inv.customer_identification : inv.customer_identification,
+      cliente_telefono: null as string | null,
+      cliente_cedula: inv.customer_identification,
+      producto_nombre: productSummary,
+      producto_variante: null as string | null,
+      producto_sku: realItems[0]?.code || null,
+      cantidad,
+      precio_unitario: cantidad > 0 ? inv.total / cantidad : inv.total,
+      total: inv.total,
+      notas: inv.observations,
+      siigo_invoice_id: inv.id,
+      siigo_invoice_number: inv.name,
+    }
+  })
 
   const totalVentas = ventas.reduce((sum, v) => sum + Number(v.total), 0)
   const totalUnidades = ventas.reduce((sum, v) => sum + v.cantidad, 0)
@@ -52,9 +141,7 @@ export async function GET(request: Request) {
   const chartDataMap: Record<string, { sales: number; orders: number; units: number }> = {}
   ventas.forEach(v => {
     const date = v.fecha
-    if (!chartDataMap[date]) {
-      chartDataMap[date] = { sales: 0, orders: 0, units: 0 }
-    }
+    if (!chartDataMap[date]) chartDataMap[date] = { sales: 0, orders: 0, units: 0 }
     chartDataMap[date].sales += Number(v.total)
     chartDataMap[date].orders += 1
     chartDataMap[date].units += v.cantidad
@@ -79,10 +166,10 @@ export async function GET(request: Request) {
     },
     chartData,
     pagination: {
-      page,
-      limit,
-      total: count || 0,
-      pages: Math.ceil((count || 0) / limit),
+      page: 1,
+      limit: ventas.length,
+      total: ventas.length,
+      pages: 1,
     },
   })
 }

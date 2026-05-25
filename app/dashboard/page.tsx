@@ -100,57 +100,73 @@ export default function DashboardPage() {
       const startDate = format(dateRange.from, 'yyyy-MM-dd')
       const endDate = format(dateRange.to, 'yyyy-MM-dd')
 
-      // Fetch all channels in parallel
-      const [shopifyRes, whatsappRes, siigoRes] = await Promise.all([
+      // Shopify orders for matching + their own totals; Siigo invoices for tiendas + whatsapp
+      const [shopifyRes, siigoRes] = await Promise.all([
         fetch(`/api/shopify/orders?start_date=${startDate}&end_date=${endDate}&group_by=day`),
-        fetch(`/api/whatsapp?start_date=${startDate}&end_date=${endDate}`),
         fetch(`/api/siigo/invoices?start_date=${startDate}&end_date=${endDate}`),
       ])
 
-      // Parse responses
       const shopifyData = shopifyRes.ok ? await shopifyRes.json() : null
-      const whatsappData = whatsappRes.ok ? await whatsappRes.json() : null
       const siigoData = siigoRes.ok ? await siigoRes.json() : null
 
       if (shopifyData?.shop) {
         setShop(shopifyData.shop)
       }
 
-      // Calculate stats per channel
+      type ShopOrder = { orderNumber: number; createdAt: string; totalPrice: number; itemCount: number }
+      const shopOrders: ShopOrder[] = shopifyData?.orders || []
+      const shopifyOrderNumbers = new Set<number>(shopOrders.map(o => o.orderNumber))
+
       const shopifyStats: ChannelStats = {
         ventas: shopifyData?.stats?.totalRevenue || 0,
         ordenes: shopifyData?.stats?.totalOrders || 0,
         unidades: shopifyData?.stats?.totalUnits || 0,
       }
 
-      const whatsappStats: ChannelStats = {
-        ventas: whatsappData?.stats?.totalVentas || 0,
-        ordenes: whatsappData?.stats?.numVentas || 0,
-        unidades: whatsappData?.stats?.totalUnidades || 0,
-      }
-
-      // Tiendas = Siigo invoices that match a registered tienda (source='tienda')
       type SiigoItem = { code: string; quantity: number }
       type SiigoInv = {
         date: string
         total: number
         tienda_id: string | null
+        observations: string
         items: SiigoItem[]
       }
-      const tiendaInvoices: SiigoInv[] = (siigoData?.invoices || []).filter(
-        (i: SiigoInv) => i.tienda_id
-      )
-      const tiendasStats: ChannelStats = {
-        ventas: tiendaInvoices.reduce((s, i) => s + (i.total || 0), 0),
-        ordenes: tiendaInvoices.length,
-        unidades: tiendaInvoices.reduce(
+      const siigoInvoices: SiigoInv[] = siigoData?.invoices || []
+
+      const extractOrderNum = (obs: string): number | null => {
+        if (!obs) return null
+        const m = obs.match(/#(\d+)/)
+        return m ? parseInt(m[1], 10) : null
+      }
+
+      const tiendaInvoices = siigoInvoices.filter(i => i.tienda_id)
+      const whatsappInvoices = siigoInvoices.filter(i => {
+        if (i.tienda_id) return false
+        const orderNum = extractOrderNum(i.observations)
+        if (orderNum && shopifyOrderNumbers.has(orderNum)) return false
+        return true
+      })
+
+      const sumUnits = (invs: SiigoInv[]) =>
+        invs.reduce(
           (s, i) =>
             s +
             (i.items || [])
               .filter(it => it.code !== 'ENVIO')
               .reduce((u, it) => u + (it.quantity || 0), 0),
           0
-        ),
+        )
+
+      const tiendasStats: ChannelStats = {
+        ventas: tiendaInvoices.reduce((s, i) => s + (i.total || 0), 0),
+        ordenes: tiendaInvoices.length,
+        unidades: sumUnits(tiendaInvoices),
+      }
+
+      const whatsappStats: ChannelStats = {
+        ventas: whatsappInvoices.reduce((s, i) => s + (i.total || 0), 0),
+        ordenes: whatsappInvoices.length,
+        unidades: sumUnits(whatsappInvoices),
       }
 
       const totalStats: ChannelStats = {
@@ -159,10 +175,8 @@ export default function DashboardPage() {
         unidades: shopifyStats.unidades + whatsappStats.unidades + tiendasStats.unidades,
       }
 
-      // Combine chart data with grouping
       const chartDataMap: Record<string, { shopify: number; whatsapp: number; tiendas: number }> = {}
 
-      // Add Shopify data
       shopifyData?.chartData?.forEach((d: { date: string; sales: number }) => {
         const key = getGroupKey(d.date, groupBy)
         if (!chartDataMap[key]) {
@@ -171,22 +185,20 @@ export default function DashboardPage() {
         chartDataMap[key].shopify += d.sales
       })
 
-      // Add WhatsApp data
-      whatsappData?.chartData?.forEach((d: { date: string; sales: number }) => {
-        const key = getGroupKey(d.date, groupBy)
-        if (!chartDataMap[key]) {
-          chartDataMap[key] = { shopify: 0, whatsapp: 0, tiendas: 0 }
-        }
-        chartDataMap[key].whatsapp += d.sales
-      })
-
-      // Add Tiendas data (Siigo invoices grouped by date)
       tiendaInvoices.forEach(inv => {
         const key = getGroupKey(inv.date, groupBy)
         if (!chartDataMap[key]) {
           chartDataMap[key] = { shopify: 0, whatsapp: 0, tiendas: 0 }
         }
         chartDataMap[key].tiendas += inv.total || 0
+      })
+
+      whatsappInvoices.forEach(inv => {
+        const key = getGroupKey(inv.date, groupBy)
+        if (!chartDataMap[key]) {
+          chartDataMap[key] = { shopify: 0, whatsapp: 0, tiendas: 0 }
+        }
+        chartDataMap[key].whatsapp += inv.total || 0
       })
 
       const chartData = Object.entries(chartDataMap)
