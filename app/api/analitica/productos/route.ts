@@ -25,6 +25,21 @@ function extractOrderNumber(observations: string | null): number | null {
   return match ? parseInt(match[1], 10) : null
 }
 
+// Heuristics to split "Producto - Talla N" / "Producto Talla N" / "Producto 35"
+function parseProductName(desc: string): { reference: string; size: string | null } {
+  const trimmed = (desc || '').trim()
+  // "Foo Talla 35" or "Foo - Talla 35"
+  let m = trimmed.match(/^(.+?)\s*[-–—]?\s*talla\s+(\d+(?:[.,]\d+)?)$/i)
+  if (m) return { reference: m[1].trim(), size: m[2] }
+  // "Foo - 35" or "Foo — 35"
+  m = trimmed.match(/^(.+?)\s*[-–—]\s*(\d+(?:[.,]\d+)?)$/)
+  if (m) return { reference: m[1].trim(), size: m[2] }
+  // "Foo 35" (trailing number, only when reference has letters)
+  m = trimmed.match(/^(.+?\D)\s+(\d+(?:[.,]\d+)?)$/)
+  if (m) return { reference: m[1].trim(), size: m[2] }
+  return { reference: trimmed || '—', size: null }
+}
+
 export async function GET(request: Request) {
   const { error } = await requireAuth()
   if (error) return error
@@ -54,7 +69,6 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: pErr.message }, { status: 500 })
       }
       if (!page || page.length === 0) break
-      // Skip fully-credited invoices entirely
       const fresh = (page as CachedInvoice[]).filter(p => (p.credited_amount || 0) < p.total)
       allInvoices.push(...fresh)
       if (page.length < pageSize) break
@@ -75,8 +89,9 @@ export async function GET(request: Request) {
     }
 
     type ChannelStats = { qty: number; amount: number; invoices: number }
-    type ProductStats = {
+    type VariantStats = {
       code: string
+      size: string | null
       description: string
       totalQty: number
       totalAmount: number
@@ -86,8 +101,19 @@ export async function GET(request: Request) {
         tiendas: Record<string, ChannelStats>
       }
     }
+    type ReferenceStats = {
+      reference: string
+      totalQty: number
+      totalAmount: number
+      byChannel: {
+        shopify: ChannelStats
+        whatsapp: ChannelStats
+        tiendas: Record<string, ChannelStats>
+      }
+      variants: Map<string, VariantStats>
+    }
 
-    const products = new Map<string, ProductStats>()
+    const refs = new Map<string, ReferenceStats>()
     let totalShopify = 0
     let totalWhatsApp = 0
     let totalTienda = 0
@@ -98,13 +124,51 @@ export async function GET(request: Request) {
       s.invoices += 1
     }
 
+    function ensureRef(reference: string): ReferenceStats {
+      let r = refs.get(reference)
+      if (!r) {
+        r = {
+          reference,
+          totalQty: 0,
+          totalAmount: 0,
+          byChannel: {
+            shopify: { qty: 0, amount: 0, invoices: 0 },
+            whatsapp: { qty: 0, amount: 0, invoices: 0 },
+            tiendas: {},
+          },
+          variants: new Map(),
+        }
+        refs.set(reference, r)
+      }
+      return r
+    }
+    function ensureVariant(r: ReferenceStats, code: string, size: string | null, description: string): VariantStats {
+      let v = r.variants.get(code)
+      if (!v) {
+        v = {
+          code,
+          size,
+          description,
+          totalQty: 0,
+          totalAmount: 0,
+          byChannel: {
+            shopify: { qty: 0, amount: 0, invoices: 0 },
+            whatsapp: { qty: 0, amount: 0, invoices: 0 },
+            tiendas: {},
+          },
+        }
+        r.variants.set(code, v)
+      }
+      if (!v.description && description) v.description = description
+      if (!v.size && size) v.size = size
+      return v
+    }
+
     for (const inv of invoices) {
       const hasShopifyTag = extractOrderNumber(inv.observations) !== null
       const tiendaMatch = inv.customer_identification
         ? tiendasByNit.get(inv.customer_identification)
         : undefined
-
-      // Priority: tienda (registered NIT) → shopify (tagged order) → whatsapp (default)
       let channel: 'shopify' | 'whatsapp' | 'tienda' = 'whatsapp'
       if (tiendaMatch) channel = 'tienda'
       else if (hasShopifyTag) channel = 'shopify'
@@ -114,50 +178,60 @@ export async function GET(request: Request) {
         const itemTotal = it.total ?? it.quantity * it.price
         const qty = it.quantity || 0
 
-        let stats = products.get(it.code)
-        if (!stats) {
-          stats = {
-            code: it.code,
-            description: it.description || '',
-            totalQty: 0,
-            totalAmount: 0,
-            byChannel: {
-              shopify: { qty: 0, amount: 0, invoices: 0 },
-              whatsapp: { qty: 0, amount: 0, invoices: 0 },
-              tiendas: {},
-            },
-          }
-          products.set(it.code, stats)
+        const { reference, size } = parseProductName(it.description || '')
+        const r = ensureRef(reference)
+        const v = ensureVariant(r, it.code, size, it.description || '')
+
+        r.totalQty += qty
+        r.totalAmount += itemTotal
+        v.totalQty += qty
+        v.totalAmount += itemTotal
+
+        const writeChannel = (refCh: ChannelStats, vCh: ChannelStats) => {
+          bump(refCh, qty, itemTotal)
+          bump(vCh, qty, itemTotal)
         }
-        if (!stats.description && it.description) stats.description = it.description
-        stats.totalQty += qty
-        stats.totalAmount += itemTotal
 
         if (channel === 'shopify') {
-          bump(stats.byChannel.shopify, qty, itemTotal)
+          writeChannel(r.byChannel.shopify, v.byChannel.shopify)
           totalShopify += itemTotal
         } else if (channel === 'tienda' && tiendaMatch) {
-          if (!stats.byChannel.tiendas[tiendaMatch.id]) {
-            stats.byChannel.tiendas[tiendaMatch.id] = { qty: 0, amount: 0, invoices: 0 }
-          }
-          bump(stats.byChannel.tiendas[tiendaMatch.id], qty, itemTotal)
+          if (!r.byChannel.tiendas[tiendaMatch.id]) r.byChannel.tiendas[tiendaMatch.id] = { qty: 0, amount: 0, invoices: 0 }
+          if (!v.byChannel.tiendas[tiendaMatch.id]) v.byChannel.tiendas[tiendaMatch.id] = { qty: 0, amount: 0, invoices: 0 }
+          writeChannel(r.byChannel.tiendas[tiendaMatch.id], v.byChannel.tiendas[tiendaMatch.id])
           totalTienda += itemTotal
         } else {
-          bump(stats.byChannel.whatsapp, qty, itemTotal)
+          writeChannel(r.byChannel.whatsapp, v.byChannel.whatsapp)
           totalWhatsApp += itemTotal
         }
       }
     }
 
-    const productsList = Array.from(products.values()).sort((a, b) => b.totalQty - a.totalQty)
+    // Serialize: sort variants by size if numeric else alpha
+    const referencesList = Array.from(refs.values())
+      .map(r => ({
+        reference: r.reference,
+        totalQty: r.totalQty,
+        totalAmount: r.totalAmount,
+        byChannel: r.byChannel,
+        variantCount: r.variants.size,
+        variants: Array.from(r.variants.values()).sort((a, b) => {
+          const na = a.size ? parseFloat(a.size.replace(',', '.')) : NaN
+          const nb = b.size ? parseFloat(b.size.replace(',', '.')) : NaN
+          if (!isNaN(na) && !isNaN(nb)) return na - nb
+          return (a.size || a.code).localeCompare(b.size || b.code)
+        }),
+      }))
+      .sort((a, b) => b.totalQty - a.totalQty)
 
     return NextResponse.json({
       tiendas: tiendasList,
-      products: productsList,
+      references: referencesList,
       totals: {
-        productos: productsList.length,
-        unidades: productsList.reduce((s, p) => s + p.totalQty, 0),
-        monto: productsList.reduce((s, p) => s + p.totalAmount, 0),
+        referencias: referencesList.length,
+        productos: referencesList.reduce((s, r) => s + r.variantCount, 0),
+        unidades: referencesList.reduce((s, r) => s + r.totalQty, 0),
+        monto: referencesList.reduce((s, r) => s + r.totalAmount, 0),
         facturas: invoices.length,
         byChannel: {
           shopify: totalShopify,

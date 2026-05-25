@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, Fragment } from 'react'
 import Link from 'next/link'
 import { DateRange } from 'react-day-picker'
-import { subDays, format } from 'date-fns'
+import { subMonths, format } from 'date-fns'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -31,12 +31,16 @@ import {
   Search,
   ArrowUp,
   ArrowDown,
+  ChevronDown,
+  ChevronRight,
+  ChevronLeft,
 } from 'lucide-react'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 
 interface ChannelStats { qty: number; amount: number; invoices: number }
-interface ProductStat {
+interface VariantStat {
   code: string
+  size: string | null
   description: string
   totalQty: number
   totalAmount: number
@@ -46,11 +50,24 @@ interface ProductStat {
     tiendas: Record<string, ChannelStats>
   }
 }
+interface ReferenceStat {
+  reference: string
+  totalQty: number
+  totalAmount: number
+  byChannel: {
+    shopify: ChannelStats
+    whatsapp: ChannelStats
+    tiendas: Record<string, ChannelStats>
+  }
+  variantCount: number
+  variants: VariantStat[]
+}
 interface TiendaRef { id: string; nombre: string }
 interface AnalyticsResponse {
   tiendas: TiendaRef[]
-  products: ProductStat[]
+  references: ReferenceStat[]
   totals: {
+    referencias: number
     productos: number
     unidades: number
     monto: number
@@ -70,12 +87,23 @@ function formatCurrency(value: number): string {
 
 const EMPTY_STATS: ChannelStats = { qty: 0, amount: 0, invoices: 0 }
 
+function sumTiendasStats(tiendas: Record<string, ChannelStats>): ChannelStats {
+  let qty = 0, amount = 0, invoices = 0
+  for (const k in tiendas) {
+    qty += tiendas[k].qty
+    amount += tiendas[k].amount
+    invoices += tiendas[k].invoices
+  }
+  return { qty, amount, invoices }
+}
+
 export default function AnaliticaPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
 
   useEffect(() => {
-    setDateRange({ from: subDays(new Date(), 90), to: new Date() })
+    setDateRange({ from: subMonths(new Date(), 6), to: new Date() })
   }, [])
+
   const [data, setData] = useState<AnalyticsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -83,10 +111,21 @@ export default function AnaliticaPage() {
   const [showAmount, setShowAmount] = useState(false)
   const [sortKey, setSortKey] = useState<string>('total')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [expandedRefs, setExpandedRefs] = useState<Set<string>>(new Set())
+  const [tiendasExpanded, setTiendasExpanded] = useState(false)
 
   function toggleSort(key: string) {
     if (sortKey === key) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
     else { setSortKey(key); setSortDir('desc') }
+  }
+
+  function toggleRef(reference: string) {
+    setExpandedRefs(prev => {
+      const next = new Set(prev)
+      if (next.has(reference)) next.delete(reference)
+      else next.add(reference)
+      return next
+    })
   }
 
   async function fetchData() {
@@ -114,25 +153,29 @@ export default function AnaliticaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange])
 
-  const filteredProducts = useMemo(() => {
+  const filteredRefs = useMemo(() => {
     if (!data) return []
     const q = search.trim().toLowerCase()
     const base = q
-      ? data.products.filter(p =>
-          p.code.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
+      ? data.references.filter(r =>
+          r.reference.toLowerCase().includes(q) ||
+          r.variants.some(v => v.code.toLowerCase().includes(q) || v.description.toLowerCase().includes(q))
         )
-      : data.products
+      : data.references
     const dir = sortDir === 'asc' ? 1 : -1
-    const valueOf = (p: ProductStat): number | string => {
-      if (sortKey === 'sku') return p.code
-      if (sortKey === 'producto') return p.description.toLowerCase()
-      if (sortKey === 'total') return showAmount ? p.totalAmount : p.totalQty
-      if (sortKey === 'shopify') return showAmount ? p.byChannel.shopify.amount : p.byChannel.shopify.qty
-      if (sortKey === 'whatsapp') return showAmount ? p.byChannel.whatsapp.amount : p.byChannel.whatsapp.qty
+    const valueOf = (r: ReferenceStat): number | string => {
+      if (sortKey === 'referencia') return r.reference.toLowerCase()
+      if (sortKey === 'total') return showAmount ? r.totalAmount : r.totalQty
+      if (sortKey === 'shopify') return showAmount ? r.byChannel.shopify.amount : r.byChannel.shopify.qty
+      if (sortKey === 'whatsapp') return showAmount ? r.byChannel.whatsapp.amount : r.byChannel.whatsapp.qty
+      if (sortKey === 'tiendas') {
+        const s = sumTiendasStats(r.byChannel.tiendas)
+        return showAmount ? s.amount : s.qty
+      }
       if (sortKey.startsWith('tienda:')) {
-        const tiendaId = sortKey.slice(7)
-        const stat = p.byChannel.tiendas[tiendaId]
-        return showAmount ? stat?.amount || 0 : stat?.qty || 0
+        const id = sortKey.slice(7)
+        const t = r.byChannel.tiendas[id]
+        return showAmount ? t?.amount || 0 : t?.qty || 0
       }
       return 0
     }
@@ -167,7 +210,7 @@ export default function AnaliticaPage() {
   const renderStat = (s: ChannelStats | undefined) => {
     const safe = s || EMPTY_STATS
     if (safe.qty === 0) return <span className="text-[#D1D5DB]">—</span>
-    return showAmount ? formatCurrency(safe.amount) : safe.qty
+    return showAmount ? formatCurrency(safe.amount) : safe.qty.toLocaleString()
   }
 
   return (
@@ -208,7 +251,7 @@ export default function AnaliticaPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-bold text-[#1A2238] mb-2">Analítica por producto y canal</h1>
-            <p className="text-[#545454]">Histórico de unidades vendidas por SKU, cruzado por canal (Shopify, WhatsApp, cada Tienda mayorista, Otros).</p>
+            <p className="text-[#545454]">Referencias agrupadas. Click una fila para ver las tallas; usá el botón a la derecha de Tiendas para desplegar/contraer todas las tiendas en columnas.</p>
           </div>
           <div className="flex items-center gap-2">
             <DateRangePicker date={dateRange} onDateChange={setDateRange} />
@@ -227,10 +270,10 @@ export default function AnaliticaPage() {
         {totals && (
           <div className="grid gap-4 md:grid-cols-4 mb-6">
             <Card className="border-t-4 border-t-[#1DA9EF]">
-              <CardHeader className="pb-2"><CardTitle className="text-sm text-[#545454]">Productos vendidos</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-sm text-[#545454]">Referencias</CardTitle></CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-[#1A2238]">{totals.productos.toLocaleString()}</div>
-                <p className="text-xs text-[#545454]">SKUs distintos</p>
+                <div className="text-2xl font-bold text-[#1A2238]">{totals.referencias.toLocaleString()}</div>
+                <p className="text-xs text-[#545454]">{totals.productos} SKUs distintos</p>
               </CardContent>
             </Card>
             <Card>
@@ -260,12 +303,12 @@ export default function AnaliticaPage() {
         <Card>
           <CardHeader>
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <CardTitle>Matriz producto × canal</CardTitle>
-              <div className="flex items-center gap-2">
+              <CardTitle>Productos por canal</CardTitle>
+              <div className="flex items-center gap-2 flex-wrap">
                 <div className="relative">
                   <Search className="h-4 w-4 absolute left-2 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
                   <Input
-                    placeholder="Buscar SKU o producto..."
+                    placeholder="Buscar referencia, SKU o producto..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                     className="pl-8 w-64"
@@ -293,40 +336,140 @@ export default function AnaliticaPage() {
               <div className="flex items-center justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-[#1DA9EF]" />
               </div>
-            ) : filteredProducts.length === 0 ? (
+            ) : filteredRefs.length === 0 ? (
               <p className="text-center text-[#545454] py-12 text-sm">Sin productos en este período</p>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader className="sticky top-0 bg-white z-10">
                     <TableRow>
-                      <SortHead k="sku" label="SKU" />
-                      <SortHead k="producto" label="Producto" />
+                      <TableHead className="w-8"></TableHead>
+                      <SortHead k="referencia" label="Referencia" />
                       <SortHead k="total" label="Total" className="text-right" />
                       <SortHead k="shopify" label="Shopify" className="text-right bg-[#1A2238]/5 text-[#1A2238]" />
                       <SortHead k="whatsapp" label="WhatsApp" className="text-right bg-[#14B8A6]/5 text-[#0F766E]" />
-                      {tiendas.map(t => (
-                        <SortHead key={t.id} k={`tienda:${t.id}`} label={t.nombre} className="text-right bg-[#1DA9EF]/5 text-[#0073D1]" />
-                      ))}
+                      {tiendasExpanded ? (
+                        <>
+                          {tiendas.map(t => (
+                            <SortHead key={t.id} k={`tienda:${t.id}`} label={t.nombre} className="text-right bg-[#1DA9EF]/5 text-[#0073D1]" />
+                          ))}
+                          <TableHead className="w-8 bg-[#1DA9EF]/5 text-[#0073D1]">
+                            <button
+                              type="button"
+                              onClick={() => setTiendasExpanded(false)}
+                              title="Colapsar tiendas"
+                              className="hover:text-[#1DA9EF]"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </button>
+                          </TableHead>
+                        </>
+                      ) : (
+                        <TableHead className="text-right bg-[#1DA9EF]/5 text-[#0073D1]">
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => toggleSort('tiendas')}
+                              className={`inline-flex items-center gap-1 ${sortKey === 'tiendas' ? 'font-semibold' : ''}`}
+                            >
+                              Tiendas ({tiendas.length})
+                              {sortKey === 'tiendas' && (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setTiendasExpanded(true)}
+                              title="Expandir tiendas"
+                              className="hover:text-[#1DA9EF]"
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredProducts.map(p => (
-                      <TableRow key={p.code}>
-                        <TableCell className="font-mono text-xs">{p.code}</TableCell>
-                        <TableCell className="text-sm">{p.description}</TableCell>
-                        <TableCell className="text-right font-bold text-[#1A2238]">
-                          {showAmount ? formatCurrency(p.totalAmount) : p.totalQty}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-sm">{renderStat(p.byChannel.shopify)}</TableCell>
-                        <TableCell className="text-right font-mono text-sm">{renderStat(p.byChannel.whatsapp)}</TableCell>
-                        {tiendas.map(t => (
-                          <TableCell key={t.id} className="text-right font-mono text-sm">
-                            {renderStat(p.byChannel.tiendas[t.id])}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))}
+                    {filteredRefs.map(r => {
+                      const tiendasSum = sumTiendasStats(r.byChannel.tiendas)
+                      const isExpanded = expandedRefs.has(r.reference)
+                      return (
+                        <Fragment key={r.reference}>
+                          <TableRow
+                            className={`cursor-pointer hover:bg-gray-50 ${isExpanded ? 'bg-gray-50' : ''}`}
+                            onClick={() => toggleRef(r.reference)}
+                          >
+                            <TableCell className="w-8">
+                              {r.variantCount > 1 && (
+                                isExpanded
+                                  ? <ChevronDown className="h-4 w-4 text-[#545454]" />
+                                  : <ChevronRight className="h-4 w-4 text-[#545454]" />
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium text-[#1A2238]">{r.reference}</div>
+                              {r.variantCount > 1 && (
+                                <div className="text-xs text-[#545454]">{r.variantCount} tallas</div>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-bold text-[#1A2238]">
+                              {showAmount ? formatCurrency(r.totalAmount) : r.totalQty.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-sm">{renderStat(r.byChannel.shopify)}</TableCell>
+                            <TableCell className="text-right font-mono text-sm">{renderStat(r.byChannel.whatsapp)}</TableCell>
+                            {tiendasExpanded ? (
+                              <>
+                                {tiendas.map(t => (
+                                  <TableCell key={t.id} className="text-right font-mono text-sm">
+                                    {renderStat(r.byChannel.tiendas[t.id])}
+                                  </TableCell>
+                                ))}
+                                <TableCell></TableCell>
+                              </>
+                            ) : (
+                              <TableCell className="text-right font-mono text-sm">
+                                {renderStat(tiendasSum)}
+                              </TableCell>
+                            )}
+                          </TableRow>
+
+                          {isExpanded && r.variants.map(v => {
+                            const vTiendasSum = sumTiendasStats(v.byChannel.tiendas)
+                            return (
+                              <TableRow key={`${r.reference}-${v.code}`} className="bg-gray-50/40">
+                                <TableCell></TableCell>
+                                <TableCell className="pl-8">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs bg-white border rounded px-1.5 py-0.5 font-mono text-[#545454]">{v.code}</span>
+                                    <span className="text-sm text-[#1A2238]">
+                                      {v.size ? `Talla ${v.size}` : v.description}
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right font-mono text-sm text-[#1A2238]">
+                                  {showAmount ? formatCurrency(v.totalAmount) : v.totalQty.toLocaleString()}
+                                </TableCell>
+                                <TableCell className="text-right font-mono text-xs">{renderStat(v.byChannel.shopify)}</TableCell>
+                                <TableCell className="text-right font-mono text-xs">{renderStat(v.byChannel.whatsapp)}</TableCell>
+                                {tiendasExpanded ? (
+                                  <>
+                                    {tiendas.map(t => (
+                                      <TableCell key={t.id} className="text-right font-mono text-xs">
+                                        {renderStat(v.byChannel.tiendas[t.id])}
+                                      </TableCell>
+                                    ))}
+                                    <TableCell></TableCell>
+                                  </>
+                                ) : (
+                                  <TableCell className="text-right font-mono text-xs">
+                                    {renderStat(vTiendasSum)}
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            )
+                          })}
+                        </Fragment>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </div>
