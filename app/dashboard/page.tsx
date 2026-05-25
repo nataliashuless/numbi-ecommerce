@@ -100,18 +100,16 @@ export default function DashboardPage() {
       const endDate = format(dateRange.to, 'yyyy-MM-dd')
 
       // Fetch all channels in parallel
-      const [shopifyRes, whatsappRes, tiendasRes, tiendasVentasRes] = await Promise.all([
+      const [shopifyRes, whatsappRes, siigoRes] = await Promise.all([
         fetch(`/api/shopify/orders?start_date=${startDate}&end_date=${endDate}&group_by=day`),
         fetch(`/api/whatsapp?start_date=${startDate}&end_date=${endDate}`),
-        fetch('/api/tiendas'),
-        fetch(`/api/tiendas/ventas?start_date=${startDate}&end_date=${endDate}&group_by=day`),
+        fetch(`/api/siigo/invoices?start_date=${startDate}&end_date=${endDate}`),
       ])
 
       // Parse responses
       const shopifyData = shopifyRes.ok ? await shopifyRes.json() : null
       const whatsappData = whatsappRes.ok ? await whatsappRes.json() : null
-      const tiendasData = tiendasRes.ok ? await tiendasRes.json() : null
-      const tiendasVentasData = tiendasVentasRes.ok ? await tiendasVentasRes.json() : null
+      const siigoData = siigoRes.ok ? await siigoRes.json() : null
 
       if (shopifyData?.shop) {
         setShop(shopifyData.shop)
@@ -130,11 +128,28 @@ export default function DashboardPage() {
         unidades: whatsappData?.stats?.totalUnidades || 0,
       }
 
-      // For tiendas, use the ventas data
+      // Tiendas = Siigo invoices that match a registered tienda (source='tienda')
+      type SiigoItem = { code: string; quantity: number }
+      type SiigoInv = {
+        date: string
+        total: number
+        tienda_id: string | null
+        items: SiigoItem[]
+      }
+      const tiendaInvoices: SiigoInv[] = (siigoData?.invoices || []).filter(
+        (i: SiigoInv) => i.tienda_id
+      )
       const tiendasStats: ChannelStats = {
-        ventas: tiendasVentasData?.stats?.totalNeto || 0,
-        ordenes: tiendasVentasData?.stats?.totalTransacciones || 0,
-        unidades: tiendasVentasData?.stats?.totalUnidades || 0,
+        ventas: tiendaInvoices.reduce((s, i) => s + (i.total || 0), 0),
+        ordenes: tiendaInvoices.length,
+        unidades: tiendaInvoices.reduce(
+          (s, i) =>
+            s +
+            (i.items || [])
+              .filter(it => it.code !== 'ENVIO')
+              .reduce((u, it) => u + (it.quantity || 0), 0),
+          0
+        ),
       }
 
       const totalStats: ChannelStats = {
@@ -164,13 +179,13 @@ export default function DashboardPage() {
         chartDataMap[key].whatsapp += d.sales
       })
 
-      // Add Tiendas data
-      tiendasVentasData?.chartData?.forEach((d: { date: string; neto: number }) => {
-        const key = getGroupKey(d.date, groupBy)
+      // Add Tiendas data (Siigo invoices grouped by date)
+      tiendaInvoices.forEach(inv => {
+        const key = getGroupKey(inv.date, groupBy)
         if (!chartDataMap[key]) {
           chartDataMap[key] = { shopify: 0, whatsapp: 0, tiendas: 0 }
         }
-        chartDataMap[key].tiendas += d.neto
+        chartDataMap[key].tiendas += inv.total || 0
       })
 
       const chartData = Object.entries(chartDataMap)
