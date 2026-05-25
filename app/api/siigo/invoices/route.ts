@@ -60,12 +60,17 @@ export async function GET(request: Request) {
 
     const namesMap = new Map<string, string>()
     if (customerIds.length > 0) {
-      const { data: customersCached } = await supabase
-        .from('siigo_customers')
-        .select('id, name')
-        .in('id', customerIds)
-      for (const row of (customersCached || []) as Array<{ id: string; name: string }>) {
-        if (row.name) namesMap.set(row.id, row.name)
+      // Chunk by 500 to keep URL size and per-query row count safe
+      const CHUNK = 500
+      for (let i = 0; i < customerIds.length; i += CHUNK) {
+        const ids = customerIds.slice(i, i + CHUNK)
+        const { data: customersCached } = await supabase
+          .from('siigo_customers')
+          .select('id, name')
+          .in('id', ids)
+        for (const row of (customersCached || []) as Array<{ id: string; name: string }>) {
+          if (row.name) namesMap.set(row.id, row.name)
+        }
       }
 
       // Only call Siigo on demand. Default behavior: use what's in cache.
