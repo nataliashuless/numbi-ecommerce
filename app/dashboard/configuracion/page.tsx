@@ -463,7 +463,7 @@ export default function ConfiguracionPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <ShoppingCart className="h-5 w-5 text-[#96BF48]" />
+                    <ShoppingCart className="h-5 w-5 text-[#1A2238]" />
                     <CardTitle>Shopify</CardTitle>
                   </div>
                   {shopifyConnected !== null && (

@@ -61,7 +61,7 @@ function formatCurrency(value: number): string {
   }).format(value)
 }
 
-const COLORS = ['#96bf48', '#25D366', '#1DA9EF']
+const COLORS = ['#1A2238', '#FFD93D', '#1DA9EF']
 
 function getGroupKey(dateStr: string, groupBy: 'day' | 'week' | 'month' | 'quarter'): string {
   const date = new Date(dateStr + 'T12:00:00')
@@ -226,8 +226,8 @@ export default function DashboardPage() {
   }, [dateRange, groupBy])
 
   const pieData = data ? [
-    { name: 'Shopify', value: data.shopify.ventas, color: '#96bf48' },
-    { name: 'WhatsApp', value: data.whatsapp.ventas, color: '#25D366' },
+    { name: 'Shopify', value: data.shopify.ventas, color: '#1A2238' },
+    { name: 'WhatsApp', value: data.whatsapp.ventas, color: '#FFD93D' },
     { name: 'Tiendas', value: data.tiendas.ventas, color: '#1DA9EF' },
   ].filter(d => d.value > 0) : []
 
@@ -396,10 +396,10 @@ export default function DashboardPage() {
             {/* Channel Breakdown */}
             <div className="grid gap-4 md:grid-cols-3 mb-8">
               <Link href="/dashboard/shopify">
-                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-[#96bf48]">
+                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-[#1A2238]">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium text-[#545454]">Shopify</CardTitle>
-                    <ShoppingCart className="h-4 w-4 text-[#96bf48]" />
+                    <ShoppingCart className="h-4 w-4 text-[#1A2238]" />
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold text-[#1A2238]">{formatCurrency(data?.shopify.ventas || 0)}</div>
@@ -409,10 +409,10 @@ export default function DashboardPage() {
               </Link>
 
               <Link href="/dashboard/whatsapp">
-                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-[#25D366]">
+                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-[#FFD93D]">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium text-[#545454]">WhatsApp</CardTitle>
-                    <MessageCircle className="h-4 w-4 text-[#25D366]" />
+                    <MessageCircle className="h-4 w-4 text-[#FFD93D]" />
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold text-[#1A2238]">{formatCurrency(data?.whatsapp.ventas || 0)}</div>
@@ -489,8 +489,8 @@ export default function DashboardPage() {
                             contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
                           />
                           <Legend />
-                          <Bar dataKey="shopify" name="Shopify" stackId="a" fill="#96bf48" />
-                          <Bar dataKey="whatsapp" name="WhatsApp" stackId="a" fill="#25D366" />
+                          <Bar dataKey="shopify" name="Shopify" stackId="a" fill="#1A2238" />
+                          <Bar dataKey="whatsapp" name="WhatsApp" stackId="a" fill="#FFD93D" />
                           <Bar dataKey="tiendas" name="Tiendas" stackId="a" fill="#1DA9EF" />
                         </BarChart>
                       </ResponsiveContainer>

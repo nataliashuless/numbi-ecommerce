@@ -389,9 +389,9 @@ export default function ConciliacionPage() {
   }, [orders, invoices, rows])
 
   const sourceBadge = (source: InvoiceSource, tiendaNombre: string | null) => {
-    if (source === 'shopify') return <Badge className="bg-[#96bf48]/15 text-[#5a7a2a] hover:bg-[#96bf48]/15">Shopify</Badge>
+    if (source === 'shopify') return <Badge className="bg-[#1A2238]/15 text-[#1A2238] hover:bg-[#1A2238]/15">Shopify</Badge>
     if (source === 'tienda') return <Badge className="bg-[#1DA9EF]/15 text-[#0073D1] hover:bg-[#1DA9EF]/15">Tienda: {tiendaNombre}</Badge>
-    return <Badge className="bg-[#25D366]/15 text-[#0e7a3e] hover:bg-[#25D366]/15">WhatsApp</Badge>
+    return <Badge className="bg-[#FFD93D]/15 text-[#7A6A00] hover:bg-[#FFD93D]/15">WhatsApp</Badge>
   }
 
   return (
@@ -508,7 +508,7 @@ export default function ConciliacionPage() {
         )}
 
         <div className="grid gap-4 md:grid-cols-5 mb-8">
-          <Card className="border-t-4 border-t-[#96bf48]">
+          <Card className="border-t-4 border-t-[#1A2238]">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-[#545454] font-medium">Total Shopify</CardTitle>
             </CardHeader>

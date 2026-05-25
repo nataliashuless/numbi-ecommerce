@@ -249,8 +249,8 @@ export default function AnaliticaPage() {
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm text-[#545454]">Por canal</CardTitle></CardHeader>
               <CardContent className="text-xs space-y-1">
-                <div className="flex justify-between"><span className="text-[#5a7a2a]">Shopify</span><span className="font-mono">{formatCurrency(totals.byChannel.shopify)}</span></div>
-                <div className="flex justify-between"><span className="text-[#0e7a3e]">WhatsApp</span><span className="font-mono">{formatCurrency(totals.byChannel.whatsapp)}</span></div>
+                <div className="flex justify-between"><span className="text-[#1A2238]">Shopify</span><span className="font-mono">{formatCurrency(totals.byChannel.shopify)}</span></div>
+                <div className="flex justify-between"><span className="text-[#7A6A00]">WhatsApp</span><span className="font-mono">{formatCurrency(totals.byChannel.whatsapp)}</span></div>
                 <div className="flex justify-between"><span className="text-[#0073D1]">Tiendas</span><span className="font-mono">{formatCurrency(totals.byChannel.tienda)}</span></div>
               </CardContent>
             </Card>
@@ -303,8 +303,8 @@ export default function AnaliticaPage() {
                       <SortHead k="sku" label="SKU" />
                       <SortHead k="producto" label="Producto" />
                       <SortHead k="total" label="Total" className="text-right" />
-                      <SortHead k="shopify" label="Shopify" className="text-right bg-[#96bf48]/5 text-[#5a7a2a]" />
-                      <SortHead k="whatsapp" label="WhatsApp" className="text-right bg-[#25D366]/5 text-[#0e7a3e]" />
+                      <SortHead k="shopify" label="Shopify" className="text-right bg-[#1A2238]/5 text-[#1A2238]" />
+                      <SortHead k="whatsapp" label="WhatsApp" className="text-right bg-[#FFD93D]/5 text-[#7A6A00]" />
                       {tiendas.map(t => (
                         <SortHead key={t.id} k={`tienda:${t.id}`} label={t.nombre} className="text-right bg-[#1DA9EF]/5 text-[#0073D1]" />
                       ))}
