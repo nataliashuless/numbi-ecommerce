@@ -29,6 +29,8 @@ import {
   Store,
   TrendingUp,
   Search,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 
@@ -79,6 +81,13 @@ export default function AnaliticaPage() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [showAmount, setShowAmount] = useState(false)
+  const [sortKey, setSortKey] = useState<string>('total')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  function toggleSort(key: string) {
+    if (sortKey === key) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortKey(key); setSortDir('desc') }
+  }
 
   async function fetchData() {
     if (!dateRange?.from || !dateRange?.to) return
@@ -108,11 +117,50 @@ export default function AnaliticaPage() {
   const filteredProducts = useMemo(() => {
     if (!data) return []
     const q = search.trim().toLowerCase()
-    if (!q) return data.products
-    return data.products.filter(p =>
-      p.code.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
+    const base = q
+      ? data.products.filter(p =>
+          p.code.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
+        )
+      : data.products
+    const dir = sortDir === 'asc' ? 1 : -1
+    const valueOf = (p: ProductStat): number | string => {
+      if (sortKey === 'sku') return p.code
+      if (sortKey === 'producto') return p.description.toLowerCase()
+      if (sortKey === 'total') return showAmount ? p.totalAmount : p.totalQty
+      if (sortKey === 'shopify') return showAmount ? p.byChannel.shopify.amount : p.byChannel.shopify.qty
+      if (sortKey === 'whatsapp') return showAmount ? p.byChannel.whatsapp.amount : p.byChannel.whatsapp.qty
+      if (sortKey === 'otra') return showAmount ? p.byChannel.otra.amount : p.byChannel.otra.qty
+      if (sortKey.startsWith('tienda:')) {
+        const tiendaId = sortKey.slice(7)
+        const stat = p.byChannel.tiendas[tiendaId]
+        return showAmount ? stat?.amount || 0 : stat?.qty || 0
+      }
+      return 0
+    }
+    return [...base].sort((a, b) => {
+      const va = valueOf(a)
+      const vb = valueOf(b)
+      if (va < vb) return -1 * dir
+      if (va > vb) return 1 * dir
+      return 0
+    })
+  }, [data, search, sortKey, sortDir, showAmount])
+
+  function SortHead({ k, label, className }: { k: string; label: string; className?: string }) {
+    const active = sortKey === k
+    return (
+      <TableHead className={className}>
+        <button
+          type="button"
+          onClick={() => toggleSort(k)}
+          className={`inline-flex items-center gap-1 hover:text-[#1DA9EF] ${active ? 'text-[#1DA9EF] font-semibold' : ''}`}
+        >
+          {label}
+          {active && (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+        </button>
+      </TableHead>
     )
-  }, [data, search])
+  }
 
   const tiendas = data?.tiendas || []
   const totals = data?.totals
@@ -254,17 +302,15 @@ export default function AnaliticaPage() {
                 <Table>
                   <TableHeader className="sticky top-0 bg-white z-10">
                     <TableRow>
-                      <TableHead>SKU</TableHead>
-                      <TableHead>Producto</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead className="text-right bg-[#96bf48]/5 text-[#5a7a2a]">Shopify</TableHead>
-                      <TableHead className="text-right bg-[#25D366]/5 text-[#0e7a3e]">WhatsApp</TableHead>
+                      <SortHead k="sku" label="SKU" />
+                      <SortHead k="producto" label="Producto" />
+                      <SortHead k="total" label="Total" className="text-right" />
+                      <SortHead k="shopify" label="Shopify" className="text-right bg-[#96bf48]/5 text-[#5a7a2a]" />
+                      <SortHead k="whatsapp" label="WhatsApp" className="text-right bg-[#25D366]/5 text-[#0e7a3e]" />
                       {tiendas.map(t => (
-                        <TableHead key={t.id} className="text-right bg-[#1DA9EF]/5 text-[#0073D1]">
-                          {t.nombre}
-                        </TableHead>
+                        <SortHead key={t.id} k={`tienda:${t.id}`} label={t.nombre} className="text-right bg-[#1DA9EF]/5 text-[#0073D1]" />
                       ))}
-                      <TableHead className="text-right text-[#545454]">Otra</TableHead>
+                      <SortHead k="otra" label="Otra" className="text-right text-[#545454]" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>

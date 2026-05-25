@@ -35,6 +35,8 @@ import {
   XCircle,
   Plus,
   TrendingUp,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 
@@ -112,6 +114,35 @@ export default function ConciliacionPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | MatchStatus>('all')
+
+  type SortKey = 'date' | 'source' | 'status' | 'orderNumber' | 'clientName' | 'shopifyTotal' | 'siigoTotal' | 'diff'
+  const [sortKey, setSortKey] = useState<SortKey>('date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDir(key === 'date' ? 'desc' : 'asc')
+    }
+  }
+
+  function SortHead({ k, label, align }: { k: SortKey; label: string; align?: 'right' }) {
+    const active = sortKey === k
+    return (
+      <TableHead className={align === 'right' ? 'text-right' : ''}>
+        <button
+          type="button"
+          onClick={() => toggleSort(k)}
+          className={`inline-flex items-center gap-1 hover:text-[#1DA9EF] ${active ? 'text-[#1DA9EF] font-semibold' : ''}`}
+        >
+          {label}
+          {active && (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+        </button>
+      </TableHead>
+    )
+  }
 
   const [syncing, setSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState<{ cached: number; earliest: string | null; latest: string | null; last_sync: string | null } | null>(null)
@@ -295,7 +326,29 @@ export default function ConciliacionPage() {
     return out
   }, [orders, invoices])
 
-  const visibleRows = rows.filter(r => filter === 'all' || r.status === filter)
+  const visibleRows = useMemo(() => {
+    const filtered = rows.filter(r => filter === 'all' || r.status === filter)
+    const dir = sortDir === 'asc' ? 1 : -1
+    const valueOf = (r: Row) => {
+      switch (sortKey) {
+        case 'date': return r.date
+        case 'source': return r.source
+        case 'status': return r.status
+        case 'orderNumber': return r.orderNumber ?? -Infinity
+        case 'clientName': return r.clientName.toLowerCase()
+        case 'shopifyTotal': return r.shopify?.totalPrice ?? -Infinity
+        case 'siigoTotal': return r.siigo?.total ?? -Infinity
+        case 'diff': return r.status === 'matched' ? r.diff : -Infinity
+      }
+    }
+    return [...filtered].sort((a, b) => {
+      const va = valueOf(a)
+      const vb = valueOf(b)
+      if (va < vb) return -1 * dir
+      if (va > vb) return 1 * dir
+      return 0
+    })
+  }, [rows, filter, sortKey, sortDir])
 
   const stats = useMemo(() => {
     const totalShopify = orders.reduce((s, o) => s + o.totalPrice, 0)
@@ -522,14 +575,14 @@ export default function ConciliacionPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Fecha</TableHead>
-                      <TableHead>Fuente</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Orden / Factura</TableHead>
-                      <TableHead>Cliente</TableHead>
-                      <TableHead className="text-right">Shopify</TableHead>
-                      <TableHead className="text-right">Siigo</TableHead>
-                      <TableHead className="text-right">Diferencia</TableHead>
+                      <SortHead k="date" label="Fecha" />
+                      <SortHead k="source" label="Fuente" />
+                      <SortHead k="status" label="Estado" />
+                      <SortHead k="orderNumber" label="Orden / Factura" />
+                      <SortHead k="clientName" label="Cliente" />
+                      <SortHead k="shopifyTotal" label="Shopify" align="right" />
+                      <SortHead k="siigoTotal" label="Siigo" align="right" />
+                      <SortHead k="diff" label="Diferencia" align="right" />
                       <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
