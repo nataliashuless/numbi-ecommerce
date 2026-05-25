@@ -250,7 +250,7 @@ export default function AnaliticaPage() {
               <CardHeader className="pb-2"><CardTitle className="text-sm text-[#545454]">Por canal</CardTitle></CardHeader>
               <CardContent className="text-xs space-y-1">
                 <div className="flex justify-between"><span className="text-[#1A2238]">Shopify</span><span className="font-mono">{formatCurrency(totals.byChannel.shopify)}</span></div>
-                <div className="flex justify-between"><span className="text-[#7A6A00]">WhatsApp</span><span className="font-mono">{formatCurrency(totals.byChannel.whatsapp)}</span></div>
+                <div className="flex justify-between"><span className="text-[#0F766E]">WhatsApp</span><span className="font-mono">{formatCurrency(totals.byChannel.whatsapp)}</span></div>
                 <div className="flex justify-between"><span className="text-[#0073D1]">Tiendas</span><span className="font-mono">{formatCurrency(totals.byChannel.tienda)}</span></div>
               </CardContent>
             </Card>
@@ -304,7 +304,7 @@ export default function AnaliticaPage() {
                       <SortHead k="producto" label="Producto" />
                       <SortHead k="total" label="Total" className="text-right" />
                       <SortHead k="shopify" label="Shopify" className="text-right bg-[#1A2238]/5 text-[#1A2238]" />
-                      <SortHead k="whatsapp" label="WhatsApp" className="text-right bg-[#FFD93D]/5 text-[#7A6A00]" />
+                      <SortHead k="whatsapp" label="WhatsApp" className="text-right bg-[#14B8A6]/5 text-[#0F766E]" />
                       {tiendas.map(t => (
                         <SortHead key={t.id} k={`tienda:${t.id}`} label={t.nombre} className="text-right bg-[#1DA9EF]/5 text-[#0073D1]" />
                       ))}

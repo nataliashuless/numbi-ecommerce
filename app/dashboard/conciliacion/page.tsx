@@ -391,7 +391,7 @@ export default function ConciliacionPage() {
   const sourceBadge = (source: InvoiceSource, tiendaNombre: string | null) => {
     if (source === 'shopify') return <Badge className="bg-[#1A2238]/15 text-[#1A2238] hover:bg-[#1A2238]/15">Shopify</Badge>
     if (source === 'tienda') return <Badge className="bg-[#1DA9EF]/15 text-[#0073D1] hover:bg-[#1DA9EF]/15">Tienda: {tiendaNombre}</Badge>
-    return <Badge className="bg-[#FFD93D]/15 text-[#7A6A00] hover:bg-[#FFD93D]/15">WhatsApp</Badge>
+    return <Badge className="bg-[#14B8A6]/15 text-[#0F766E] hover:bg-[#14B8A6]/15">WhatsApp</Badge>
   }
 
   return (

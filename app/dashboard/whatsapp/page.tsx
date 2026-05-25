@@ -1488,7 +1488,7 @@ Diseño: chocolate`}
                           formatter={(value) => [formatCurrency(Number(value)), 'Ventas']}
                           contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
                         />
-                        <Bar dataKey="sales" fill="#FFD93D" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="sales" fill="#14B8A6" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (

@@ -44,12 +44,27 @@ interface ChannelStats {
   unidades: number
 }
 
+interface ChartPoint {
+  date: string
+  shopify_ventas: number
+  whatsapp_ventas: number
+  tiendas_ventas: number
+  shopify_ordenes: number
+  whatsapp_ordenes: number
+  tiendas_ordenes: number
+  shopify_unidades: number
+  whatsapp_unidades: number
+  tiendas_unidades: number
+}
+
+type Metric = 'ventas' | 'ordenes' | 'unidades'
+
 interface ConsolidatedData {
   shopify: ChannelStats
   whatsapp: ChannelStats
   tiendas: ChannelStats
   total: ChannelStats
-  chartData: { date: string; shopify: number; whatsapp: number; tiendas: number }[]
+  chartData: ChartPoint[]
 }
 
 function formatCurrency(value: number): string {
@@ -61,7 +76,7 @@ function formatCurrency(value: number): string {
   }).format(value)
 }
 
-const COLORS = ['#1A2238', '#FFD93D', '#1DA9EF']
+const COLORS = ['#1A2238', '#14B8A6', '#1DA9EF']
 
 function getGroupKey(dateStr: string, groupBy: 'day' | 'week' | 'month' | 'quarter'): string {
   const date = new Date(dateStr + 'T12:00:00')
@@ -87,6 +102,7 @@ export default function DashboardPage() {
   const [shop, setShop] = useState('')
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month' | 'quarter'>('month')
+  const [metric, setMetric] = useState<Metric>('ventas')
 
   useEffect(() => {
     setDateRange({ from: subMonths(new Date(), 6), to: new Date() })
@@ -175,33 +191,46 @@ export default function DashboardPage() {
         unidades: shopifyStats.unidades + whatsappStats.unidades + tiendasStats.unidades,
       }
 
-      const chartDataMap: Record<string, { shopify: number; whatsapp: number; tiendas: number }> = {}
-
-      shopifyData?.chartData?.forEach((d: { date: string; sales: number }) => {
-        const key = getGroupKey(d.date, groupBy)
-        if (!chartDataMap[key]) {
-          chartDataMap[key] = { shopify: 0, whatsapp: 0, tiendas: 0 }
-        }
-        chartDataMap[key].shopify += d.sales
+      type Bucket = {
+        shopify_ventas: number; shopify_ordenes: number; shopify_unidades: number
+        whatsapp_ventas: number; whatsapp_ordenes: number; whatsapp_unidades: number
+        tiendas_ventas: number; tiendas_ordenes: number; tiendas_unidades: number
+      }
+      const empty = (): Bucket => ({
+        shopify_ventas: 0, shopify_ordenes: 0, shopify_unidades: 0,
+        whatsapp_ventas: 0, whatsapp_ordenes: 0, whatsapp_unidades: 0,
+        tiendas_ventas: 0, tiendas_ordenes: 0, tiendas_unidades: 0,
       })
+      const chartDataMap: Record<string, Bucket> = {}
+
+      shopifyData?.chartData?.forEach((d: { date: string; sales: number; orders: number; units: number }) => {
+        const key = getGroupKey(d.date, groupBy)
+        if (!chartDataMap[key]) chartDataMap[key] = empty()
+        chartDataMap[key].shopify_ventas += d.sales || 0
+        chartDataMap[key].shopify_ordenes += d.orders || 0
+        chartDataMap[key].shopify_unidades += d.units || 0
+      })
+
+      const itemUnits = (items: SiigoItem[]) =>
+        items.filter(it => it.code !== 'ENVIO').reduce((u, it) => u + (it.quantity || 0), 0)
 
       tiendaInvoices.forEach(inv => {
         const key = getGroupKey(inv.date, groupBy)
-        if (!chartDataMap[key]) {
-          chartDataMap[key] = { shopify: 0, whatsapp: 0, tiendas: 0 }
-        }
-        chartDataMap[key].tiendas += inv.total || 0
+        if (!chartDataMap[key]) chartDataMap[key] = empty()
+        chartDataMap[key].tiendas_ventas += inv.total || 0
+        chartDataMap[key].tiendas_ordenes += 1
+        chartDataMap[key].tiendas_unidades += itemUnits(inv.items || [])
       })
 
       whatsappInvoices.forEach(inv => {
         const key = getGroupKey(inv.date, groupBy)
-        if (!chartDataMap[key]) {
-          chartDataMap[key] = { shopify: 0, whatsapp: 0, tiendas: 0 }
-        }
-        chartDataMap[key].whatsapp += inv.total || 0
+        if (!chartDataMap[key]) chartDataMap[key] = empty()
+        chartDataMap[key].whatsapp_ventas += inv.total || 0
+        chartDataMap[key].whatsapp_ordenes += 1
+        chartDataMap[key].whatsapp_unidades += itemUnits(inv.items || [])
       })
 
-      const chartData = Object.entries(chartDataMap)
+      const chartData: ChartPoint[] = Object.entries(chartDataMap)
         .map(([date, values]) => ({ date, ...values }))
         .sort((a, b) => a.date.localeCompare(b.date))
 
@@ -227,7 +256,7 @@ export default function DashboardPage() {
 
   const pieData = data ? [
     { name: 'Shopify', value: data.shopify.ventas, color: '#1A2238' },
-    { name: 'WhatsApp', value: data.whatsapp.ventas, color: '#FFD93D' },
+    { name: 'WhatsApp', value: data.whatsapp.ventas, color: '#14B8A6' },
     { name: 'Tiendas', value: data.tiendas.ventas, color: '#1DA9EF' },
   ].filter(d => d.value > 0) : []
 
@@ -359,38 +388,70 @@ export default function DashboardPage() {
           </div>
         ) : (
           <>
-            {/* Total KPIs */}
+            {/* Total KPIs (click to switch chart metric) */}
             <div className="grid gap-4 md:grid-cols-3 mb-8">
-              <Card className="border-t-4 border-t-[#1DA9EF]">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#545454]">Ventas Totales</CardTitle>
-                  <DollarSign className="h-4 w-4 text-[#1DA9EF]" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-[#1DA9EF]">{formatCurrency(data?.total.ventas || 0)}</div>
+              <button
+                type="button"
+                onClick={() => setMetric('ventas')}
+                className={`text-left rounded-xl border bg-white transition-all ${
+                  metric === 'ventas'
+                    ? 'border-t-4 border-t-[#1DA9EF] shadow-md ring-1 ring-[#1DA9EF]/20'
+                    : 'border-t-4 border-t-transparent hover:border-t-[#1DA9EF]/40 hover:shadow-sm'
+                }`}
+              >
+                <div className="p-6">
+                  <div className="flex items-center justify-between pb-2">
+                    <span className="text-sm font-medium text-[#545454]">Ventas Totales</span>
+                    <DollarSign className={`h-4 w-4 ${metric === 'ventas' ? 'text-[#1DA9EF]' : 'text-[#545454]'}`} />
+                  </div>
+                  <div className={`text-3xl font-bold ${metric === 'ventas' ? 'text-[#1DA9EF]' : 'text-[#1A2238]'}`}>
+                    {formatCurrency(data?.total.ventas || 0)}
+                  </div>
                   <p className="text-xs text-[#545454] mt-1">Todos los canales</p>
-                </CardContent>
-              </Card>
+                </div>
+              </button>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#545454]">Total Órdenes</CardTitle>
-                  <ShoppingCart className="h-4 w-4 text-[#545454]" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-[#1A2238]">{data?.total.ordenes || 0}</div>
-                </CardContent>
-              </Card>
+              <button
+                type="button"
+                onClick={() => setMetric('ordenes')}
+                className={`text-left rounded-xl border bg-white transition-all ${
+                  metric === 'ordenes'
+                    ? 'border-t-4 border-t-[#1DA9EF] shadow-md ring-1 ring-[#1DA9EF]/20'
+                    : 'border-t-4 border-t-transparent hover:border-t-[#1DA9EF]/40 hover:shadow-sm'
+                }`}
+              >
+                <div className="p-6">
+                  <div className="flex items-center justify-between pb-2">
+                    <span className="text-sm font-medium text-[#545454]">Total Órdenes</span>
+                    <ShoppingCart className={`h-4 w-4 ${metric === 'ordenes' ? 'text-[#1DA9EF]' : 'text-[#545454]'}`} />
+                  </div>
+                  <div className={`text-3xl font-bold ${metric === 'ordenes' ? 'text-[#1DA9EF]' : 'text-[#1A2238]'}`}>
+                    {(data?.total.ordenes || 0).toLocaleString()}
+                  </div>
+                  <p className="text-xs text-[#545454] mt-1">Facturas + órdenes</p>
+                </div>
+              </button>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#545454]">Unidades Vendidas</CardTitle>
-                  <Box className="h-4 w-4 text-[#545454]" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-[#1A2238]">{data?.total.unidades || 0}</div>
-                </CardContent>
-              </Card>
+              <button
+                type="button"
+                onClick={() => setMetric('unidades')}
+                className={`text-left rounded-xl border bg-white transition-all ${
+                  metric === 'unidades'
+                    ? 'border-t-4 border-t-[#1DA9EF] shadow-md ring-1 ring-[#1DA9EF]/20'
+                    : 'border-t-4 border-t-transparent hover:border-t-[#1DA9EF]/40 hover:shadow-sm'
+                }`}
+              >
+                <div className="p-6">
+                  <div className="flex items-center justify-between pb-2">
+                    <span className="text-sm font-medium text-[#545454]">Unidades Vendidas</span>
+                    <Box className={`h-4 w-4 ${metric === 'unidades' ? 'text-[#1DA9EF]' : 'text-[#545454]'}`} />
+                  </div>
+                  <div className={`text-3xl font-bold ${metric === 'unidades' ? 'text-[#1DA9EF]' : 'text-[#1A2238]'}`}>
+                    {(data?.total.unidades || 0).toLocaleString()}
+                  </div>
+                  <p className="text-xs text-[#545454] mt-1">Productos despachados</p>
+                </div>
+              </button>
             </div>
 
             {/* Channel Breakdown */}
@@ -409,10 +470,10 @@ export default function DashboardPage() {
               </Link>
 
               <Link href="/dashboard/whatsapp">
-                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-[#FFD93D]">
+                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-[#14B8A6]">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium text-[#545454]">WhatsApp</CardTitle>
-                    <MessageCircle className="h-4 w-4 text-[#FFD93D]" />
+                    <MessageCircle className="h-4 w-4 text-[#14B8A6]" />
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold text-[#1A2238]">{formatCurrency(data?.whatsapp.ventas || 0)}</div>
@@ -440,7 +501,11 @@ export default function DashboardPage() {
               {/* Stacked Bar Chart */}
               <Card className="md:col-span-2">
                 <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle className="text-lg">Ventas por Canal</CardTitle>
+                  <CardTitle className="text-lg">
+                    {metric === 'ventas' && 'Ventas por Canal'}
+                    {metric === 'ordenes' && 'Órdenes por Canal'}
+                    {metric === 'unidades' && 'Unidades por Canal'}
+                  </CardTitle>
                   <div className="flex gap-1">
                     <Button
                       variant={groupBy === 'day' ? 'default' : 'outline'}
@@ -483,15 +548,26 @@ export default function DashboardPage() {
                         <BarChart data={formattedChartData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                           <XAxis dataKey="displayDate" tick={{ fontSize: 12 }} stroke="#545454" />
-                          <YAxis tick={{ fontSize: 12 }} stroke="#545454" tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
+                          <YAxis
+                            tick={{ fontSize: 12 }}
+                            stroke="#545454"
+                            tickFormatter={(value) =>
+                              metric === 'ventas'
+                                ? `$${(value / 1000).toFixed(0)}k`
+                                : Number(value).toLocaleString()
+                            }
+                          />
                           <Tooltip
-                            formatter={(value) => [formatCurrency(Number(value)), '']}
+                            formatter={(value) => [
+                              metric === 'ventas' ? formatCurrency(Number(value)) : Number(value).toLocaleString(),
+                              '',
+                            ]}
                             contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
                           />
                           <Legend />
-                          <Bar dataKey="shopify" name="Shopify" stackId="a" fill="#1A2238" />
-                          <Bar dataKey="whatsapp" name="WhatsApp" stackId="a" fill="#FFD93D" />
-                          <Bar dataKey="tiendas" name="Tiendas" stackId="a" fill="#1DA9EF" />
+                          <Bar dataKey={`shopify_${metric}`} name="Shopify" stackId="a" fill="#1A2238" />
+                          <Bar dataKey={`whatsapp_${metric}`} name="WhatsApp" stackId="a" fill="#14B8A6" />
+                          <Bar dataKey={`tiendas_${metric}`} name="Tiendas" stackId="a" fill="#1DA9EF" />
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
