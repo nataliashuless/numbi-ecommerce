@@ -17,17 +17,26 @@ export async function GET(request: Request) {
   try {
     const supabase = getAdminClient()
 
-    const { data: cached, error: cacheError } = await supabase
-      .from('siigo_invoices')
-      .select('id, number, prefix, name, date, total, balance, customer_id, customer_identification, observations, items')
-      .gte('date', startDate)
-      .lte('date', endDate)
-      .order('date', { ascending: false })
-      .range(0, 49999)
-
-    if (cacheError) {
-      return NextResponse.json({ error: cacheError.message }, { status: 500 })
+    const allCached: Array<Record<string, unknown>> = []
+    const pageSize = 1000
+    let pageStart = 0
+    for (let i = 0; i < 50; i++) {
+      const { data: page, error: pErr } = await supabase
+        .from('siigo_invoices')
+        .select('id, number, prefix, name, date, total, balance, customer_id, customer_identification, observations, items')
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: false })
+        .range(pageStart, pageStart + pageSize - 1)
+      if (pErr) {
+        return NextResponse.json({ error: pErr.message }, { status: 500 })
+      }
+      if (!page || page.length === 0) break
+      allCached.push(...page)
+      if (page.length < pageSize) break
+      pageStart += pageSize
     }
+    const cached = allCached
 
     type Cached = {
       id: string

@@ -39,17 +39,25 @@ export async function GET(request: Request) {
   try {
     const supabase = getAdminClient()
 
-    const { data: invoicesData, error: invErr } = await supabase
-      .from('siigo_invoices')
-      .select('id, date, total, customer_identification, observations, items')
-      .gte('date', startDate)
-      .lte('date', endDate)
-      .range(0, 49999)
-
-    if (invErr) {
-      return NextResponse.json({ error: invErr.message }, { status: 500 })
+    const allInvoices: CachedInvoice[] = []
+    const pageSize = 1000
+    let pageStart = 0
+    for (let i = 0; i < 50; i++) {
+      const { data: page, error: pErr } = await supabase
+        .from('siigo_invoices')
+        .select('id, date, total, customer_identification, observations, items')
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .range(pageStart, pageStart + pageSize - 1)
+      if (pErr) {
+        return NextResponse.json({ error: pErr.message }, { status: 500 })
+      }
+      if (!page || page.length === 0) break
+      allInvoices.push(...(page as CachedInvoice[]))
+      if (page.length < pageSize) break
+      pageStart += pageSize
     }
-    const invoices = (invoicesData || []) as CachedInvoice[]
+    const invoices = allInvoices
 
     const { data: waVentas } = await supabase
       .from('ventas_whatsapp')

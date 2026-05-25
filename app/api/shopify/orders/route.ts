@@ -15,19 +15,27 @@ export async function GET(request: Request) {
 
   try {
     const supabase = getAdminClient()
-    let query = supabase
-      .from('shopify_orders')
-      .select('id, order_number, name, created_at, total_price, currency, financial_status, fulfillment_status, customer_name, customer_email, item_count')
-      .order('created_at', { ascending: false })
-      .range(0, 49999)
-
-    if (startDate) query = query.gte('created_at', `${startDate}T00:00:00-05:00`)
-    if (endDate) query = query.lte('created_at', `${endDate}T23:59:59-05:00`)
-
-    const { data: ordersRows, error: qErr } = await query
-    if (qErr) {
-      return NextResponse.json({ error: qErr.message }, { status: 500 })
+    const allRows: Array<Record<string, unknown>> = []
+    const pageSize = 1000
+    let pageStart = 0
+    for (let pageIdx = 0; pageIdx < 50; pageIdx++) {
+      let query = supabase
+        .from('shopify_orders')
+        .select('id, order_number, name, created_at, total_price, currency, financial_status, fulfillment_status, customer_name, customer_email, item_count')
+        .order('created_at', { ascending: false })
+        .range(pageStart, pageStart + pageSize - 1)
+      if (startDate) query = query.gte('created_at', `${startDate}T00:00:00-05:00`)
+      if (endDate) query = query.lte('created_at', `${endDate}T23:59:59-05:00`)
+      const { data: page, error: pErr } = await query
+      if (pErr) {
+        return NextResponse.json({ error: pErr.message }, { status: 500 })
+      }
+      if (!page || page.length === 0) break
+      allRows.push(...page)
+      if (page.length < pageSize) break
+      pageStart += pageSize
     }
+    const ordersRows = allRows
 
     type Row = {
       id: number
