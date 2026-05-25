@@ -492,7 +492,7 @@ export default function ConciliacionPage() {
           {siigoStatus && (
             <div>
               <strong>Siigo:</strong> {siigoStatus.cached.toLocaleString()} facturas · {siigoStatus.earliest || '—'} → {siigoStatus.latest || '—'}
-              {siigoStatus.last_sync && ` · sync ${new Date(siigoStatus.last_sync).toLocaleString('es-CO')}`}
+              {siigoStatus.last_sync && ` · sync ${format(new Date(siigoStatus.last_sync), 'yyyy-MM-dd HH:mm')}`}
             </div>
           )}
           {shopifyStatus && (
@@ -500,7 +500,7 @@ export default function ConciliacionPage() {
               <strong>Shopify:</strong> {shopifyStatus.cached.toLocaleString()} órdenes
               {shopifyStatus.earliest && ` · ${shopifyStatus.earliest.slice(0,10)}`}
               {shopifyStatus.latest && ` → ${shopifyStatus.latest.slice(0,10)}`}
-              {shopifyStatus.last_sync && ` · sync ${new Date(shopifyStatus.last_sync).toLocaleString('es-CO')}`}
+              {shopifyStatus.last_sync && ` · sync ${format(new Date(shopifyStatus.last_sync), 'yyyy-MM-dd HH:mm')}`}
             </div>
           )}
         </div>
