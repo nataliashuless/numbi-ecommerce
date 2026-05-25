@@ -23,6 +23,7 @@ export async function GET(request: Request) {
       .gte('date', startDate)
       .lte('date', endDate)
       .order('date', { ascending: false })
+      .limit(50000)
 
     if (cacheError) {
       return NextResponse.json({ error: cacheError.message }, { status: 500 })

@@ -19,6 +19,7 @@ export async function GET(request: Request) {
       .from('shopify_orders')
       .select('id, order_number, name, created_at, total_price, currency, financial_status, fulfillment_status, customer_name, customer_email, item_count')
       .order('created_at', { ascending: false })
+      .limit(50000)
 
     if (startDate) query = query.gte('created_at', `${startDate}T00:00:00-05:00`)
     if (endDate) query = query.lte('created_at', `${endDate}T23:59:59-05:00`)
