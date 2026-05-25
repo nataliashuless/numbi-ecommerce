@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { DateRange } from 'react-day-picker'
-import { format, subDays } from 'date-fns'
+import { format, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -86,10 +86,10 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [shop, setShop] = useState('')
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
-  const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month' | 'quarter'>('day')
+  const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month' | 'quarter'>('month')
 
   useEffect(() => {
-    setDateRange({ from: subDays(new Date(), 30), to: new Date() })
+    setDateRange({ from: subMonths(new Date(), 6), to: new Date() })
   }, [])
 
   async function fetchData() {
