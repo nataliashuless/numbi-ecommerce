@@ -50,12 +50,15 @@ interface ChartPoint {
   shopify_ventas: number
   whatsapp_ventas: number
   tiendas_ventas: number
+  ferias_ventas: number
   shopify_ordenes: number
   whatsapp_ordenes: number
   tiendas_ordenes: number
+  ferias_ordenes: number
   shopify_unidades: number
   whatsapp_unidades: number
   tiendas_unidades: number
+  ferias_unidades: number
 }
 
 type Metric = 'ventas' | 'ordenes' | 'unidades'
@@ -64,6 +67,7 @@ interface ConsolidatedData {
   shopify: ChannelStats
   whatsapp: ChannelStats
   tiendas: ChannelStats
+  ferias: ChannelStats
   total: ChannelStats
   chartData: ChartPoint[]
 }
@@ -77,7 +81,9 @@ function formatCurrency(value: number): string {
   }).format(value)
 }
 
-const COLORS = ['#1A2238', '#14B8A6', '#1DA9EF']
+const COLORS = ['#1A2238', '#14B8A6', '#1DA9EF', '#F59E0B']
+
+const FERIA_COLOR = '#F59E0B'
 
 function getGroupKey(dateStr: string, groupBy: 'day' | 'week' | 'month' | 'quarter'): string {
   const date = new Date(dateStr + 'T12:00:00')
@@ -117,14 +123,24 @@ export default function DashboardPage() {
       const startDate = format(dateRange.from, 'yyyy-MM-dd')
       const endDate = format(dateRange.to, 'yyyy-MM-dd')
 
-      // Shopify orders for matching + their own totals; Siigo invoices for tiendas + whatsapp
-      const [shopifyRes, siigoRes] = await Promise.all([
+      // Shopify orders for matching + their own totals; Siigo invoices for tiendas + whatsapp;
+      // ferias for date-window classification (Siigo invoices in a feria window become 'feria')
+      const [shopifyRes, siigoRes, feriasRes] = await Promise.all([
         fetch(`/api/shopify/orders?start_date=${startDate}&end_date=${endDate}&group_by=day`),
         fetch(`/api/siigo/invoices?start_date=${startDate}&end_date=${endDate}`),
+        fetch('/api/ferias'),
       ])
 
       const shopifyData = shopifyRes.ok ? await shopifyRes.json() : null
       const siigoData = siigoRes.ok ? await siigoRes.json() : null
+      const feriasData = feriasRes.ok ? await feriasRes.json() : null
+
+      type FeriaWindow = { id: string; nombre: string; fecha_inicio: string; fecha_fin: string; activa: boolean }
+      const feriaWindows: FeriaWindow[] = (feriasData?.ferias || []).filter((f: FeriaWindow) => f.activa)
+      const isFeriaDate = (dateStr: string): boolean => {
+        const d = dateStr.slice(0, 10)
+        return feriaWindows.some(f => d >= f.fecha_inicio && d <= f.fecha_fin)
+      }
 
       if (shopifyData?.shop) {
         setShop(shopifyData.shop)
@@ -157,12 +173,15 @@ export default function DashboardPage() {
       }
 
       const tiendaInvoices = siigoInvoices.filter(i => i.tienda_id)
-      const whatsappInvoices = siigoInvoices.filter(i => {
+      // "Direct" sales = not tienda, not shopify-matched. These split into feria vs whatsapp by date.
+      const directInvoices = siigoInvoices.filter(i => {
         if (i.tienda_id) return false
         const orderNum = extractOrderNum(i.observations)
         if (orderNum && shopifyOrderNumbers.has(orderNum)) return false
         return true
       })
+      const feriaInvoices = directInvoices.filter(i => isFeriaDate(i.date))
+      const whatsappInvoices = directInvoices.filter(i => !isFeriaDate(i.date))
 
       const sumUnits = (invs: SiigoInv[]) =>
         invs.reduce(
@@ -186,21 +205,29 @@ export default function DashboardPage() {
         unidades: sumUnits(whatsappInvoices),
       }
 
+      const feriasStats: ChannelStats = {
+        ventas: feriaInvoices.reduce((s, i) => s + (i.total || 0), 0),
+        ordenes: feriaInvoices.length,
+        unidades: sumUnits(feriaInvoices),
+      }
+
       const totalStats: ChannelStats = {
-        ventas: shopifyStats.ventas + whatsappStats.ventas + tiendasStats.ventas,
-        ordenes: shopifyStats.ordenes + whatsappStats.ordenes + tiendasStats.ordenes,
-        unidades: shopifyStats.unidades + whatsappStats.unidades + tiendasStats.unidades,
+        ventas: shopifyStats.ventas + whatsappStats.ventas + tiendasStats.ventas + feriasStats.ventas,
+        ordenes: shopifyStats.ordenes + whatsappStats.ordenes + tiendasStats.ordenes + feriasStats.ordenes,
+        unidades: shopifyStats.unidades + whatsappStats.unidades + tiendasStats.unidades + feriasStats.unidades,
       }
 
       type Bucket = {
         shopify_ventas: number; shopify_ordenes: number; shopify_unidades: number
         whatsapp_ventas: number; whatsapp_ordenes: number; whatsapp_unidades: number
         tiendas_ventas: number; tiendas_ordenes: number; tiendas_unidades: number
+        ferias_ventas: number; ferias_ordenes: number; ferias_unidades: number
       }
       const empty = (): Bucket => ({
         shopify_ventas: 0, shopify_ordenes: 0, shopify_unidades: 0,
         whatsapp_ventas: 0, whatsapp_ordenes: 0, whatsapp_unidades: 0,
         tiendas_ventas: 0, tiendas_ordenes: 0, tiendas_unidades: 0,
+        ferias_ventas: 0, ferias_ordenes: 0, ferias_unidades: 0,
       })
       const chartDataMap: Record<string, Bucket> = {}
 
@@ -231,6 +258,14 @@ export default function DashboardPage() {
         chartDataMap[key].whatsapp_unidades += itemUnits(inv.items || [])
       })
 
+      feriaInvoices.forEach(inv => {
+        const key = getGroupKey(inv.date, groupBy)
+        if (!chartDataMap[key]) chartDataMap[key] = empty()
+        chartDataMap[key].ferias_ventas += inv.total || 0
+        chartDataMap[key].ferias_ordenes += 1
+        chartDataMap[key].ferias_unidades += itemUnits(inv.items || [])
+      })
+
       const chartData: ChartPoint[] = Object.entries(chartDataMap)
         .map(([date, values]) => ({ date, ...values }))
         .sort((a, b) => a.date.localeCompare(b.date))
@@ -239,6 +274,7 @@ export default function DashboardPage() {
         shopify: shopifyStats,
         whatsapp: whatsappStats,
         tiendas: tiendasStats,
+        ferias: feriasStats,
         total: totalStats,
         chartData,
       })
@@ -259,6 +295,7 @@ export default function DashboardPage() {
     { name: 'Shopify', value: data.shopify.ventas, color: '#1A2238' },
     { name: 'WhatsApp', value: data.whatsapp.ventas, color: '#14B8A6' },
     { name: 'Tiendas', value: data.tiendas.ventas, color: '#1DA9EF' },
+    { name: 'Ferias', value: data.ferias.ventas, color: FERIA_COLOR },
   ].filter(d => d.value > 0) : []
 
   const formattedChartData = data?.chartData.map(d => {
@@ -462,7 +499,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Channel Breakdown */}
-            <div className="grid gap-4 md:grid-cols-3 mb-8">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
               <Link href="/dashboard/shopify">
                 <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-[#1A2238]">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -498,6 +535,19 @@ export default function DashboardPage() {
                   <CardContent>
                     <div className="text-2xl font-bold text-[#1A2238]">{formatCurrency(data?.tiendas.ventas || 0)}</div>
                     <p className="text-xs text-[#545454]">{data?.tiendas.ordenes || 0} ventas pendientes</p>
+                  </CardContent>
+                </Card>
+              </Link>
+
+              <Link href="/dashboard/ferias">
+                <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-[#F59E0B]">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-[#545454]">Ferias</CardTitle>
+                    <Tent className="h-4 w-4 text-[#F59E0B]" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-[#1A2238]">{formatCurrency(data?.ferias.ventas || 0)}</div>
+                    <p className="text-xs text-[#545454]">{data?.ferias.ordenes || 0} ventas · {data?.ferias.unidades || 0} unidades</p>
                   </CardContent>
                 </Card>
               </Link>
@@ -595,6 +645,7 @@ export default function DashboardPage() {
                           <Bar dataKey={`shopify_${metric}`} name="Shopify" stackId="a" fill="#1A2238" />
                           <Bar dataKey={`whatsapp_${metric}`} name="WhatsApp" stackId="a" fill="#14B8A6" />
                           <Bar dataKey={`tiendas_${metric}`} name="Tiendas" stackId="a" fill="#1DA9EF" />
+                          <Bar dataKey={`ferias_${metric}`} name="Ferias" stackId="a" fill="#F59E0B" />
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
