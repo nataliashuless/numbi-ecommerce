@@ -91,6 +91,8 @@ interface ForecastItem {
   sku: string
   producto: string
   variante: string
+  size: string | null
+  description: string
   imagen: string | null
   stockBodega: number
   stockConsignado: number
@@ -106,10 +108,25 @@ interface ForecastItem {
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
 }
 
+interface ForecastReference {
+  reference: string
+  variantCount: number
+  stockBodega: number
+  stockConsignado: number
+  stockTotal: number
+  ventasTotal: number
+  velocidadDiaria: number
+  sugerenciaProduccion: number
+  prioridad: 'critica' | 'alta' | 'media' | 'baja'
+  variants: ForecastItem[]
+}
+
 interface ForecastData {
   forecast: ForecastItem[]
+  referencias: ForecastReference[]
   resumen: {
     totalSkus: number
+    totalReferencias: number
     criticos: number
     altos: number
     medios: number
@@ -158,8 +175,17 @@ export default function InventarioPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [expandedRefs, setExpandedRefs] = useState<Set<string>>(new Set())
   const [tiendasExpanded, setTiendasExpanded] = useState(false)
+  const [expandedForecastRefs, setExpandedForecastRefs] = useState<Set<string>>(new Set())
   function toggleRef(reference: string) {
     setExpandedRefs(prev => {
+      const next = new Set(prev)
+      if (next.has(reference)) next.delete(reference)
+      else next.add(reference)
+      return next
+    })
+  }
+  function toggleForecastRef(reference: string) {
+    setExpandedForecastRefs(prev => {
       const next = new Set(prev)
       if (next.has(reference)) next.delete(reference)
       else next.add(reference)
@@ -834,112 +860,213 @@ export default function InventarioPage() {
                   </CardContent>
                 </Card>
 
-                {/* Forecast Table */}
+                {/* Forecast Table grouped by reference */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg">Forecast de Produccion</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="min-w-[200px]">Producto</TableHead>
-                            <TableHead>SKU</TableHead>
-                            <TableHead className="text-center">Stock Bodega</TableHead>
-                            <TableHead className="text-center">Ventas ({diasAnalisis}d)</TableHead>
-                            <TableHead className="text-center">Vel. Semanal</TableHead>
-                            <TableHead className="text-center">Dias Restantes</TableHead>
-                            <TableHead className="text-center">Prioridad</TableHead>
-                            <TableHead className="text-center bg-green-50">Producir</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {filteredForecast.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={8} className="text-center py-8 text-[#545454]">
-                                No hay productos que mostrar
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            filteredForecast.map((item) => (
-                              <TableRow key={item.sku} className={item.prioridad === 'critica' ? 'bg-red-50' : item.prioridad === 'alta' ? 'bg-orange-50' : ''}>
-                                <TableCell>
-                                  <div className="flex items-center gap-3">
-                                    {item.imagen && (
-                                      <img
-                                        src={item.imagen}
-                                        alt={item.producto}
-                                        className="w-10 h-10 object-cover rounded"
-                                      />
-                                    )}
-                                    <div>
-                                      <div className="font-medium text-[#1A2238]">{item.producto}</div>
-                                      {item.variante && (
-                                        <div className="text-sm text-[#545454]">{item.variante}</div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="font-mono text-sm text-[#545454]">{item.sku}</TableCell>
-                                <TableCell className="text-center">
-                                  {getInventoryBadge(item.stockBodega)}
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <div className="text-sm">
-                                    <span className="font-medium">{item.ventasTotal}</span>
-                                    {item.ventasTotal > 0 && (
-                                      <div className="text-xs text-[#545454]">
-                                        S:{item.ventasShopify} W:{item.ventasWhatsApp} T:{item.ventasTiendas}
-                                      </div>
-                                    )}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <span className="font-medium">{item.velocidadSemanal.toFixed(1)}</span>
-                                  <span className="text-xs text-[#545454]"> uds/sem</span>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  {item.diasHastaAgotamiento !== null ? (
-                                    <span className={`font-bold ${item.diasHastaAgotamiento <= 7 ? 'text-red-600' : item.diasHastaAgotamiento <= 14 ? 'text-orange-600' : 'text-[#1A2238]'}`}>
-                                      {item.diasHastaAgotamiento} dias
-                                    </span>
-                                  ) : (
-                                    <span className="text-[#545454]">-</span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  {getPriorityBadge(item.prioridad)}
-                                </TableCell>
-                                <TableCell className="text-center bg-green-50/50">
-                                  {item.sugerenciaProduccion > 0 ? (
-                                    <span className="font-bold text-green-700">{item.sugerenciaProduccion}</span>
-                                  ) : (
-                                    <span className="text-[#545454]">-</span>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
+                    {(() => {
+                      const allRefs = forecastData.referencias || []
+                      const searchLowerF = forecastSearchTerm.toLowerCase()
+                      const filteredRefs: ForecastReference[] = allRefs
+                        .map(r => {
+                          // Filter variants by priority + search
+                          const refMatches = !searchLowerF || r.reference.toLowerCase().includes(searchLowerF)
+                          const variants = r.variants.filter(v => {
+                            if (forecastFilter !== 'all' && v.prioridad !== forecastFilter) return false
+                            if (refMatches) return true
+                            return (
+                              v.sku.toLowerCase().includes(searchLowerF) ||
+                              v.description.toLowerCase().includes(searchLowerF) ||
+                              (v.size || '').toLowerCase().includes(searchLowerF)
+                            )
+                          })
+                          if (variants.length === 0) return null
+                          // Recompute aggregates from filtered variants
+                          const aggregated: ForecastReference = {
+                            reference: r.reference,
+                            variantCount: variants.length,
+                            stockBodega: variants.reduce((s, v) => s + v.stockBodega, 0),
+                            stockConsignado: variants.reduce((s, v) => s + v.stockConsignado, 0),
+                            stockTotal: variants.reduce((s, v) => s + v.stockTotal, 0),
+                            ventasTotal: variants.reduce((s, v) => s + v.ventasTotal, 0),
+                            velocidadDiaria: Math.round(variants.reduce((s, v) => s + v.velocidadDiaria, 0) * 100) / 100,
+                            sugerenciaProduccion: variants.reduce((s, v) => s + v.sugerenciaProduccion, 0),
+                            prioridad: r.prioridad,
+                            variants,
+                          }
+                          return aggregated
+                        })
+                        .filter((r): r is ForecastReference => r !== null)
 
-                    {filteredForecast.length > 0 && (
-                      <div className="mt-4 pt-4 border-t">
-                        <div className="flex justify-between items-center text-sm">
-                          <div className="text-[#545454]">
-                            Formula: Producir = (Lead Time + Stock Seguridad) x Velocidad Diaria - Stock Actual
+                      return (
+                        <>
+                          <div className="overflow-x-auto">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="w-8"></TableHead>
+                                  <TableHead className="min-w-[200px]">Referencia / Talla</TableHead>
+                                  <TableHead className="text-center">Bodega</TableHead>
+                                  <TableHead className="text-center">Consignado</TableHead>
+                                  <TableHead className="text-center">Total Stock</TableHead>
+                                  <TableHead className="text-center">Ventas ({diasAnalisis}d)</TableHead>
+                                  <TableHead className="text-center">Vel. Semanal</TableHead>
+                                  <TableHead className="text-center">Días Restantes</TableHead>
+                                  <TableHead className="text-center">Prioridad</TableHead>
+                                  <TableHead className="text-center bg-green-50">Producir</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {filteredRefs.length === 0 ? (
+                                  <TableRow>
+                                    <TableCell colSpan={10} className="text-center py-8 text-[#545454]">
+                                      No hay productos que mostrar
+                                    </TableCell>
+                                  </TableRow>
+                                ) : (
+                                  filteredRefs.map(r => {
+                                    const isExpanded = expandedForecastRefs.has(r.reference)
+                                    const rowBg = r.prioridad === 'critica' ? 'bg-red-50' : r.prioridad === 'alta' ? 'bg-orange-50' : ''
+                                    const diasParent = r.velocidadDiaria > 0 ? Math.round(r.stockTotal / r.velocidadDiaria) : null
+                                    return (
+                                      <Fragment key={r.reference}>
+                                        <TableRow
+                                          className={`cursor-pointer hover:bg-gray-50 ${rowBg}`}
+                                          onClick={() => toggleForecastRef(r.reference)}
+                                        >
+                                          <TableCell className="w-8">
+                                            {r.variantCount > 1 && (
+                                              isExpanded
+                                                ? <ChevronDown className="h-4 w-4 text-[#545454]" />
+                                                : <ChevronRight className="h-4 w-4 text-[#545454]" />
+                                            )}
+                                          </TableCell>
+                                          <TableCell>
+                                            <div className="font-medium text-[#1A2238]">{r.reference}</div>
+                                            {r.variantCount > 1 && (
+                                              <div className="text-xs text-[#545454]">{r.variantCount} tallas</div>
+                                            )}
+                                          </TableCell>
+                                          <TableCell className="text-center">{getInventoryBadge(r.stockBodega)}</TableCell>
+                                          <TableCell className="text-center">
+                                            {r.stockConsignado > 0 ? (
+                                              <Badge variant="secondary">{r.stockConsignado}</Badge>
+                                            ) : (
+                                              <span className="text-[#D1D5DB]">—</span>
+                                            )}
+                                          </TableCell>
+                                          <TableCell className="text-center font-medium">{r.stockTotal}</TableCell>
+                                          <TableCell className="text-center font-medium">{r.ventasTotal}</TableCell>
+                                          <TableCell className="text-center">
+                                            <span className="font-medium">{(r.velocidadDiaria * 7).toFixed(1)}</span>
+                                            <span className="text-xs text-[#545454]"> uds/sem</span>
+                                          </TableCell>
+                                          <TableCell className="text-center">
+                                            {diasParent !== null ? (
+                                              <span className={`font-bold ${diasParent <= 7 ? 'text-red-600' : diasParent <= 14 ? 'text-orange-600' : 'text-[#1A2238]'}`}>
+                                                {diasParent} días
+                                              </span>
+                                            ) : (
+                                              <span className="text-[#545454]">—</span>
+                                            )}
+                                          </TableCell>
+                                          <TableCell className="text-center">
+                                            {getPriorityBadge(r.prioridad)}
+                                          </TableCell>
+                                          <TableCell className="text-center bg-green-50/50">
+                                            {r.sugerenciaProduccion > 0 ? (
+                                              <span className="font-bold text-green-700">{r.sugerenciaProduccion}</span>
+                                            ) : (
+                                              <span className="text-[#545454]">—</span>
+                                            )}
+                                          </TableCell>
+                                        </TableRow>
+
+                                        {isExpanded && r.variants.map(v => {
+                                          const varBg = v.prioridad === 'critica' ? 'bg-red-50/50' : v.prioridad === 'alta' ? 'bg-orange-50/40' : 'bg-gray-50/40'
+                                          return (
+                                            <TableRow key={`${r.reference}-${v.sku}`} className={varBg}>
+                                              <TableCell></TableCell>
+                                              <TableCell className="pl-8">
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-xs bg-white border rounded px-1.5 py-0.5 font-mono text-[#545454]">{v.sku}</span>
+                                                  <span className="text-sm text-[#1A2238]">
+                                                    {v.size ? `Talla ${v.size}` : v.description}
+                                                  </span>
+                                                </div>
+                                              </TableCell>
+                                              <TableCell className="text-center">{getInventoryBadge(v.stockBodega)}</TableCell>
+                                              <TableCell className="text-center">
+                                                {v.stockConsignado > 0 ? (
+                                                  <Badge variant="secondary" className="text-xs">{v.stockConsignado}</Badge>
+                                                ) : (
+                                                  <span className="text-[#D1D5DB]">—</span>
+                                                )}
+                                              </TableCell>
+                                              <TableCell className="text-center text-sm">{v.stockTotal}</TableCell>
+                                              <TableCell className="text-center">
+                                                <div className="text-sm">
+                                                  <span className="font-medium">{v.ventasTotal}</span>
+                                                  {v.ventasTotal > 0 && (
+                                                    <div className="text-xs text-[#545454]">
+                                                      S:{v.ventasShopify} W:{v.ventasWhatsApp} T:{v.ventasTiendas}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </TableCell>
+                                              <TableCell className="text-center text-sm">
+                                                <span className="font-medium">{v.velocidadSemanal.toFixed(1)}</span>
+                                              </TableCell>
+                                              <TableCell className="text-center">
+                                                {v.diasHastaAgotamiento !== null ? (
+                                                  <span className={`font-bold text-sm ${v.diasHastaAgotamiento <= 7 ? 'text-red-600' : v.diasHastaAgotamiento <= 14 ? 'text-orange-600' : 'text-[#1A2238]'}`}>
+                                                    {v.diasHastaAgotamiento} d
+                                                  </span>
+                                                ) : (
+                                                  <span className="text-[#545454]">—</span>
+                                                )}
+                                              </TableCell>
+                                              <TableCell className="text-center">
+                                                {getPriorityBadge(v.prioridad)}
+                                              </TableCell>
+                                              <TableCell className="text-center bg-green-50/30">
+                                                {v.sugerenciaProduccion > 0 ? (
+                                                  <span className="font-bold text-green-700 text-sm">{v.sugerenciaProduccion}</span>
+                                                ) : (
+                                                  <span className="text-[#545454]">—</span>
+                                                )}
+                                              </TableCell>
+                                            </TableRow>
+                                          )
+                                        })}
+                                      </Fragment>
+                                    )
+                                  })
+                                )}
+                              </TableBody>
+                            </Table>
                           </div>
-                          <div>
-                            <span className="text-[#545454]">Total a producir: </span>
-                            <span className="font-bold text-green-600">
-                              {filteredForecast.reduce((sum, f) => sum + f.sugerenciaProduccion, 0).toLocaleString()} uds
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+
+                          {filteredRefs.length > 0 && (
+                            <div className="mt-4 pt-4 border-t">
+                              <div className="flex justify-between items-center text-sm">
+                                <div className="text-[#545454]">
+                                  Producir = (Lead Time + Stock Seguridad) × Vel. Diaria − (Bodega + Consignado)
+                                </div>
+                                <div>
+                                  <span className="text-[#545454]">Total a producir: </span>
+                                  <span className="font-bold text-green-600">
+                                    {filteredRefs.reduce((sum, r) => sum + r.sugerenciaProduccion, 0).toLocaleString()} uds
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )
+                    })()}
                   </CardContent>
                 </Card>
               </>
