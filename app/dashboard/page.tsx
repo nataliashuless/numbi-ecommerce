@@ -558,11 +558,31 @@ export default function DashboardPage() {
                             }
                           />
                           <Tooltip
-                            formatter={(value) => [
-                              metric === 'ventas' ? formatCurrency(Number(value)) : Number(value).toLocaleString(),
-                              '',
-                            ]}
-                            contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                            content={(props: { active?: boolean; payload?: Array<{ name: string; value: number; color: string; dataKey: string }>; label?: string }) => {
+                              const { active, payload, label } = props
+                              if (!active || !payload || payload.length === 0) return null
+                              const formatVal = (v: number) =>
+                                metric === 'ventas' ? formatCurrency(v) : v.toLocaleString()
+                              const total = payload.reduce((s, p) => s + (Number(p.value) || 0), 0)
+                              return (
+                                <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-md text-sm">
+                                  <div className="font-semibold text-[#1A2238] mb-2">{label}</div>
+                                  {payload.map(p => (
+                                    <div key={p.dataKey} className="flex items-center justify-between gap-6 py-0.5">
+                                      <div className="flex items-center gap-2">
+                                        <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: p.color }} />
+                                        <span style={{ color: p.color }}>{p.name}</span>
+                                      </div>
+                                      <span className="font-mono">{formatVal(Number(p.value) || 0)}</span>
+                                    </div>
+                                  ))}
+                                  <div className="border-t border-gray-200 mt-2 pt-2 flex items-center justify-between gap-6 font-bold text-[#1A2238]">
+                                    <span>Total</span>
+                                    <span className="font-mono">{formatVal(total)}</span>
+                                  </div>
+                                </div>
+                              )
+                            }}
                           />
                           <Legend />
                           <Bar dataKey={`shopify_${metric}`} name="Shopify" stackId="a" fill="#1A2238" />
