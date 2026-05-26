@@ -45,6 +45,7 @@ import {
   FileText,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -156,6 +157,7 @@ export default function InventarioPage() {
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [expandedRefs, setExpandedRefs] = useState<Set<string>>(new Set())
+  const [tiendasExpanded, setTiendasExpanded] = useState(false)
   function toggleRef(reference: string) {
     setExpandedRefs(prev => {
       const next = new Set(prev)
@@ -508,11 +510,39 @@ export default function InventarioPage() {
                         <TableHead className="w-8"></TableHead>
                         <TableHead className="min-w-[200px]">Referencia / SKU</TableHead>
                         <TableHead className="text-center bg-blue-50">Bodega</TableHead>
-                        {tiendas.map(tienda => (
-                          <TableHead key={tienda.id} className="text-center bg-purple-50 min-w-[80px]">
-                            {tienda.nombre.length > 12 ? tienda.nombre.substring(0, 12) + '…' : tienda.nombre}
+                        {tiendasExpanded ? (
+                          <>
+                            {tiendas.map(tienda => (
+                              <TableHead key={tienda.id} className="text-center bg-purple-50 min-w-[80px]">
+                                {tienda.nombre.length > 12 ? tienda.nombre.substring(0, 12) + '…' : tienda.nombre}
+                              </TableHead>
+                            ))}
+                            <TableHead className="text-center bg-purple-50 w-8">
+                              <button
+                                type="button"
+                                onClick={() => setTiendasExpanded(false)}
+                                title="Colapsar tiendas"
+                                className="text-purple-600 hover:text-purple-800"
+                              >
+                                <ChevronLeft className="h-4 w-4" />
+                              </button>
+                            </TableHead>
+                          </>
+                        ) : (
+                          <TableHead className="text-center bg-purple-50">
+                            <div className="inline-flex items-center gap-1">
+                              <span>Tiendas ({tiendas.length})</span>
+                              <button
+                                type="button"
+                                onClick={() => setTiendasExpanded(true)}
+                                title="Expandir tiendas"
+                                className="text-purple-600 hover:text-purple-800"
+                              >
+                                <ChevronRight className="h-4 w-4" />
+                              </button>
+                            </div>
                           </TableHead>
-                        ))}
+                        )}
                         <TableHead className="text-center bg-green-50">Total</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -548,15 +578,28 @@ export default function InventarioPage() {
                                 <TableCell className="text-center bg-blue-50/50">
                                   {getInventoryBadge(r.bodega)}
                                 </TableCell>
-                                {tiendas.map(tienda => (
-                                  <TableCell key={tienda.id} className="text-center bg-purple-50/50">
-                                    {r.tiendas[tienda.id] > 0 ? (
-                                      <Badge variant="secondary">{r.tiendas[tienda.id]}</Badge>
+                                {tiendasExpanded ? (
+                                  <>
+                                    {tiendas.map(tienda => (
+                                      <TableCell key={tienda.id} className="text-center bg-purple-50/50">
+                                        {r.tiendas[tienda.id] > 0 ? (
+                                          <Badge variant="secondary">{r.tiendas[tienda.id]}</Badge>
+                                        ) : (
+                                          <span className="text-[#D1D5DB]">—</span>
+                                        )}
+                                      </TableCell>
+                                    ))}
+                                    <TableCell></TableCell>
+                                  </>
+                                ) : (
+                                  <TableCell className="text-center bg-purple-50/50">
+                                    {r.totalConsignado > 0 ? (
+                                      <Badge variant="secondary">{r.totalConsignado}</Badge>
                                     ) : (
                                       <span className="text-[#D1D5DB]">—</span>
                                     )}
                                   </TableCell>
-                                ))}
+                                )}
                                 <TableCell className="text-center bg-green-50/50">
                                   {getInventoryBadge(r.total)}
                                 </TableCell>
@@ -576,15 +619,28 @@ export default function InventarioPage() {
                                   <TableCell className="text-center bg-blue-50/30">
                                     {getInventoryBadge(v.bodega)}
                                   </TableCell>
-                                  {tiendas.map(tienda => (
-                                    <TableCell key={tienda.id} className="text-center bg-purple-50/30">
-                                      {v.tiendas[tienda.id] > 0 ? (
-                                        <Badge variant="secondary" className="text-xs">{v.tiendas[tienda.id]}</Badge>
+                                  {tiendasExpanded ? (
+                                    <>
+                                      {tiendas.map(tienda => (
+                                        <TableCell key={tienda.id} className="text-center bg-purple-50/30">
+                                          {v.tiendas[tienda.id] > 0 ? (
+                                            <Badge variant="secondary" className="text-xs">{v.tiendas[tienda.id]}</Badge>
+                                          ) : (
+                                            <span className="text-[#D1D5DB]">—</span>
+                                          )}
+                                        </TableCell>
+                                      ))}
+                                      <TableCell></TableCell>
+                                    </>
+                                  ) : (
+                                    <TableCell className="text-center bg-purple-50/30">
+                                      {v.totalConsignado > 0 ? (
+                                        <Badge variant="secondary" className="text-xs">{v.totalConsignado}</Badge>
                                       ) : (
                                         <span className="text-[#D1D5DB]">—</span>
                                       )}
                                     </TableCell>
-                                  ))}
+                                  )}
                                   <TableCell className="text-center bg-green-50/30">
                                     {getInventoryBadge(v.total)}
                                   </TableCell>
