@@ -201,6 +201,7 @@ export default function InventarioPage() {
   const [diasAnalisis, setDiasAnalisis] = useState('30')
   const [leadTime, setLeadTime] = useState('14')
   const [stockSeguridad, setStockSeguridad] = useState('7')
+  const [incluirConsignado, setIncluirConsignado] = useState(true)
 
   useEffect(() => {
     async function fetchInventario() {
@@ -810,6 +811,30 @@ export default function InventarioPage() {
                         Recalcular
                       </Button>
                     </div>
+                    <div className="mt-4 pt-4 border-t flex items-center gap-3 flex-wrap">
+                      <Label className="text-sm">Stock para descontar:</Label>
+                      <div className="flex border rounded-md text-sm overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setIncluirConsignado(true)}
+                          className={`px-3 py-1.5 ${incluirConsignado ? 'bg-[#1DA9EF] text-white font-medium' : 'bg-white text-[#545454] hover:bg-gray-50'}`}
+                        >
+                          Bodega + Consignado en tiendas
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIncluirConsignado(false)}
+                          className={`px-3 py-1.5 border-l ${!incluirConsignado ? 'bg-[#1DA9EF] text-white font-medium' : 'bg-white text-[#545454] hover:bg-gray-50'}`}
+                        >
+                          Solo bodega
+                        </button>
+                      </div>
+                      <p className="text-xs text-[#545454]">
+                        {incluirConsignado
+                          ? 'Asume que el stock consignado se va a vender — no produce de más.'
+                          : 'Más conservador — produce para reabastecer bodega ignorando consignado.'}
+                      </p>
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -869,21 +894,59 @@ export default function InventarioPage() {
                     {(() => {
                       const allRefs = forecastData.referencias || []
                       const searchLowerF = forecastSearchTerm.toLowerCase()
+                      const leadDays = parseInt(leadTime) || 14
+                      const safetyDays = parseInt(stockSeguridad) || 7
+
+                      // Recalc per variant based on the toggle: stock for production decision
+                      const recalcVariant = (v: ForecastItem): ForecastItem => {
+                        const stockBase = incluirConsignado
+                          ? v.stockBodega + v.stockConsignado
+                          : v.stockBodega
+                        const stockNecesario = Math.ceil(v.velocidadDiaria * (leadDays + safetyDays))
+                        const sugerencia = v.velocidadDiaria > 0
+                          ? Math.max(0, stockNecesario - stockBase)
+                          : 0
+                        let dias: number | null = null
+                        if (v.velocidadDiaria > 0 && stockBase > 0) {
+                          dias = Math.round(stockBase / v.velocidadDiaria)
+                        } else if (v.velocidadDiaria > 0 && stockBase === 0) {
+                          dias = 0
+                        }
+                        let prioridad: ForecastItem['prioridad'] = 'baja'
+                        if (dias !== null) {
+                          if (dias <= 7) prioridad = 'critica'
+                          else if (dias <= 14) prioridad = 'alta'
+                          else if (dias <= 30) prioridad = 'media'
+                        }
+                        return {
+                          ...v,
+                          sugerenciaProduccion: sugerencia,
+                          diasHastaAgotamiento: dias,
+                          prioridad,
+                        }
+                      }
+
                       const filteredRefs: ForecastReference[] = allRefs
                         .map(r => {
-                          // Filter variants by priority + search
                           const refMatches = !searchLowerF || r.reference.toLowerCase().includes(searchLowerF)
-                          const variants = r.variants.filter(v => {
-                            if (forecastFilter !== 'all' && v.prioridad !== forecastFilter) return false
-                            if (refMatches) return true
-                            return (
-                              v.sku.toLowerCase().includes(searchLowerF) ||
-                              v.description.toLowerCase().includes(searchLowerF) ||
-                              (v.size || '').toLowerCase().includes(searchLowerF)
-                            )
-                          })
+                          const variants = r.variants
+                            .map(recalcVariant)
+                            .filter(v => {
+                              if (forecastFilter !== 'all' && v.prioridad !== forecastFilter) return false
+                              if (refMatches) return true
+                              return (
+                                v.sku.toLowerCase().includes(searchLowerF) ||
+                                v.description.toLowerCase().includes(searchLowerF) ||
+                                (v.size || '').toLowerCase().includes(searchLowerF)
+                              )
+                            })
                           if (variants.length === 0) return null
-                          // Recompute aggregates from filtered variants
+                          // Worst priority across variants
+                          const order = { critica: 0, alta: 1, media: 2, baja: 3 } as const
+                          let worst: ForecastItem['prioridad'] = 'baja'
+                          for (const v of variants) {
+                            if (order[v.prioridad] < order[worst]) worst = v.prioridad
+                          }
                           const aggregated: ForecastReference = {
                             reference: r.reference,
                             variantCount: variants.length,
@@ -893,7 +956,7 @@ export default function InventarioPage() {
                             ventasTotal: variants.reduce((s, v) => s + v.ventasTotal, 0),
                             velocidadDiaria: Math.round(variants.reduce((s, v) => s + v.velocidadDiaria, 0) * 100) / 100,
                             sugerenciaProduccion: variants.reduce((s, v) => s + v.sugerenciaProduccion, 0),
-                            prioridad: r.prioridad,
+                            prioridad: worst,
                             variants,
                           }
                           return aggregated
@@ -929,7 +992,8 @@ export default function InventarioPage() {
                                   filteredRefs.map(r => {
                                     const isExpanded = expandedForecastRefs.has(r.reference)
                                     const rowBg = r.prioridad === 'critica' ? 'bg-red-50' : r.prioridad === 'alta' ? 'bg-orange-50' : ''
-                                    const diasParent = r.velocidadDiaria > 0 ? Math.round(r.stockTotal / r.velocidadDiaria) : null
+                                    const stockBaseParent = incluirConsignado ? r.stockTotal : r.stockBodega
+                                    const diasParent = r.velocidadDiaria > 0 ? Math.round(stockBaseParent / r.velocidadDiaria) : null
                                     return (
                                       <Fragment key={r.reference}>
                                         <TableRow
