@@ -559,7 +559,7 @@ export default function DashboardPage() {
                           />
                           <Tooltip
                             content={(props) => {
-                              const { active, payload, label } = props as { active?: boolean; payload?: Array<{ name: string; value: number; color: string; dataKey: string }>; label?: string }
+                              const { active, payload, label } = props as unknown as { active?: boolean; payload?: Array<{ name: string; value: number; color: string; dataKey: string }>; label?: string }
                               if (!active || !payload || payload.length === 0) return null
                               const formatVal = (v: number) =>
                                 metric === 'ventas' ? formatCurrency(v) : v.toLocaleString()
