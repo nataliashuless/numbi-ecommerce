@@ -163,6 +163,7 @@ export default function DashboardPage() {
         tienda_id: string | null
         observations: string
         items: SiigoItem[]
+        assigned_feria_id: string | null
       }
       const siigoInvoices: SiigoInv[] = siigoData?.invoices || []
 
@@ -172,15 +173,24 @@ export default function DashboardPage() {
         return m ? parseInt(m[1], 10) : null
       }
 
-      const tiendaInvoices = siigoInvoices.filter(i => i.tienda_id)
+      // Priority rules for classification:
+      // 1) assigned_feria_id present → 'feria' (manual override always wins)
+      // 2) tienda_id present → 'tienda'
+      // 3) #orderNumber matches a Shopify order → 'shopify' (already counted via Shopify side)
+      // 4) date within an active feria window → 'feria'
+      // 5) else → 'whatsapp'
+      const manualFeriaInvoices = siigoInvoices.filter(i => i.assigned_feria_id)
+      const restAfterManual = siigoInvoices.filter(i => !i.assigned_feria_id)
+      const tiendaInvoices = restAfterManual.filter(i => i.tienda_id)
       // "Direct" sales = not tienda, not shopify-matched. These split into feria vs whatsapp by date.
-      const directInvoices = siigoInvoices.filter(i => {
+      const directInvoices = restAfterManual.filter(i => {
         if (i.tienda_id) return false
         const orderNum = extractOrderNum(i.observations)
         if (orderNum && shopifyOrderNumbers.has(orderNum)) return false
         return true
       })
-      const feriaInvoices = directInvoices.filter(i => isFeriaDate(i.date))
+      const windowFeriaInvoices = directInvoices.filter(i => isFeriaDate(i.date))
+      const feriaInvoices = [...manualFeriaInvoices, ...windowFeriaInvoices]
       const whatsappInvoices = directInvoices.filter(i => !isFeriaDate(i.date))
 
       const sumUnits = (invs: SiigoInv[]) =>

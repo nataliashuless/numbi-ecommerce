@@ -348,6 +348,11 @@ export default function FeriasPage() {
                             </div>
                           </TableCell>
                           <TableCell className="text-right">
+                            <Link href={`/dashboard/ferias/${f.id}`}>
+                              <Button size="sm" className="bg-[#F59E0B] hover:bg-[#D97706] text-white mr-1">
+                                Ver facturas
+                              </Button>
+                            </Link>
                             <Button size="sm" variant="outline" onClick={() => openEdit(f)}>
                               <Pencil className="h-3 w-3 mr-1" />Editar
                             </Button>

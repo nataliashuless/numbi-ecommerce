@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     for (let i = 0; i < 50; i++) {
       const { data: page, error: pErr } = await supabase
         .from('siigo_invoices')
-        .select('id, number, prefix, name, date, total, balance, customer_id, customer_identification, observations, items, credited_amount')
+        .select('id, number, prefix, name, date, total, balance, customer_id, customer_identification, observations, items, credited_amount, assigned_feria_id')
         .gte('date', startDate)
         .lte('date', endDate)
         .order('date', { ascending: false })
@@ -51,6 +51,7 @@ export async function GET(request: Request) {
       observations: string
       items: Array<{ code: string; description: string; quantity: number; price: number; total?: number; discount?: { percentage?: number; value?: number } }>
       credited_amount: number | null
+      assigned_feria_id: string | null
     }
     // Exclude fully credited invoices (credited_amount >= total)
     const rows = ((cached || []) as Cached[]).filter(r => (r.credited_amount || 0) < r.total)
@@ -132,6 +133,7 @@ export async function GET(request: Request) {
         source,
         tienda_id: tiendaMatch?.id || null,
         tienda_nombre: tiendaMatch?.nombre || null,
+        assigned_feria_id: inv.assigned_feria_id,
       }
     })
 
