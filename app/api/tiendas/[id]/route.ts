@@ -25,6 +25,44 @@ export async function GET(
     return NextResponse.json({ error: tiendaError.message }, { status: 500 })
   }
 
+  // Inventory consigned in this tienda's Siigo warehouse
+  let siigoInventario: Array<{
+    product_code: string
+    product_name: string
+    quantity: number
+  }> = []
+  let warehouseName: string | null = null
+  if (tienda.siigo_warehouse_id) {
+    const { data: stockRows } = await supabase
+      .from('siigo_product_stock')
+      .select('product_code, product_name, warehouse_name, quantity')
+      .eq('warehouse_id', tienda.siigo_warehouse_id)
+      .order('quantity', { ascending: false })
+      .range(0, 9999)
+    if (stockRows && stockRows.length > 0) {
+      warehouseName = stockRows[0].warehouse_name
+      siigoInventario = stockRows
+        .filter(r => r.quantity !== 0)
+        .map(r => ({
+          product_code: r.product_code,
+          product_name: r.product_name,
+          quantity: Number(r.quantity),
+        }))
+    } else {
+      const { data: w } = await supabase
+        .from('siigo_warehouses')
+        .select('name')
+        .eq('id', tienda.siigo_warehouse_id)
+        .maybeSingle()
+      warehouseName = w?.name || null
+    }
+  }
+  const siigoInventarioStats = {
+    skus_con_saldo: siigoInventario.length,
+    unidades_total: siigoInventario.reduce((s, i) => s + i.quantity, 0),
+    warehouse_name: warehouseName,
+  }
+
   // Get consignments
   const { data: consignaciones } = await supabase
     .from('consignaciones')
@@ -93,6 +131,8 @@ export async function GET(
     ventas: ventas || [],
     liquidaciones: liquidaciones || [],
     inventario,
+    siigoInventario,
+    siigoInventarioStats,
     stats: {
       inventarioActual,
       totalConsignado,

@@ -47,6 +47,7 @@ interface Tienda {
   direccion: string | null
   activa: boolean
   siigo_customer_identification: string | null
+  siigo_warehouse_id: number | null
 }
 
 interface SiigoItem {
@@ -84,6 +85,8 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
 
   const [tienda, setTienda] = useState<Tienda | null>(null)
   const [invoices, setInvoices] = useState<SiigoInvoice[]>([])
+  const [siigoInventario, setSiigoInventario] = useState<Array<{ product_code: string; product_name: string; quantity: number }>>([])
+  const [siigoInventarioStats, setSiigoInventarioStats] = useState<{ skus_con_saldo: number; unidades_total: number; warehouse_name: string | null } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
@@ -109,6 +112,8 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
       }
       const data = await res.json()
       setTienda(data.tienda)
+      setSiigoInventario(data.siigoInventario || [])
+      setSiigoInventarioStats(data.siigoInventarioStats || null)
     } catch {
       setError('Error cargando tienda')
     }
@@ -336,6 +341,58 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
                 </CardContent>
               </Card>
             </div>
+
+            {/* Inventario consignado */}
+            {siigoInventarioStats && (
+              <Card className="mb-8 border-t-4 border-t-[#1DA9EF]">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Boxes className="h-5 w-5" /> Inventario en consignación
+                    </CardTitle>
+                    <p className="text-xs text-[#545454] mt-1">
+                      Saldo Siigo en bodega{' '}
+                      <span className="font-mono">{siigoInventarioStats.warehouse_name || '—'}</span>
+                      {' · '}
+                      <strong>{siigoInventarioStats.unidades_total.toLocaleString()}</strong> unidades en{' '}
+                      <strong>{siigoInventarioStats.skus_con_saldo}</strong> SKUs
+                    </p>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {!tienda.siigo_warehouse_id ? (
+                    <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded">
+                      Esta tienda no está vinculada a una bodega Siigo. Editá la tienda y asigná la bodega correspondiente.
+                    </p>
+                  ) : siigoInventario.length === 0 ? (
+                    <p className="text-center text-[#545454] py-6 text-sm">Sin saldo en este momento</p>
+                  ) : (
+                    <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-white">
+                          <TableRow>
+                            <TableHead>SKU</TableHead>
+                            <TableHead>Producto</TableHead>
+                            <TableHead className="text-right">Saldo</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {siigoInventario.map(item => (
+                            <TableRow key={item.product_code}>
+                              <TableCell className="font-mono text-xs">{item.product_code}</TableCell>
+                              <TableCell className="text-sm">{item.product_name}</TableCell>
+                              <TableCell className={`text-right font-mono text-sm ${item.quantity < 0 ? 'text-red-700' : 'text-[#1A2238]'}`}>
+                                {item.quantity.toLocaleString()}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             <div className="grid gap-4 lg:grid-cols-2 mb-8">
               <Card>
