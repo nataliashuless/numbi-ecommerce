@@ -35,6 +35,8 @@ import {
   Calendar,
   MapPin,
   Pencil,
+  Sparkles,
+  X,
 } from 'lucide-react'
 
 interface Feria {
@@ -56,12 +58,28 @@ function feriaStatus(f: Feria): { label: string; color: string } {
   return { label: 'En curso', color: 'bg-green-100 text-green-700' }
 }
 
+interface AutoMatchResult {
+  ok: boolean
+  stats: {
+    totalInvoicesInWindow: number
+    skippedTienda: number
+    skippedShopify: number
+    skippedNoCustomer: number
+    skippedNoNameMatch: number
+    skippedDateOutWindow: number
+    matched: number
+  }
+  perFeria: Array<{ feria_id: string; feria_name: string; count: number; error?: string }>
+}
+
 export default function FeriasPage() {
   const [ferias, setFerias] = useState<Feria[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [autoMatching, setAutoMatching] = useState(false)
+  const [autoMatchResult, setAutoMatchResult] = useState<AutoMatchResult | null>(null)
 
   const [form, setForm] = useState({
     id: '' as string | undefined,
@@ -149,6 +167,22 @@ export default function FeriasPage() {
     } catch {}
   }
 
+  async function runAutoMatch() {
+    if (!confirm('Esto va a asignar facturas Siigo a ferias automáticamente cruzando los nombres del Excel histórico. Solo afecta facturas no asignadas. ¿Continuar?')) return
+    setAutoMatching(true)
+    setAutoMatchResult(null)
+    try {
+      const res = await fetch('/api/ferias/auto-match-excel', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error')
+      setAutoMatchResult(data)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Error al auto-asignar')
+    } finally {
+      setAutoMatching(false)
+    }
+  }
+
   const today = new Date().toISOString().slice(0, 10)
   const activas = ferias.filter(f => f.activa && f.fecha_fin >= today)
   const enCurso = ferias.filter(f => f.activa && f.fecha_inicio <= today && f.fecha_fin >= today)
@@ -193,6 +227,18 @@ export default function FeriasPage() {
             <h1 className="text-3xl font-bold text-[#1A2238] mb-2">Ferias y Eventos</h1>
             <p className="text-[#545454]">Pop-ups, ferias y eventos donde llevás inventario.</p>
           </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={runAutoMatch}
+              disabled={autoMatching}
+              className="border-[#F59E0B] text-[#D97706] hover:bg-[#F59E0B]/10"
+              title="Asigna facturas Siigo a ferias por coincidencia de nombre del Excel histórico"
+            >
+              {autoMatching ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+              Auto-asignar desde Excel
+            </Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={openNew} className="bg-[#1DA9EF] hover:bg-[#0073D1] text-white font-medium">
@@ -267,7 +313,37 @@ export default function FeriasPage() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
+
+        {autoMatchResult && (
+          <div className="mb-6 bg-[#F59E0B]/10 border border-[#F59E0B]/30 rounded-lg p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3 className="font-semibold text-[#1A2238] mb-1">Auto-asignación completada</h3>
+                <p className="text-sm text-[#545454] mb-3">
+                  {autoMatchResult.stats.matched} facturas asignadas de {autoMatchResult.stats.totalInvoicesInWindow} en ventana
+                </p>
+                <ul className="text-sm space-y-1">
+                  {autoMatchResult.perFeria.map(p => (
+                    <li key={p.feria_id} className="text-[#1A2238]">
+                      <span className="font-medium">{p.feria_name}:</span>{' '}
+                      <span className="text-[#D97706]">+{p.count} facturas</span>
+                      {p.error && <span className="text-red-600 ml-2">({p.error})</span>}
+                    </li>
+                  ))}
+                </ul>
+                <details className="mt-3 text-xs text-[#545454]">
+                  <summary className="cursor-pointer">Diagnóstico</summary>
+                  <pre className="mt-2 bg-white/50 p-2 rounded">{JSON.stringify(autoMatchResult.stats, null, 2)}</pre>
+                </details>
+              </div>
+              <button onClick={() => setAutoMatchResult(null)} className="text-[#545454] hover:text-[#1A2238]">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="grid gap-4 md:grid-cols-3 mb-6">
           <Card className="border-t-4 border-t-[#1DA9EF]">
