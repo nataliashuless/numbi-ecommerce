@@ -3,6 +3,11 @@ import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 
 interface VariantForecast {
   sku: string
+  // For backward compat with existing UI:
+  producto: string   // reference name (e.g. "Boy")
+  variante: string   // size with prefix (e.g. "Talla 26") or empty
+  imagen: string | null
+  // New canonical fields:
   size: string | null
   description: string
   stockBodega: number
@@ -230,10 +235,12 @@ export async function GET(request: Request) {
       }
 
       const { reference, size } = parseProductName(stockInfo.product_name)
-      void reference
 
       variantsForecast.push({
         sku,
+        producto: reference || stockInfo.product_name,
+        variante: size ? `Talla ${size}` : '',
+        imagen: null,
         size,
         description: stockInfo.product_name,
         stockBodega: stockInfo.stockBodega,
