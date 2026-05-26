@@ -89,7 +89,23 @@ export default function FeriasPage() {
   }
 
   useEffect(() => {
-    fetchData()
+    // On first mount, fire-and-forget the historical auto-match (idempotent —
+    // only touches invoices that have assigned_feria_id IS NULL). Then refresh
+    // the list once it completes so any new counts show up.
+    let cancelled = false
+    ;(async () => {
+      await fetchData()
+      try {
+        const res = await fetch('/api/ferias/auto-match-excel', { method: 'POST' })
+        if (!cancelled && res.ok) {
+          const data = await res.json()
+          if (data?.stats?.matched > 0) {
+            await fetchData()
+          }
+        }
+      } catch {}
+    })()
+    return () => { cancelled = true }
   }, [])
 
   function openNew() {
