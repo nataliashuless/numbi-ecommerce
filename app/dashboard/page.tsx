@@ -22,6 +22,7 @@ import {
   TrendingUp,
   Settings,
   FileText,
+  Tent,
 } from 'lucide-react'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 import {
@@ -325,6 +326,12 @@ export default function DashboardPage() {
               <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Store className="h-4 w-4 mr-2" />
                 Tiendas
+              </Button>
+            </Link>
+            <Link href="/dashboard/ferias">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
+                <Tent className="h-4 w-4 mr-2" />
+                Ferias
               </Button>
             </Link>
             <Link href="/dashboard/conciliacion">

@@ -32,6 +32,7 @@ import {
   Trash2,
   FileText,
   TrendingUp,
+  Tent,
 } from 'lucide-react'
 
 interface SiigoPaymentMethod {
@@ -411,6 +412,12 @@ export default function ConfiguracionPage() {
               <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Store className="h-4 w-4 mr-2" />
                 Tiendas
+              </Button>
+            </Link>
+            <Link href="/dashboard/ferias">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
+                <Tent className="h-4 w-4 mr-2" />
+                Ferias
               </Button>
             </Link>
             <Link href="/dashboard/conciliacion">
