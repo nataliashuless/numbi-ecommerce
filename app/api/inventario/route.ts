@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAuth, getShopifyCredentials, getAdminClient } from '@/lib/auth-helpers'
+import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 
 interface InventarioItem {
   sku: string
@@ -12,182 +12,129 @@ interface InventarioItem {
   total: number
 }
 
+// Reads everything from the local Siigo stock cache (table siigo_product_stock).
+// Warehouse 27 = Bodega Principal La Calera (Shuless). The rest are stores.
+const PRINCIPAL_WAREHOUSE_ID = 27
+
 export async function GET() {
-  // Require authentication
-  const { user, error } = await requireAuth()
+  const { error } = await requireAuth()
   if (error) return error
-
-  // Get Shopify credentials from database
-  const credentials = await getShopifyCredentials()
-  const shop = credentials?.shopify_shop
-  const accessToken = credentials?.shopify_access_token
-
-  if (!shop || !accessToken) {
-    return NextResponse.json({ error: 'Shopify no conectado' }, { status: 401 })
-  }
 
   const supabase = getAdminClient()
 
   try {
-    // 1. Fetch products from Shopify (Bodega inventory)
-    let allProducts: Array<{
-      id: number
-      title: string
-      images: Array<{ src: string }>
-      variants: Array<{
-        id: number
-        title: string
-        sku: string
-        inventory_quantity: number
-      }>
-    }> = []
-
-    let nextUrl: string | null = `https://${shop}/admin/api/2024-10/products.json?limit=250`
-
-    while (nextUrl) {
-      const response: Response = await fetch(nextUrl, {
-        headers: {
-          'X-Shopify-Access-Token': accessToken,
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        return NextResponse.json({ error: error.errors || 'Failed to fetch products' }, { status: response.status })
-      }
-
-      const data = await response.json()
-      allProducts = allProducts.concat(data.products || [])
-
-      const linkHeader = response.headers.get('Link')
-      nextUrl = null
-      if (linkHeader) {
-        const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/)
-        if (nextMatch) {
-          nextUrl = nextMatch[1]
-        }
-      }
-    }
-
-    // 2. Fetch all active stores
-    const { data: tiendas, error: tiendasError } = await supabase
+    // 1. Active tiendas + their warehouse mapping
+    const { data: tiendasRaw } = await supabase
       .from('tiendas_terceros')
-      .select('id, nombre')
+      .select('id, nombre, nombre_corto, siigo_warehouse_id')
       .eq('activa', true)
       .order('nombre')
+    const tiendas = (tiendasRaw || []).map(t => ({
+      id: t.id,
+      nombre: t.nombre_corto || t.nombre,
+      siigo_warehouse_id: t.siigo_warehouse_id as number | null,
+    }))
 
-    if (tiendasError) {
-      console.error('Error fetching tiendas:', tiendasError)
+    const warehouseToTienda = new Map<number, string>()
+    for (const t of tiendas) {
+      if (t.siigo_warehouse_id) warehouseToTienda.set(t.siigo_warehouse_id, t.id)
     }
 
-    const tiendasList = tiendas || []
-    const tiendaIds = tiendasList.map(t => t.id)
+    // 2. All stock rows for: principal + every linked tienda warehouse
+    const relevantWarehouseIds = [PRINCIPAL_WAREHOUSE_ID, ...Array.from(warehouseToTienda.keys())]
 
-    // 3. Fetch all consignaciones for user's tiendas
-    const { data: consignaciones, error: consignacionesError } = tiendaIds.length > 0
-      ? await supabase
-          .from('consignaciones')
-          .select('tienda_id, producto_sku, tipo, cantidad')
-          .in('tienda_id', tiendaIds)
-      : { data: [], error: null }
-
-    if (consignacionesError) {
-      console.error('Error fetching consignaciones:', consignacionesError)
-    }
-
-    // 4. Fetch all ventas_terceros for user's tiendas (to subtract from consigned)
-    const { data: ventasTerceros, error: ventasError } = tiendaIds.length > 0
-      ? await supabase
-          .from('ventas_terceros')
-          .select('tienda_id, producto_sku, cantidad')
-          .in('tienda_id', tiendaIds)
-      : { data: [], error: null }
-
-    if (ventasError) {
-      console.error('Error fetching ventas_terceros:', ventasError)
-    }
-
-    // 5. Calculate consigned inventory per SKU per store
-    const consignadoPorSku: { [sku: string]: { [tiendaId: string]: number } } = {}
-
-    // Add consignaciones (envio adds, devolucion subtracts)
-    for (const c of consignaciones || []) {
-      if (!c.producto_sku) continue
-      if (!consignadoPorSku[c.producto_sku]) {
-        consignadoPorSku[c.producto_sku] = {}
+    const allStock: Array<{
+      product_id: string
+      product_code: string
+      product_name: string
+      warehouse_id: number
+      quantity: number
+    }> = []
+    const pageSize = 1000
+    let pageStart = 0
+    for (let i = 0; i < 50; i++) {
+      const { data: page, error: stockErr } = await supabase
+        .from('siigo_product_stock')
+        .select('product_id, product_code, product_name, warehouse_id, quantity')
+        .in('warehouse_id', relevantWarehouseIds)
+        .range(pageStart, pageStart + pageSize - 1)
+      if (stockErr) {
+        return NextResponse.json({ error: stockErr.message }, { status: 500 })
       }
-      if (!consignadoPorSku[c.producto_sku][c.tienda_id]) {
-        consignadoPorSku[c.producto_sku][c.tienda_id] = 0
-      }
-      if (c.tipo === 'envio') {
-        consignadoPorSku[c.producto_sku][c.tienda_id] += c.cantidad
-      } else if (c.tipo === 'devolucion') {
-        consignadoPorSku[c.producto_sku][c.tienda_id] -= c.cantidad
-      }
+      if (!page || page.length === 0) break
+      allStock.push(...(page as Array<{
+        product_id: string
+        product_code: string
+        product_name: string
+        warehouse_id: number
+        quantity: number
+      }>))
+      if (page.length < pageSize) break
+      pageStart += pageSize
     }
 
-    // Subtract ventas from consigned
-    for (const v of ventasTerceros || []) {
-      if (!v.producto_sku) continue
-      if (consignadoPorSku[v.producto_sku] && consignadoPorSku[v.producto_sku][v.tienda_id]) {
-        consignadoPorSku[v.producto_sku][v.tienda_id] -= v.cantidad
-      }
+    // 3. Group by product_code (the SKU)
+    type Bucket = {
+      product_name: string
+      bodega: number
+      tiendas: { [tiendaId: string]: number }
     }
+    const bySku = new Map<string, Bucket>()
 
-    // 6. Build consolidated inventory
-    const inventario: InventarioItem[] = []
-
-    for (const product of allProducts) {
-      for (const variant of product.variants) {
-        const sku = variant.sku || `NO-SKU-${variant.id}`
-        const bodega = variant.inventory_quantity || 0
-
-        // Get consigned quantities for this SKU
-        const tiendasInventario: { [tiendaId: string]: number } = {}
-        let totalConsignado = 0
-
-        for (const tienda of tiendasList) {
-          const cantidad = consignadoPorSku[sku]?.[tienda.id] || 0
-          tiendasInventario[tienda.id] = Math.max(0, cantidad) // No negative
-          totalConsignado += tiendasInventario[tienda.id]
+    for (const row of allStock) {
+      const sku = row.product_code || ''
+      if (!sku) continue
+      let b = bySku.get(sku)
+      if (!b) {
+        b = { product_name: row.product_name || '', bodega: 0, tiendas: {} }
+        bySku.set(sku, b)
+      }
+      if (!b.product_name && row.product_name) b.product_name = row.product_name
+      const qty = Number(row.quantity) || 0
+      if (row.warehouse_id === PRINCIPAL_WAREHOUSE_ID) {
+        b.bodega = qty
+      } else {
+        const tiendaId = warehouseToTienda.get(row.warehouse_id)
+        if (tiendaId) {
+          b.tiendas[tiendaId] = qty
         }
-
-        inventario.push({
-          sku,
-          producto: product.title,
-          variante: variant.title !== 'Default Title' ? variant.title : '',
-          imagen: product.images[0]?.src || null,
-          bodega,
-          tiendas: tiendasInventario,
-          totalConsignado,
-          total: bodega + totalConsignado,
-        })
       }
     }
 
-    // Sort by product name, then variant
-    inventario.sort((a, b) => {
-      const productCompare = a.producto.localeCompare(b.producto)
-      if (productCompare !== 0) return productCompare
-      return a.variante.localeCompare(b.variante)
-    })
-
-    // Calculate totals
-    const totales = {
-      bodega: inventario.reduce((sum, i) => sum + i.bodega, 0),
-      consignado: inventario.reduce((sum, i) => sum + i.totalConsignado, 0),
-      total: inventario.reduce((sum, i) => sum + i.total, 0),
+    // 4. Build inventory rows
+    const inventario: InventarioItem[] = []
+    for (const [sku, b] of bySku) {
+      const totalConsignado = Object.values(b.tiendas).reduce((s, q) => s + Math.max(0, q), 0)
+      // Try to split "Producto - Talla" into producto vs variante
+      const m = b.product_name.match(/^(.+?)\s*[-–]\s*(.+)$/) || b.product_name.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)$/)
+      const producto = m ? m[1].trim() : b.product_name
+      const variante = m ? m[2].trim() : ''
+      inventario.push({
+        sku,
+        producto,
+        variante,
+        imagen: null,
+        bodega: b.bodega,
+        tiendas: b.tiendas,
+        totalConsignado,
+        total: b.bodega + totalConsignado,
+      })
     }
+
+    // Sort: descending by total
+    inventario.sort((a, b) => b.total - a.total)
 
     return NextResponse.json({
       inventario,
-      tiendas: tiendasList,
-      totales,
+      tiendas: tiendas.map(t => ({ id: t.id, nombre: t.nombre })),
+      totales: {
+        bodega: inventario.reduce((s, i) => s + i.bodega, 0),
+        consignado: inventario.reduce((s, i) => s + i.totalConsignado, 0),
+        total: inventario.reduce((s, i) => s + i.total, 0),
+      },
     })
-
-  } catch (error) {
-    console.error('Inventario API error:', error)
-    return NextResponse.json({ error: 'Failed to fetch inventario' }, { status: 500 })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error al obtener inventario'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
