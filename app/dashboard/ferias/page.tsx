@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -44,15 +43,9 @@ interface Feria {
   ubicacion: string | null
   fecha_inicio: string
   fecha_fin: string
-  siigo_warehouse_id: number | null
   notas: string | null
   activa: boolean
   created_at: string
-}
-
-interface Warehouse {
-  id: number
-  name: string
 }
 
 function feriaStatus(f: Feria): { label: string; color: string } {
@@ -65,7 +58,6 @@ function feriaStatus(f: Feria): { label: string; color: string } {
 
 export default function FeriasPage() {
   const [ferias, setFerias] = useState<Feria[]>([])
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -77,7 +69,6 @@ export default function FeriasPage() {
     ubicacion: '',
     fecha_inicio: '',
     fecha_fin: '',
-    siigo_warehouse_id: '' as string,
     notas: '',
     activa: true,
   })
@@ -85,17 +76,10 @@ export default function FeriasPage() {
   async function fetchData() {
     setLoading(true)
     try {
-      const [feriasRes, whRes] = await Promise.all([
-        fetch('/api/ferias'),
-        fetch('/api/siigo/warehouses'),
-      ])
+      const feriasRes = await fetch('/api/ferias')
       if (feriasRes.ok) {
         const d = await feriasRes.json()
         setFerias(d.ferias || [])
-      }
-      if (whRes.ok) {
-        const d = await whRes.json()
-        setWarehouses(d.warehouses || [])
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error cargando')
@@ -115,7 +99,6 @@ export default function FeriasPage() {
       ubicacion: '',
       fecha_inicio: '',
       fecha_fin: '',
-      siigo_warehouse_id: '',
       notas: '',
       activa: true,
     })
@@ -130,7 +113,6 @@ export default function FeriasPage() {
       ubicacion: f.ubicacion || '',
       fecha_inicio: f.fecha_inicio,
       fecha_fin: f.fecha_fin,
-      siigo_warehouse_id: f.siigo_warehouse_id ? String(f.siigo_warehouse_id) : '',
       notas: f.notas || '',
       activa: f.activa,
     })
@@ -143,14 +125,10 @@ export default function FeriasPage() {
     setSaving(true)
     setError(null)
     try {
-      const payload = {
-        ...form,
-        siigo_warehouse_id: form.siigo_warehouse_id ? parseInt(form.siigo_warehouse_id) : null,
-      }
       const res = await fetch('/api/ferias', {
         method: form.id ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(form),
       })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Error guardando')
@@ -268,22 +246,6 @@ export default function FeriasPage() {
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor="warehouse">Bodega Siigo (opcional)</Label>
-                  <Select
-                    value={form.siigo_warehouse_id}
-                    onValueChange={(v) => setForm({ ...form, siigo_warehouse_id: v === '_none' ? '' : v })}
-                  >
-                    <SelectTrigger><SelectValue placeholder="Sin bodega asociada" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_none">Sin bodega asociada</SelectItem>
-                      {warehouses.map(w => (
-                        <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-[#545454] mt-1">Si la feria tiene su propia bodega en Siigo, asóciala para trackear ventas e inventario.</p>
-                </div>
-                <div>
                   <Label htmlFor="notas">Notas</Label>
                   <Textarea
                     id="notas"
@@ -357,14 +319,12 @@ export default function FeriasPage() {
                       <TableHead>Nombre</TableHead>
                       <TableHead>Ubicación</TableHead>
                       <TableHead>Fechas</TableHead>
-                      <TableHead>Bodega Siigo</TableHead>
                       <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {ferias.map(f => {
                       const st = feriaStatus(f)
-                      const wh = warehouses.find(w => w.id === f.siigo_warehouse_id)
                       return (
                         <TableRow key={f.id}>
                           <TableCell>
@@ -386,9 +346,6 @@ export default function FeriasPage() {
                               <span className="text-[#545454]">→</span>
                               <span>{format(new Date(f.fecha_fin + 'T12:00:00'), 'dd MMM yyyy')}</span>
                             </div>
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {wh ? wh.name : <span className="text-[#D1D5DB]">—</span>}
                           </TableCell>
                           <TableCell className="text-right">
                             <Button size="sm" variant="outline" onClick={() => openEdit(f)}>
