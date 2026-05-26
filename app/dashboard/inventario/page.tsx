@@ -467,7 +467,7 @@ export default function InventarioPage() {
                       onClick={() => setFilter('all')}
                       className={filter === 'all' ? 'bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]' : ''}
                     >
-                      Todos ({inventario.length})
+                      Todos ({allVariants.length})
                     </Button>
                     <Button
                       variant={filter === 'low' ? 'default' : 'outline'}
