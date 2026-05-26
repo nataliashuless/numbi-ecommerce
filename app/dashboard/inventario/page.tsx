@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Fragment } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -43,6 +43,8 @@ import {
   Factory,
   Settings,
   FileText,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -52,21 +54,32 @@ interface Tienda {
   nombre: string
 }
 
-interface InventarioItem {
+interface VariantItem {
   sku: string
-  producto: string
-  variante: string
-  imagen: string | null
+  size: string | null
+  description: string
   bodega: number
   tiendas: { [tiendaId: string]: number }
   totalConsignado: number
   total: number
 }
 
+interface ReferenceItem {
+  reference: string
+  variantCount: number
+  bodega: number
+  tiendas: { [tiendaId: string]: number }
+  totalConsignado: number
+  total: number
+  variants: VariantItem[]
+}
+
 interface InventarioData {
-  inventario: InventarioItem[]
+  referencias: ReferenceItem[]
   tiendas: Tienda[]
   totales: {
+    referencias: number
+    skus: number
     bodega: number
     consignado: number
     total: number
@@ -142,6 +155,15 @@ export default function InventarioPage() {
   const [forecastLoading, setForecastLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [expandedRefs, setExpandedRefs] = useState<Set<string>>(new Set())
+  function toggleRef(reference: string) {
+    setExpandedRefs(prev => {
+      const next = new Set(prev)
+      if (next.has(reference)) next.delete(reference)
+      else next.add(reference)
+      return next
+    })
+  }
   const [forecastSearchTerm, setForecastSearchTerm] = useState('')
   const [filter, setFilter] = useState<'all' | 'low' | 'out'>('all')
   const [forecastFilter, setForecastFilter] = useState<'all' | 'critica' | 'alta' | 'media'>('all')
@@ -220,34 +242,55 @@ export default function InventarioPage() {
     )
   }
 
-  const inventario = inventarioData?.inventario || []
+  const referencias = inventarioData?.referencias || []
   const tiendas = inventarioData?.tiendas || []
-  const totales = inventarioData?.totales || { bodega: 0, consignado: 0, total: 0 }
+  const totales = inventarioData?.totales || { referencias: 0, skus: 0, bodega: 0, consignado: 0, total: 0 }
 
-  // Filter inventory
-  let filteredInventario = inventario.filter(item => {
-    const searchLower = searchTerm.toLowerCase()
+  // Filter at the variant level, keep parent ref if any variant matches
+  const searchLower = searchTerm.toLowerCase()
+  const passesFilter = (v: VariantItem) => {
+    if (filter === 'low' && !(v.total > 0 && v.total <= 5)) return false
+    if (filter === 'out' && v.total !== 0) return false
+    if (!searchLower) return true
     return (
-      item.producto.toLowerCase().includes(searchLower) ||
-      item.sku.toLowerCase().includes(searchLower) ||
-      item.variante.toLowerCase().includes(searchLower)
+      v.sku.toLowerCase().includes(searchLower) ||
+      v.description.toLowerCase().includes(searchLower) ||
+      (v.size || '').toLowerCase().includes(searchLower)
     )
-  })
-
-  if (filter === 'low') {
-    filteredInventario = filteredInventario.filter(item => item.total > 0 && item.total <= 5)
-  } else if (filter === 'out') {
-    filteredInventario = filteredInventario.filter(item => item.total === 0)
   }
+  const filteredRefs: ReferenceItem[] = referencias
+    .map(r => {
+      // Refine: if search matches reference name, keep ALL variants of that ref (respecting filter)
+      const refMatchesSearch = !searchLower || r.reference.toLowerCase().includes(searchLower)
+      const variants = r.variants.filter(v => refMatchesSearch ? (filter === 'all' ? true : (filter === 'low' ? (v.total > 0 && v.total <= 5) : v.total === 0)) : passesFilter(v))
+      if (variants.length === 0) return null
+      const bodega = variants.reduce((s, v) => s + v.bodega, 0)
+      const totalConsignado = variants.reduce((s, v) => s + v.totalConsignado, 0)
+      const tiendasAgg: { [k: string]: number } = {}
+      for (const v of variants) {
+        for (const tid in v.tiendas) tiendasAgg[tid] = (tiendasAgg[tid] || 0) + v.tiendas[tid]
+      }
+      return {
+        ...r,
+        variants,
+        variantCount: variants.length,
+        bodega,
+        tiendas: tiendasAgg,
+        totalConsignado,
+        total: bodega + totalConsignado,
+      }
+    })
+    .filter((r): r is ReferenceItem => r !== null)
 
   const filteredTotales = {
-    bodega: filteredInventario.reduce((sum, i) => sum + i.bodega, 0),
-    consignado: filteredInventario.reduce((sum, i) => sum + i.totalConsignado, 0),
-    total: filteredInventario.reduce((sum, i) => sum + i.total, 0),
+    bodega: filteredRefs.reduce((s, r) => s + r.bodega, 0),
+    consignado: filteredRefs.reduce((s, r) => s + r.totalConsignado, 0),
+    total: filteredRefs.reduce((s, r) => s + r.total, 0),
   }
 
-  const lowStockCount = inventario.filter(i => i.total > 0 && i.total <= 5).length
-  const outOfStockCount = inventario.filter(i => i.total === 0).length
+  const allVariants = referencias.flatMap(r => r.variants)
+  const lowStockCount = allVariants.filter(v => v.total > 0 && v.total <= 5).length
+  const outOfStockCount = allVariants.filter(v => v.total === 0).length
 
   // Filter forecast
   let filteredForecast = forecastData?.forecast || []
@@ -452,7 +495,7 @@ export default function InventarioPage() {
                   Detalle por Producto
                   {searchTerm && (
                     <span className="ml-2 text-sm font-normal text-[#545454]">
-                      ({filteredInventario.length} resultados)
+                      ({filteredRefs.length} referencias)
                     </span>
                   )}
                 </CardTitle>
@@ -462,68 +505,100 @@ export default function InventarioPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="min-w-[200px]">Producto</TableHead>
-                        <TableHead>SKU</TableHead>
+                        <TableHead className="w-8"></TableHead>
+                        <TableHead className="min-w-[200px]">Referencia / SKU</TableHead>
                         <TableHead className="text-center bg-blue-50">Bodega</TableHead>
                         {tiendas.map(tienda => (
                           <TableHead key={tienda.id} className="text-center bg-purple-50 min-w-[80px]">
-                            {tienda.nombre.length > 10 ? tienda.nombre.substring(0, 10) + '...' : tienda.nombre}
+                            {tienda.nombre.length > 12 ? tienda.nombre.substring(0, 12) + '…' : tienda.nombre}
                           </TableHead>
                         ))}
                         <TableHead className="text-center bg-green-50">Total</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredInventario.length === 0 ? (
+                      {filteredRefs.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={4 + tiendas.length} className="text-center py-8 text-[#545454]">
                             {searchTerm ? 'No se encontraron productos' : 'No hay productos en inventario'}
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredInventario.map((item) => (
-                          <TableRow key={item.sku}>
-                            <TableCell>
-                              <div className="flex items-center gap-3">
-                                {item.imagen && (
-                                  <img
-                                    src={item.imagen}
-                                    alt={item.producto}
-                                    className="w-10 h-10 object-cover rounded"
-                                  />
-                                )}
-                                <div>
-                                  <div className="font-medium text-[#1A2238]">{item.producto}</div>
-                                  {item.variante && (
-                                    <div className="text-sm text-[#545454]">{item.variante}</div>
+                        filteredRefs.map((r) => {
+                          const isExpanded = expandedRefs.has(r.reference)
+                          return (
+                            <Fragment key={r.reference}>
+                              <TableRow
+                                className={`cursor-pointer hover:bg-gray-50 ${isExpanded ? 'bg-gray-50' : ''}`}
+                                onClick={() => toggleRef(r.reference)}
+                              >
+                                <TableCell className="w-8">
+                                  {r.variantCount > 1 && (
+                                    isExpanded
+                                      ? <ChevronDown className="h-4 w-4 text-[#545454]" />
+                                      : <ChevronRight className="h-4 w-4 text-[#545454]" />
                                   )}
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="font-mono text-sm text-[#545454]">{item.sku}</TableCell>
-                            <TableCell className="text-center bg-blue-50/50">
-                              {getInventoryBadge(item.bodega)}
-                            </TableCell>
-                            {tiendas.map(tienda => (
-                              <TableCell key={tienda.id} className="text-center bg-purple-50/50">
-                                {item.tiendas[tienda.id] > 0 ? (
-                                  <Badge variant="secondary">{item.tiendas[tienda.id]}</Badge>
-                                ) : (
-                                  <span className="text-[#545454]">-</span>
-                                )}
-                              </TableCell>
-                            ))}
-                            <TableCell className="text-center bg-green-50/50">
-                              {getInventoryBadge(item.total)}
-                            </TableCell>
-                          </TableRow>
-                        ))
+                                </TableCell>
+                                <TableCell>
+                                  <div className="font-medium text-[#1A2238]">{r.reference}</div>
+                                  {r.variantCount > 1 && (
+                                    <div className="text-xs text-[#545454]">{r.variantCount} tallas</div>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-center bg-blue-50/50">
+                                  {getInventoryBadge(r.bodega)}
+                                </TableCell>
+                                {tiendas.map(tienda => (
+                                  <TableCell key={tienda.id} className="text-center bg-purple-50/50">
+                                    {r.tiendas[tienda.id] > 0 ? (
+                                      <Badge variant="secondary">{r.tiendas[tienda.id]}</Badge>
+                                    ) : (
+                                      <span className="text-[#D1D5DB]">—</span>
+                                    )}
+                                  </TableCell>
+                                ))}
+                                <TableCell className="text-center bg-green-50/50">
+                                  {getInventoryBadge(r.total)}
+                                </TableCell>
+                              </TableRow>
+
+                              {isExpanded && r.variants.map(v => (
+                                <TableRow key={`${r.reference}-${v.sku}`} className="bg-gray-50/40">
+                                  <TableCell></TableCell>
+                                  <TableCell className="pl-8">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs bg-white border rounded px-1.5 py-0.5 font-mono text-[#545454]">{v.sku}</span>
+                                      <span className="text-sm text-[#1A2238]">
+                                        {v.size ? `Talla ${v.size}` : v.description}
+                                      </span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-center bg-blue-50/30">
+                                    {getInventoryBadge(v.bodega)}
+                                  </TableCell>
+                                  {tiendas.map(tienda => (
+                                    <TableCell key={tienda.id} className="text-center bg-purple-50/30">
+                                      {v.tiendas[tienda.id] > 0 ? (
+                                        <Badge variant="secondary" className="text-xs">{v.tiendas[tienda.id]}</Badge>
+                                      ) : (
+                                        <span className="text-[#D1D5DB]">—</span>
+                                      )}
+                                    </TableCell>
+                                  ))}
+                                  <TableCell className="text-center bg-green-50/30">
+                                    {getInventoryBadge(v.total)}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </Fragment>
+                          )
+                        })
                       )}
                     </TableBody>
                   </Table>
                 </div>
 
-                {filteredInventario.length > 0 && (
+                {filteredRefs.length > 0 && (
                   <div className="mt-4 pt-4 border-t">
                     <div className="flex justify-end gap-8 text-sm">
                       <div>

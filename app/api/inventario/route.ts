@@ -1,20 +1,39 @@
 import { NextResponse } from 'next/server'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 
-interface InventarioItem {
+interface VariantRow {
   sku: string
-  producto: string
-  variante: string
-  imagen: string | null
+  size: string | null
+  description: string
   bodega: number
   tiendas: { [tiendaId: string]: number }
   totalConsignado: number
   total: number
 }
 
-// Reads everything from the local Siigo stock cache (table siigo_product_stock).
-// Warehouse 27 = Bodega Principal La Calera (Shuless). The rest are stores.
+interface ReferenceRow {
+  reference: string
+  variantCount: number
+  bodega: number
+  tiendas: { [tiendaId: string]: number }
+  totalConsignado: number
+  total: number
+  variants: VariantRow[]
+}
+
 const PRINCIPAL_WAREHOUSE_ID = 27
+const PRODUCT_ACCOUNT_GROUP_ID = 339 // exclude raw materials
+
+function parseProductName(desc: string): { reference: string; size: string | null } {
+  const trimmed = (desc || '').trim()
+  let m = trimmed.match(/^(.+?)\s*[-–—]?\s*talla\s+(\d+(?:[.,]\d+)?)$/i)
+  if (m) return { reference: m[1].trim(), size: m[2] }
+  m = trimmed.match(/^(.+?)\s*[-–—]\s*(\d+(?:[.,]\d+)?)$/)
+  if (m) return { reference: m[1].trim(), size: m[2] }
+  m = trimmed.match(/^(.+?\D)\s+(\d+(?:[.,]\d+)?)$/)
+  if (m) return { reference: m[1].trim(), size: m[2] }
+  return { reference: trimmed || '—', size: null }
+}
 
 export async function GET() {
   const { error } = await requireAuth()
@@ -23,7 +42,6 @@ export async function GET() {
   const supabase = getAdminClient()
 
   try {
-    // 1. Active tiendas + their warehouse mapping
     const { data: tiendasRaw } = await supabase
       .from('tiendas_terceros')
       .select('id, nombre, nombre_corto, siigo_warehouse_id')
@@ -40,7 +58,6 @@ export async function GET() {
       if (t.siigo_warehouse_id) warehouseToTienda.set(t.siigo_warehouse_id, t.id)
     }
 
-    // 2. All stock rows for: principal + every linked tienda warehouse
     const relevantWarehouseIds = [PRINCIPAL_WAREHOUSE_ID, ...Array.from(warehouseToTienda.keys())]
 
     const allStock: Array<{
@@ -49,14 +66,16 @@ export async function GET() {
       product_name: string
       warehouse_id: number
       quantity: number
+      account_group_id: number | null
     }> = []
     const pageSize = 1000
     let pageStart = 0
     for (let i = 0; i < 50; i++) {
       const { data: page, error: stockErr } = await supabase
         .from('siigo_product_stock')
-        .select('product_id, product_code, product_name, warehouse_id, quantity')
+        .select('product_id, product_code, product_name, warehouse_id, quantity, account_group_id')
         .in('warehouse_id', relevantWarehouseIds)
+        .eq('account_group_id', PRODUCT_ACCOUNT_GROUP_ID)
         .range(pageStart, pageStart + pageSize - 1)
       if (stockErr) {
         return NextResponse.json({ error: stockErr.message }, { status: 500 })
@@ -68,69 +87,105 @@ export async function GET() {
         product_name: string
         warehouse_id: number
         quantity: number
+        account_group_id: number | null
       }>))
       if (page.length < pageSize) break
       pageStart += pageSize
     }
 
-    // 3. Group by product_code (the SKU)
-    type Bucket = {
-      product_name: string
+    // Group by SKU (variant) first
+    type VariantBucket = {
+      sku: string
+      size: string | null
+      description: string
+      reference: string
       bodega: number
       tiendas: { [tiendaId: string]: number }
     }
-    const bySku = new Map<string, Bucket>()
+    const bySku = new Map<string, VariantBucket>()
 
     for (const row of allStock) {
       const sku = row.product_code || ''
       if (!sku) continue
-      let b = bySku.get(sku)
-      if (!b) {
-        b = { product_name: row.product_name || '', bodega: 0, tiendas: {} }
-        bySku.set(sku, b)
+      let v = bySku.get(sku)
+      if (!v) {
+        const { reference, size } = parseProductName(row.product_name || '')
+        v = {
+          sku,
+          size,
+          description: row.product_name || '',
+          reference,
+          bodega: 0,
+          tiendas: {},
+        }
+        bySku.set(sku, v)
       }
-      if (!b.product_name && row.product_name) b.product_name = row.product_name
       const qty = Number(row.quantity) || 0
       if (row.warehouse_id === PRINCIPAL_WAREHOUSE_ID) {
-        b.bodega = qty
+        v.bodega = qty
       } else {
         const tiendaId = warehouseToTienda.get(row.warehouse_id)
-        if (tiendaId) {
-          b.tiendas[tiendaId] = qty
-        }
+        if (tiendaId) v.tiendas[tiendaId] = qty
       }
     }
 
-    // 4. Build inventory rows
-    const inventario: InventarioItem[] = []
-    for (const [sku, b] of bySku) {
-      const totalConsignado = Object.values(b.tiendas).reduce((s, q) => s + Math.max(0, q), 0)
-      // Try to split "Producto - Talla" into producto vs variante
-      const m = b.product_name.match(/^(.+?)\s*[-–]\s*(.+)$/) || b.product_name.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)$/)
-      const producto = m ? m[1].trim() : b.product_name
-      const variante = m ? m[2].trim() : ''
-      inventario.push({
-        sku,
-        producto,
-        variante,
-        imagen: null,
-        bodega: b.bodega,
-        tiendas: b.tiendas,
-        totalConsignado,
-        total: b.bodega + totalConsignado,
-      })
+    // Now group variants by reference
+    const byRef = new Map<string, ReferenceRow>()
+    for (const v of bySku.values()) {
+      const tiendaSum = Object.values(v.tiendas).reduce((s, q) => s + Math.max(0, q), 0)
+      const variantRow: VariantRow = {
+        sku: v.sku,
+        size: v.size,
+        description: v.description,
+        bodega: v.bodega,
+        tiendas: v.tiendas,
+        totalConsignado: tiendaSum,
+        total: v.bodega + tiendaSum,
+      }
+      let r = byRef.get(v.reference)
+      if (!r) {
+        r = {
+          reference: v.reference,
+          variantCount: 0,
+          bodega: 0,
+          tiendas: {},
+          totalConsignado: 0,
+          total: 0,
+          variants: [],
+        }
+        byRef.set(v.reference, r)
+      }
+      r.variants.push(variantRow)
+      r.bodega += variantRow.bodega
+      for (const tid in v.tiendas) {
+        r.tiendas[tid] = (r.tiendas[tid] || 0) + v.tiendas[tid]
+      }
+      r.totalConsignado += variantRow.totalConsignado
+      r.total += variantRow.total
+      r.variantCount += 1
     }
 
-    // Sort: descending by total
-    inventario.sort((a, b) => b.total - a.total)
+    const referencias = Array.from(byRef.values())
+      .map(r => ({
+        ...r,
+        variants: r.variants.sort((a, b) => {
+          const na = a.size ? parseFloat(a.size.replace(',', '.')) : NaN
+          const nb = b.size ? parseFloat(b.size.replace(',', '.')) : NaN
+          if (!isNaN(na) && !isNaN(nb)) return na - nb
+          return (a.size || a.sku).localeCompare(b.size || b.sku)
+        }),
+      }))
+      .sort((a, b) => b.total - a.total)
 
     return NextResponse.json({
-      inventario,
+      referencias,
       tiendas: tiendas.map(t => ({ id: t.id, nombre: t.nombre })),
       totales: {
-        bodega: inventario.reduce((s, i) => s + i.bodega, 0),
-        consignado: inventario.reduce((s, i) => s + i.totalConsignado, 0),
-        total: inventario.reduce((s, i) => s + i.total, 0),
+        referencias: referencias.length,
+        skus: bySku.size,
+        bodega: referencias.reduce((s, r) => s + r.bodega, 0),
+        consignado: referencias.reduce((s, r) => s + r.totalConsignado, 0),
+        total: referencias.reduce((s, r) => s + r.total, 0),
       },
     })
   } catch (err) {
