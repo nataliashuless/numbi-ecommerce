@@ -2,6 +2,16 @@ import { NextResponse } from 'next/server'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 import excelNames from './excel-names.json'
 
+// Allow auth either via a logged-in session OR via the service-role bearer
+// (so we can trigger this once from a script/curl without a browser login).
+async function authorize(request: Request): Promise<NextResponse | null> {
+  const bearer = request.headers.get('authorization')
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (bearer && serviceKey && bearer === `Bearer ${serviceKey}`) return null
+  const { error } = await requireAuth()
+  return error || null
+}
+
 // POST: backfill assigned_feria_id for Siigo invoices that match an Excel
 // customer name within the feria's month + next month, are not tienda, not
 // shopify-matched, and not already assigned.
@@ -26,9 +36,9 @@ function normalize(s: string | null | undefined): string {
 
 export const maxDuration = 300
 
-export async function POST() {
-  const { error } = await requireAuth()
-  if (error) return error
+export async function POST(request: Request) {
+  const unauth = await authorize(request)
+  if (unauth) return unauth
 
   const supabase = getAdminClient()
   const entries = excelNames as ExcelEntry[]
