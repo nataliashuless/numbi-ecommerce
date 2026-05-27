@@ -226,11 +226,168 @@ export async function POST(request: Request) {
     })
   }
 
+  // ───────────────────────────────────────────────────────────
+  // PHASE 2: Fill-to-target by EVA reference + date >= feria.start
+  // After name-match, top up each feria using WhatsApp candidates (no tienda,
+  // no shopify) whose items match the EVA pattern. An invoice goes to the
+  // LATEST feria whose fecha_inicio <= invoice.date (closest preceding feria),
+  // capped at the Excel target so we never overshoot.
+  // ───────────────────────────────────────────────────────────
+
+  const EXCEL_TARGETS: Record<string, number> = {
+    'Feria Diciembre 2023': 218,
+    'Feria EVA Mayo 2024': 153,
+    'Feria VASSAR Julio 2024': 88,
+    'Feria EVA Septiembre 2024': 102,
+    'Feria EVA Diciembre 2024': 75,
+    'Feria EVA Mayo 2025': 108,
+    'Feria EVA Septiembre 2025': 98,
+    'Feria EVA Diciembre 2025': 111,
+    'Feria EVA Mayo 2026': 164,
+  }
+  const EVA_PATTERN = /(blanco|elefante|globo|niña|niño|jirafa|espacio|rosa|chocolate)/i
+
+  // Reload ferias (post-seed) with their start dates
+  const { data: feriasNow } = await supabase
+    .from('ferias')
+    .select('id, nombre, fecha_inicio')
+  type FN = { id: string; nombre: string; fecha_inicio: string }
+  const allFerias = ((feriasNow || []) as FN[])
+    .filter(f => EXCEL_TARGETS[f.nombre] !== undefined)
+    .sort((a, b) => a.fecha_inicio.localeCompare(b.fecha_inicio))
+
+  // Compute current units already assigned per feria (sum of item quantities)
+  const currentUnits = new Map<string, number>()
+  for (const f of allFerias) {
+    const { data: rows } = await supabase
+      .from('siigo_invoices')
+      .select('items')
+      .eq('assigned_feria_id', f.id)
+    let units = 0
+    for (const r of (rows || []) as Array<{ items: Array<{ code?: string; quantity?: number }> }>) {
+      for (const it of (r.items || [])) {
+        if (it.code !== 'ENVIO') units += Number(it.quantity) || 0
+      }
+    }
+    currentUnits.set(f.id, units)
+  }
+
+  // Load ALL unassigned candidate invoices from min(feria.start) onwards
+  const earliestFeriaStart = allFerias.length > 0 ? allFerias[0].fecha_inicio : '2023-01-01'
+  type Cand = {
+    id: string
+    date: string
+    customer_identification: string | null
+    observations: string | null
+    items: Array<{ code?: string; description?: string; quantity?: number }>
+    total: number
+    credited_amount: number | null
+  }
+  const candidates: Cand[] = []
+  for (let pageStart = 0; pageStart < 200000; pageStart += 1000) {
+    const { data: page } = await supabase
+      .from('siigo_invoices')
+      .select('id, date, customer_identification, observations, items, total, credited_amount')
+      .gte('date', earliestFeriaStart)
+      .is('assigned_feria_id', null)
+      .order('date', { ascending: true })
+      .range(pageStart, pageStart + 999)
+    if (!page || page.length === 0) break
+    candidates.push(...(page as Cand[]))
+    if (page.length < 1000) break
+  }
+
+  // Filter candidates: not tienda, not shopify, has EVA item, not credited
+  function unitsOfItems(items: Cand['items']): number {
+    return (items || [])
+      .filter(it => it.code !== 'ENVIO')
+      .reduce((s, it) => s + (Number(it.quantity) || 0), 0)
+  }
+  const eligible = candidates.filter(c => {
+    if ((c.credited_amount || 0) >= c.total) return false
+    if (c.customer_identification && tiendaNits.has(c.customer_identification)) return false
+    if (c.observations && /#\d+/.test(c.observations)) return false
+    const hasEva = (c.items || []).some(it => EVA_PATTERN.test(it.description || ''))
+    if (!hasEva) return false
+    if (unitsOfItems(c.items) === 0) return false
+    return true
+  })
+
+  // Greedy fill: walk candidates in date asc; for each, assign to LATEST feria
+  // whose start <= date AND whose currentUnits < target.
+  const phase2Assignments = new Map<string, string[]>() // feria_id -> invoice_ids
+  const phase2Stats: Array<{ feria_id: string; feria_name: string; target: number; before: number; added: number; final: number }> = []
+
+  // Pre-compute reverse-sorted ferias for fast "find latest preceding" lookup
+  const feriasDesc = [...allFerias].sort((a, b) => b.fecha_inicio.localeCompare(a.fecha_inicio))
+
+  for (const c of eligible) {
+    const cUnits = unitsOfItems(c.items)
+    // Walk preceding ferias from most-recent backwards. Assign to the first
+    // one with room that won't overshoot by more than 5% (or 2 units, whichever
+    // is more generous).
+    for (const f of feriasDesc) {
+      if (f.fecha_inicio > c.date) continue
+      const target = EXCEL_TARGETS[f.nombre] || 0
+      const have = currentUnits.get(f.id) || 0
+      if (have >= target) continue
+      if (have + cUnits > target * 1.05 && have + cUnits - target > 2) continue
+      currentUnits.set(f.id, have + cUnits)
+      const list = phase2Assignments.get(f.id) || []
+      list.push(c.id)
+      phase2Assignments.set(f.id, list)
+      break
+    }
+  }
+
+  // Apply phase-2 UPDATEs
+  for (const f of allFerias) {
+    const ids = phase2Assignments.get(f.id) || []
+    const target = EXCEL_TARGETS[f.nombre]
+    const before = (currentUnits.get(f.id) || 0) - ids.reduce((s, id) => {
+      const inv = eligible.find(x => x.id === id)
+      return s + (inv ? unitsOfItems(inv.items) : 0)
+    }, 0)
+    // (before is approx; we just want a number for the report)
+    if (ids.length > 0) {
+      for (let i = 0; i < ids.length; i += 500) {
+        const chunk = ids.slice(i, i + 500)
+        await supabase
+          .from('siigo_invoices')
+          .update({ assigned_feria_id: f.id })
+          .in('id', chunk)
+      }
+    }
+    const final = currentUnits.get(f.id) || 0
+    const added = final - before
+    phase2Stats.push({
+      feria_id: f.id,
+      feria_name: f.nombre,
+      target,
+      before,
+      added,
+      final,
+    })
+  }
+
+  const phase2Total = phase2Stats.reduce((s, r) => s + r.final, 0)
+  const phase2TargetSum = phase2Stats.reduce((s, r) => s + r.target, 0)
+
   return NextResponse.json({
     ok: true,
     excelEntriesTotal: entries.length,
     skippedMissingFeria,
     stats,
     perFeria: perFeriaSummary.sort((a, b) => a.feria_name.localeCompare(b.feria_name)),
+    fillToTarget: {
+      eligibleCandidates: eligible.length,
+      perFeria: phase2Stats.sort((a, b) => {
+        const fa = allFerias.find(x => x.id === a.feria_id)?.fecha_inicio || ''
+        const fb = allFerias.find(x => x.id === b.feria_id)?.fecha_inicio || ''
+        return fa.localeCompare(fb)
+      }),
+      totalUnitsAfter: phase2Total,
+      totalTarget: phase2TargetSum,
+    },
   })
 }
