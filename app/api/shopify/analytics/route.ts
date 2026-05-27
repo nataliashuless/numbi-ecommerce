@@ -95,6 +95,36 @@ export async function GET(request: Request) {
     if (page.length < pageSize) break
   }
 
+  // Build a customer→total-orders map over the ENTIRE cache (not just range).
+  // A customer with ≥2 orders historically counts as 'recurring'; their orders
+  // in the current range are 'returning' (except for the first, which is 'new').
+  // To keep it simple: any customer with ≥2 orders total is classified as
+  // returning for ALL their orders in range. This is the standard cohort
+  // definition used in Shopify Analytics.
+  const customerOrderCount = new Map<string, number>()
+  const customerFirstOrderAt = new Map<string, string>()
+  for (let off = 0; off < 200000; off += pageSize) {
+    const { data: page } = await supabase
+      .from('shopify_orders')
+      .select('id, created_at, raw')
+      .order('created_at', { ascending: true })
+      .range(off, off + pageSize - 1)
+    if (!page || page.length === 0) break
+    for (const row of (page as Array<{ id: number; created_at: string; raw: ShopifyRaw }>)) {
+      const cust = row.raw?.customer
+      // Prefer id; fall back to email for guest checkouts that still capture email
+      const key = cust?.id ? `id:${cust.id}` : (() => {
+        type RawCustomer = ShopifyRaw['customer'] & { email?: string }
+        const c = cust as RawCustomer | null
+        return c?.email ? `em:${c.email.toLowerCase()}` : null
+      })()
+      if (!key) continue
+      customerOrderCount.set(key, (customerOrderCount.get(key) || 0) + 1)
+      if (!customerFirstOrderAt.has(key)) customerFirstOrderAt.set(key, row.created_at)
+    }
+    if (page.length < pageSize) break
+  }
+
   // KPIs
   let revenue = 0
   let units = 0
@@ -176,14 +206,22 @@ export async function GET(request: Request) {
     if (utm.gclid) hasGclid += 1
     if (utm.fbclid) hasFbclid += 1
 
-    // Customer mix
-    const oc = raw.customer?.orders_count
-    if (oc === 1 || oc === undefined || oc === null) {
-      newCustomerOrders += 1
-      newCustomerRevenue += rev
-    } else {
+    // Customer mix — derived from the WHOLE cache (above), not from
+    // raw.customer.orders_count (which is unreliable: missing for guests/POS
+    // and not updated after sync). Definition: a customer with ≥2 orders
+    // total in our DB counts as 'recurring' (all their orders in range are
+    // returning). Anonymous orders (no id, no email) count as 'new'.
+    const cust = raw.customer as (ShopifyRaw['customer'] & { email?: string }) | null
+    const custKey = cust?.id
+      ? `id:${cust.id}`
+      : (cust?.email ? `em:${cust.email.toLowerCase()}` : null)
+    const totalForCustomer = custKey ? (customerOrderCount.get(custKey) || 0) : 0
+    if (totalForCustomer >= 2) {
       returningCustomerOrders += 1
       returningCustomerRevenue += rev
+    } else {
+      newCustomerOrders += 1
+      newCustomerRevenue += rev
     }
 
     // Geography (prefer shipping, fallback billing)
@@ -238,6 +276,20 @@ export async function GET(request: Request) {
 
   const aov = orders > 0 ? revenue / orders : 0
 
+  // Unique customer counts (within the in-range orders)
+  const inRangeCustomers = new Set<string>()
+  const inRangeReturningCustomers = new Set<string>()
+  for (const r of rows) {
+    const cust = r.raw?.customer as (ShopifyRaw['customer'] & { email?: string }) | null
+    const k = cust?.id ? `id:${cust.id}` : (cust?.email ? `em:${cust.email.toLowerCase()}` : null)
+    if (!k) continue
+    inRangeCustomers.add(k)
+    if ((customerOrderCount.get(k) || 0) >= 2) inRangeReturningCustomers.add(k)
+  }
+  const uniqueCustomers = inRangeCustomers.size
+  const uniqueReturningCustomers = inRangeReturningCustomers.size
+  const uniqueReturningRate = uniqueCustomers > 0 ? uniqueReturningCustomers / uniqueCustomers : 0
+
   return NextResponse.json({
     asOf: new Date().toISOString().slice(0, 10),
     range: { start: startDate, end: endDate },
@@ -254,6 +306,9 @@ export async function GET(request: Request) {
       returningCustomerOrders,
       returningCustomerRevenue,
       returningRate: orders > 0 ? returningCustomerOrders / orders : 0,
+      uniqueCustomers,
+      uniqueReturningCustomers,
+      uniqueReturningRate,
       gclidOrders: hasGclid,
       fbclidOrders: hasFbclid,
     },

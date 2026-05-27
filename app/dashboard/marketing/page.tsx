@@ -65,6 +65,9 @@ interface KPIs {
   returningCustomerOrders: number
   returningCustomerRevenue: number
   returningRate: number
+  uniqueCustomers: number
+  uniqueReturningCustomers: number
+  uniqueReturningRate: number
   gclidOrders: number
   fbclidOrders: number
 }
@@ -351,13 +354,16 @@ export default function MarketingPage() {
               </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#545454]">Returning Rate</CardTitle>
+                  <CardTitle className="text-sm font-medium text-[#545454]">Recurrentes</CardTitle>
                   <Repeat className="h-4 w-4 text-[#14B8A6]" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-[#1A2238]">{formatPct(data.kpis.returningRate)}</div>
+                  <div className="text-2xl font-bold text-[#1A2238]">{formatPct(data.kpis.uniqueReturningRate)}</div>
                   <p className="text-xs text-[#545454]">
-                    {data.kpis.returningCustomerOrders.toLocaleString()} recurrentes · {data.kpis.newCustomerOrders.toLocaleString()} nuevos
+                    {data.kpis.uniqueReturningCustomers.toLocaleString()} de {data.kpis.uniqueCustomers.toLocaleString()} customers
+                  </p>
+                  <p className="text-xs text-[#545454] mt-0.5">
+                    {data.kpis.returningCustomerOrders.toLocaleString()} órdenes recurrentes
                   </p>
                 </CardContent>
               </Card>
