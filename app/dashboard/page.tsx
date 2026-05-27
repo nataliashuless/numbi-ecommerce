@@ -72,6 +72,20 @@ interface ConsolidatedData {
   chartData: ChartPoint[]
 }
 
+interface ChannelTotals {
+  shopify: ChannelStats
+  whatsapp: ChannelStats
+  tiendas: ChannelStats
+  ferias: ChannelStats
+  total: ChannelStats
+}
+
+interface YtdComparison {
+  thisYear: ChannelTotals
+  lastYear: ChannelTotals
+  asOf: string  // ISO date "yyyy-mm-dd"
+}
+
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('es-CO', {
     style: 'currency',
@@ -112,6 +126,7 @@ export default function DashboardPage() {
   const [metric, setMetric] = useState<Metric>('ventas')
 
   const [autoMatchTick, setAutoMatchTick] = useState(0)
+  const [ytd, setYtd] = useState<YtdComparison | null>(null)
 
   useEffect(() => {
     setDateRange({ from: subMonths(new Date(), 6), to: new Date() })
@@ -126,6 +141,118 @@ export default function DashboardPage() {
       })
       .catch(() => {})
   }, [])
+
+  // YTD comparison: this year (Jan 1 → today) vs same range last year
+  useEffect(() => {
+    const today = new Date()
+    const yyyyToday = today.getFullYear()
+    const fmt = (d: Date) => format(d, 'yyyy-MM-dd')
+    const startThis = `${yyyyToday}-01-01`
+    const endThis = fmt(today)
+    const startPrev = `${yyyyToday - 1}-01-01`
+    // Same MM-DD last year
+    const prevEnd = new Date(today.getTime())
+    prevEnd.setFullYear(yyyyToday - 1)
+    const endPrev = fmt(prevEnd)
+
+    ;(async () => {
+      const [thisYear, lastYear] = await Promise.all([
+        computeChannelTotals(startThis, endThis),
+        computeChannelTotals(startPrev, endPrev),
+      ])
+      if (thisYear && lastYear) {
+        setYtd({ thisYear, lastYear, asOf: endThis })
+      }
+    })()
+  }, [autoMatchTick])
+
+  // Compute per-channel totals for an arbitrary date range. Used by the
+  // YTD comparison table. Mirrors the classification rules in fetchData()
+  // but doesn't touch chart state or main `data` state.
+  async function computeChannelTotals(startDate: string, endDate: string): Promise<ChannelTotals | null> {
+    try {
+      const [shopifyRes, siigoRes, feriasRes] = await Promise.all([
+        fetch(`/api/shopify/orders?start_date=${startDate}&end_date=${endDate}&group_by=day`),
+        fetch(`/api/siigo/invoices?start_date=${startDate}&end_date=${endDate}`),
+        fetch('/api/ferias'),
+      ])
+      const shopifyData = shopifyRes.ok ? await shopifyRes.json() : null
+      const siigoData = siigoRes.ok ? await siigoRes.json() : null
+      const feriasData = feriasRes.ok ? await feriasRes.json() : null
+
+      type FeriaWindow = { id: string; nombre: string; fecha_inicio: string; fecha_fin: string; activa: boolean }
+      const feriaWindows: FeriaWindow[] = (feriasData?.ferias || []).filter((f: FeriaWindow) => f.activa)
+      const isFeriaDate = (dateStr: string): boolean => {
+        const d = dateStr.slice(0, 10)
+        return feriaWindows.some(f => d >= f.fecha_inicio && d <= f.fecha_fin)
+      }
+
+      type ShopOrder = { orderNumber: number }
+      const shopOrders: ShopOrder[] = shopifyData?.orders || []
+      const shopifyOrderNumbers = new Set<number>(shopOrders.map(o => o.orderNumber))
+
+      const shopifyStats: ChannelStats = {
+        ventas: shopifyData?.stats?.totalRevenue || 0,
+        ordenes: shopifyData?.stats?.totalOrders || 0,
+        unidades: shopifyData?.stats?.totalUnits || 0,
+      }
+
+      type SiigoItem = { code: string; quantity: number }
+      type SiigoInv = {
+        date: string; total: number; tienda_id: string | null; observations: string
+        items: SiigoItem[]; assigned_feria_id: string | null
+      }
+      const siigoInvoices: SiigoInv[] = siigoData?.invoices || []
+      const extractOrderNum = (obs: string) => {
+        if (!obs) return null
+        const m = obs.match(/#(\d+)/)
+        return m ? parseInt(m[1], 10) : null
+      }
+
+      const manualFeriaInvoices = siigoInvoices.filter(i => i.assigned_feria_id)
+      const restAfterManual = siigoInvoices.filter(i => !i.assigned_feria_id)
+      const tiendaInvoices = restAfterManual.filter(i => i.tienda_id)
+      const directInvoices = restAfterManual.filter(i => {
+        if (i.tienda_id) return false
+        const on = extractOrderNum(i.observations)
+        if (on && shopifyOrderNumbers.has(on)) return false
+        return true
+      })
+      const windowFeriaInvoices = directInvoices.filter(i => isFeriaDate(i.date))
+      const feriaInvoices = [...manualFeriaInvoices, ...windowFeriaInvoices]
+      const whatsappInvoices = directInvoices.filter(i => !isFeriaDate(i.date))
+
+      const sumUnits = (invs: SiigoInv[]) =>
+        invs.reduce((s, i) =>
+          s + (i.items || []).filter(it => it.code !== 'ENVIO').reduce((u, it) => u + (it.quantity || 0), 0),
+        0)
+
+      const tiendas: ChannelStats = {
+        ventas: tiendaInvoices.reduce((s, i) => s + (i.total || 0), 0),
+        ordenes: tiendaInvoices.length,
+        unidades: sumUnits(tiendaInvoices),
+      }
+      const whatsapp: ChannelStats = {
+        ventas: whatsappInvoices.reduce((s, i) => s + (i.total || 0), 0),
+        ordenes: whatsappInvoices.length,
+        unidades: sumUnits(whatsappInvoices),
+      }
+      const ferias: ChannelStats = {
+        ventas: feriaInvoices.reduce((s, i) => s + (i.total || 0), 0),
+        ordenes: feriaInvoices.length,
+        unidades: sumUnits(feriaInvoices),
+      }
+      const total: ChannelStats = {
+        ventas: shopifyStats.ventas + whatsapp.ventas + tiendas.ventas + ferias.ventas,
+        ordenes: shopifyStats.ordenes + whatsapp.ordenes + tiendas.ordenes + ferias.ordenes,
+        unidades: shopifyStats.unidades + whatsapp.unidades + tiendas.unidades + ferias.unidades,
+      }
+      return { shopify: shopifyStats, whatsapp, tiendas, ferias, total }
+    } catch (e) {
+      console.error('computeChannelTotals error:', e)
+      return null
+    }
+  }
 
   async function fetchData() {
     if (!dateRange?.from || !dateRange?.to) return
@@ -716,6 +843,92 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* YTD Comparison: current year vs prior year, same date range */}
+            <Card className="mb-8">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-[#1DA9EF]" />
+                  YTD por canal
+                </CardTitle>
+                {ytd && (
+                  <p className="text-xs text-[#545454]">
+                    {format(new Date(`${new Date().getFullYear()}-01-01T12:00:00`), 'd MMM', { locale: es })}
+                    {' → '}
+                    {format(new Date(ytd.asOf + 'T12:00:00'), 'd MMM yyyy', { locale: es })}
+                    {' vs mismo rango '}
+                    {new Date().getFullYear() - 1}
+                  </p>
+                )}
+              </CardHeader>
+              <CardContent>
+                {!ytd ? (
+                  <div className="flex items-center justify-center py-8 text-[#545454]">
+                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                    Cargando comparativo YTD…
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-[#E5E7EB]">
+                          <th className="text-left py-2 px-3 font-medium text-[#545454]">Canal</th>
+                          <th className="text-right py-2 px-3 font-medium text-[#545454]">YTD {new Date().getFullYear()}</th>
+                          <th className="text-right py-2 px-3 font-medium text-[#545454]">YTD {new Date().getFullYear() - 1}</th>
+                          <th className="text-right py-2 px-3 font-medium text-[#545454]">Δ Ventas</th>
+                          <th className="text-right py-2 px-3 font-medium text-[#545454]">Δ Unidades</th>
+                          <th className="text-right py-2 px-3 font-medium text-[#545454]">Δ Órdenes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {([
+                          { key: 'shopify', label: 'Shopify', color: '#1A2238' },
+                          { key: 'whatsapp', label: 'WhatsApp', color: '#14B8A6' },
+                          { key: 'tiendas', label: 'Tiendas', color: '#1DA9EF' },
+                          { key: 'ferias', label: 'Ferias', color: '#F59E0B' },
+                          { key: 'total', label: 'Total', color: '#1A2238' },
+                        ] as const).map(({ key, label, color }) => {
+                          const cur = ytd.thisYear[key]
+                          const prev = ytd.lastYear[key]
+                          const pct = (a: number, b: number) => b === 0 ? (a > 0 ? Infinity : 0) : ((a - b) / b) * 100
+                          const fmtPct = (v: number) => {
+                            if (!isFinite(v)) return '—'
+                            const sign = v >= 0 ? '+' : ''
+                            return `${sign}${v.toFixed(1)}%`
+                          }
+                          const pctColor = (v: number) => !isFinite(v) || v === 0 ? 'text-[#545454]' : v > 0 ? 'text-green-600' : 'text-red-600'
+                          const pctVentas = pct(cur.ventas, prev.ventas)
+                          const pctUnidades = pct(cur.unidades, prev.unidades)
+                          const pctOrdenes = pct(cur.ordenes, prev.ordenes)
+                          const isTotal = key === 'total'
+                          return (
+                            <tr key={key} className={`border-b border-[#F3F4F6] ${isTotal ? 'font-semibold bg-[#F9FAFB]' : ''}`}>
+                              <td className="py-2.5 px-3">
+                                <span className="inline-flex items-center gap-2">
+                                  <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: color }} />
+                                  <span className={isTotal ? 'text-[#1A2238]' : 'text-[#1A2238]'}>{label}</span>
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono">
+                                <div>{formatCurrency(cur.ventas)}</div>
+                                <div className="text-xs text-[#545454]">{cur.unidades.toLocaleString()}u · {cur.ordenes.toLocaleString()}o</div>
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono text-[#545454]">
+                                <div>{formatCurrency(prev.ventas)}</div>
+                                <div className="text-xs">{prev.unidades.toLocaleString()}u · {prev.ordenes.toLocaleString()}o</div>
+                              </td>
+                              <td className={`py-2.5 px-3 text-right font-mono ${pctColor(pctVentas)}`}>{fmtPct(pctVentas)}</td>
+                              <td className={`py-2.5 px-3 text-right font-mono ${pctColor(pctUnidades)}`}>{fmtPct(pctUnidades)}</td>
+                              <td className={`py-2.5 px-3 text-right font-mono ${pctColor(pctOrdenes)}`}>{fmtPct(pctOrdenes)}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </>
         )}
       </main>
