@@ -321,8 +321,9 @@ export async function POST(request: Request) {
   // Pre-compute reverse-sorted ferias for fast "find latest preceding" lookup
   const feriasDesc = [...allFerias].sort((a, b) => b.fecha_inicio.localeCompare(a.fecha_inicio))
 
-  // Pass 1: strict — invoice goes to LATEST preceding feria with room
-  // (no overshoot cap; small overshoot is fine — we want to hit 1,117)
+  // Walk eligible candidates in date asc. For each, assign to the LATEST
+  // preceding feria with room (current units < target). No overshoot cap —
+  // hitting the total target of 1,117 is the priority.
   for (const c of eligible) {
     const cUnits = unitsOfItems(c.items)
     for (const f of feriasDesc) {
@@ -330,10 +331,6 @@ export async function POST(request: Request) {
       const target = EXCEL_TARGETS[f.nombre] || 0
       const have = currentUnits.get(f.id) || 0
       if (have >= target) continue
-      // Accept any candidate that doesn't massively overshoot
-      // Cap: never go past target+max(0.20*target, 10 units)
-      const maxOver = Math.max(Math.floor(target * 0.20), 10)
-      if (have + cUnits > target + maxOver) continue
       currentUnits.set(f.id, have + cUnits)
       const list = phase2Assignments.get(f.id) || []
       list.push(c.id)

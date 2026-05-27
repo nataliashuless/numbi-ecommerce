@@ -111,8 +111,20 @@ export default function DashboardPage() {
   const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month' | 'quarter'>('month')
   const [metric, setMetric] = useState<Metric>('ventas')
 
+  const [autoMatchTick, setAutoMatchTick] = useState(0)
+
   useEffect(() => {
     setDateRange({ from: subMonths(new Date(), 6), to: new Date() })
+    // Fire-and-forget historical auto-match (idempotent). When it finishes,
+    // bump the tick to trigger a data refresh so the user sees the updated
+    // ferias attribution without having to do anything.
+    fetch('/api/ferias/auto-match-excel', { method: 'POST' })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        const matched = (data?.stats?.matched || 0) + (data?.fillToTarget?.totalUnitsAfter || 0)
+        if (matched > 0) setAutoMatchTick(t => t + 1)
+      })
+      .catch(() => {})
   }, [])
 
   async function fetchData() {
@@ -299,7 +311,7 @@ export default function DashboardPage() {
     if (dateRange?.from && dateRange?.to) {
       fetchData()
     }
-  }, [dateRange, groupBy])
+  }, [dateRange, groupBy, autoMatchTick])
 
   const pieData = data ? [
     { name: 'Shopify', value: data.shopify.ventas, color: '#1A2238' },
