@@ -100,8 +100,20 @@ function formatPct(v: number) {
   return `${(v * 100).toFixed(1)}%`
 }
 
+interface QlData {
+  available: boolean
+  error?: string
+  code?: string
+  hint?: string | null
+  range?: { start: string; end: string }
+  totals?: { total_sessions?: number; online_store_visitors?: number } | null
+  daily?: Array<{ day: string; total_sessions?: number; online_store_visitors?: number }>
+  bySource?: Array<{ referrer_source: string; total_sessions?: number }>
+}
+
 export default function MarketingPage() {
   const [data, setData] = useState<AnalyticsData | null>(null)
+  const [ql, setQl] = useState<QlData | null>(null)
   const [loading, setLoading] = useState(true)
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
 
@@ -115,8 +127,12 @@ export default function MarketingPage() {
     try {
       const s = format(dateRange.from, 'yyyy-MM-dd')
       const e = format(dateRange.to, 'yyyy-MM-dd')
-      const res = await fetch(`/api/shopify/analytics?start_date=${s}&end_date=${e}`)
-      if (res.ok) setData(await res.json())
+      const [resOrders, resQl] = await Promise.all([
+        fetch(`/api/shopify/analytics?start_date=${s}&end_date=${e}`),
+        fetch(`/api/shopify/analytics-ql?start_date=${s}&end_date=${e}`),
+      ])
+      if (resOrders.ok) setData(await resOrders.json())
+      if (resQl.ok) setQl(await resQl.json())
     } finally {
       setLoading(false)
     }
@@ -204,6 +220,113 @@ export default function MarketingPage() {
           </div>
         ) : (
           <>
+            {/* ShopifyQL: visits / CVR (real Shopify Analytics) */}
+            {ql && (() => {
+              const orders = data?.kpis?.orders || 0
+              const visitors = Number(ql.totals?.online_store_visitors || 0)
+              const sessions = Number(ql.totals?.total_sessions || 0)
+              const cvr = visitors > 0 ? orders / visitors : 0
+              if (!ql.available) {
+                return (
+                  <Card className="mb-8 border-l-4 border-l-[#F59E0B]">
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5 text-[#F59E0B]" />
+                        Visits &amp; CVR — Acción requerida
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-[#1A2238] mb-3">
+                        El access token actual de Shopify no tiene permiso para leer Analytics (ShopifyQL).
+                      </p>
+                      {ql.hint && (
+                        <div className="bg-[#FEF3C7] border border-[#F59E0B]/30 rounded-md p-3 mb-3 text-sm text-[#92400E]">
+                          {ql.hint}
+                        </div>
+                      )}
+                      <details className="text-xs text-[#545454]">
+                        <summary className="cursor-pointer">Detalle técnico ({ql.code})</summary>
+                        <pre className="mt-2 bg-gray-50 p-2 rounded overflow-x-auto">{ql.error}</pre>
+                      </details>
+                    </CardContent>
+                  </Card>
+                )
+              }
+              return (
+                <>
+                  <Card className="mb-8 border-l-4 border-l-[#14B8A6]">
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5 text-[#14B8A6]" />
+                        Visits &amp; CVR — Shopify Analytics
+                      </CardTitle>
+                      <p className="text-xs text-[#545454]">
+                        Datos en vivo desde ShopifyQL (sessions, visitors). CVR se calcula contra órdenes Shopify del mismo rango.
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-4 md:grid-cols-4 mb-6">
+                        <div className="rounded-xl border bg-white p-4">
+                          <p className="text-sm text-[#545454]">Visitors únicos</p>
+                          <p className="text-2xl font-bold text-[#1A2238]">{visitors.toLocaleString()}</p>
+                        </div>
+                        <div className="rounded-xl border bg-white p-4">
+                          <p className="text-sm text-[#545454]">Sessions</p>
+                          <p className="text-2xl font-bold text-[#1A2238]">{sessions.toLocaleString()}</p>
+                        </div>
+                        <div className="rounded-xl border bg-white p-4">
+                          <p className="text-sm text-[#545454]">Órdenes Shopify</p>
+                          <p className="text-2xl font-bold text-[#1A2238]">{orders.toLocaleString()}</p>
+                        </div>
+                        <div className="rounded-xl border bg-white p-4 ring-1 ring-[#14B8A6]/20">
+                          <p className="text-sm text-[#545454]">CVR (órdenes / visitors)</p>
+                          <p className="text-2xl font-bold text-[#14B8A6]">{formatPct(cvr)}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-6 md:grid-cols-3">
+                        <div className="md:col-span-2">
+                          <h4 className="text-sm font-semibold text-[#1A2238] mb-2">Visitors &amp; Sessions por día</h4>
+                          <div className="h-[240px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={ql.daily || []}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                <XAxis dataKey="day" tick={{ fontSize: 11 }} stroke="#545454" />
+                                <YAxis tick={{ fontSize: 11 }} stroke="#545454" />
+                                <Tooltip />
+                                <Legend />
+                                <Line type="monotone" dataKey="online_store_visitors" name="Visitors" stroke="#1A2238" strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="total_sessions" name="Sessions" stroke="#14B8A6" strokeWidth={2} dot={false} />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold text-[#1A2238] mb-2">Sessions por fuente</h4>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Fuente</TableHead>
+                                <TableHead className="text-right">Sessions</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {(ql.bySource || []).slice(0, 12).map((s, i) => (
+                                <TableRow key={`${s.referrer_source}-${i}`}>
+                                  <TableCell className="font-medium">{s.referrer_source || '(direct)'}</TableCell>
+                                  <TableCell className="text-right tabular-nums">{Number(s.total_sessions || 0).toLocaleString()}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              )
+            })()}
+
             {/* KPIs */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
               <Card>
