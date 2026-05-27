@@ -869,60 +869,68 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm tabular-nums">
                       <thead>
                         <tr className="border-b border-[#E5E7EB]">
-                          <th className="text-left py-2 px-3 font-medium text-[#545454]">Canal</th>
-                          <th className="text-right py-2 px-3 font-medium text-[#545454]">YTD {new Date().getFullYear()}</th>
-                          <th className="text-right py-2 px-3 font-medium text-[#545454]">YTD {new Date().getFullYear() - 1}</th>
-                          <th className="text-right py-2 px-3 font-medium text-[#545454]">Δ Ventas</th>
-                          <th className="text-right py-2 px-3 font-medium text-[#545454]">Δ Unidades</th>
-                          <th className="text-right py-2 px-3 font-medium text-[#545454]">Δ Órdenes</th>
+                          <th className="text-left py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Canal</th>
+                          <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">YTD {new Date().getFullYear() - 1}</th>
+                          <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">YTD {new Date().getFullYear()}</th>
+                          <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Δ Ventas</th>
+                          <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Δ Unidades</th>
+                          <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Δ Órdenes</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {([
-                          { key: 'shopify', label: 'Shopify', color: '#1A2238' },
-                          { key: 'whatsapp', label: 'WhatsApp', color: '#14B8A6' },
-                          { key: 'tiendas', label: 'Tiendas', color: '#1DA9EF' },
-                          { key: 'ferias', label: 'Ferias', color: '#F59E0B' },
-                          { key: 'total', label: 'Total', color: '#1A2238' },
-                        ] as const).map(({ key, label, color }) => {
-                          const cur = ytd.thisYear[key]
-                          const prev = ytd.lastYear[key]
+                        {(() => {
+                          const sumChan = (a: ChannelStats, b: ChannelStats): ChannelStats => ({
+                            ventas: a.ventas + b.ventas,
+                            ordenes: a.ordenes + b.ordenes,
+                            unidades: a.unidades + b.unidades,
+                          })
+                          const onlineCur = sumChan(ytd.thisYear.shopify, ytd.thisYear.whatsapp)
+                          const onlinePrev = sumChan(ytd.lastYear.shopify, ytd.lastYear.whatsapp)
+                          type Row = { key: string; label: string; color: string; cur: ChannelStats; prev: ChannelStats }
+                          const rows: Row[] = [
+                            { key: 'online',  label: 'Online',  color: '#1A2238', cur: onlineCur,           prev: onlinePrev },
+                            { key: 'tiendas', label: 'Tiendas', color: '#1DA9EF', cur: ytd.thisYear.tiendas, prev: ytd.lastYear.tiendas },
+                            { key: 'ferias',  label: 'Ferias',  color: '#F59E0B', cur: ytd.thisYear.ferias,  prev: ytd.lastYear.ferias },
+                            { key: 'total',   label: 'Total',   color: '#1A2238', cur: ytd.thisYear.total,   prev: ytd.lastYear.total },
+                          ]
                           const pct = (a: number, b: number) => b === 0 ? (a > 0 ? Infinity : 0) : ((a - b) / b) * 100
                           const fmtPct = (v: number) => {
                             if (!isFinite(v)) return '—'
                             const sign = v >= 0 ? '+' : ''
                             return `${sign}${v.toFixed(1)}%`
                           }
-                          const pctColor = (v: number) => !isFinite(v) || v === 0 ? 'text-[#545454]' : v > 0 ? 'text-green-600' : 'text-red-600'
-                          const pctVentas = pct(cur.ventas, prev.ventas)
-                          const pctUnidades = pct(cur.unidades, prev.unidades)
-                          const pctOrdenes = pct(cur.ordenes, prev.ordenes)
-                          const isTotal = key === 'total'
-                          return (
-                            <tr key={key} className={`border-b border-[#F3F4F6] ${isTotal ? 'font-semibold bg-[#F9FAFB]' : ''}`}>
-                              <td className="py-2.5 px-3">
-                                <span className="inline-flex items-center gap-2">
-                                  <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: color }} />
-                                  <span className={isTotal ? 'text-[#1A2238]' : 'text-[#1A2238]'}>{label}</span>
-                                </span>
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-mono">
-                                <div>{formatCurrency(cur.ventas)}</div>
-                                <div className="text-xs text-[#545454]">{cur.unidades.toLocaleString()}u · {cur.ordenes.toLocaleString()}o</div>
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-mono text-[#545454]">
-                                <div>{formatCurrency(prev.ventas)}</div>
-                                <div className="text-xs">{prev.unidades.toLocaleString()}u · {prev.ordenes.toLocaleString()}o</div>
-                              </td>
-                              <td className={`py-2.5 px-3 text-right font-mono ${pctColor(pctVentas)}`}>{fmtPct(pctVentas)}</td>
-                              <td className={`py-2.5 px-3 text-right font-mono ${pctColor(pctUnidades)}`}>{fmtPct(pctUnidades)}</td>
-                              <td className={`py-2.5 px-3 text-right font-mono ${pctColor(pctOrdenes)}`}>{fmtPct(pctOrdenes)}</td>
-                            </tr>
-                          )
-                        })}
+                          const pctColor = (v: number) => !isFinite(v) || v === 0 ? 'text-[#6B7280]' : v > 0 ? 'text-green-600' : 'text-red-600'
+                          return rows.map(({ key, label, color, cur, prev }) => {
+                            const pctVentas = pct(cur.ventas, prev.ventas)
+                            const pctUnidades = pct(cur.unidades, prev.unidades)
+                            const pctOrdenes = pct(cur.ordenes, prev.ordenes)
+                            const isTotal = key === 'total'
+                            return (
+                              <tr key={key} className={`border-b border-[#F3F4F6] ${isTotal ? 'font-semibold bg-[#F9FAFB]' : ''}`}>
+                                <td className="py-3 px-3">
+                                  <span className="inline-flex items-center gap-2">
+                                    <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: color }} />
+                                    <span className="text-[#1A2238]">{label}</span>
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3 text-right text-[#6B7280]">
+                                  <div>{formatCurrency(prev.ventas)}</div>
+                                  <div className="text-xs">{prev.unidades.toLocaleString()}u · {prev.ordenes.toLocaleString()}o</div>
+                                </td>
+                                <td className="py-3 px-3 text-right">
+                                  <div className="text-[#1A2238]">{formatCurrency(cur.ventas)}</div>
+                                  <div className="text-xs text-[#6B7280]">{cur.unidades.toLocaleString()}u · {cur.ordenes.toLocaleString()}o</div>
+                                </td>
+                                <td className={`py-3 px-3 text-right ${pctColor(pctVentas)}`}>{fmtPct(pctVentas)}</td>
+                                <td className={`py-3 px-3 text-right ${pctColor(pctUnidades)}`}>{fmtPct(pctUnidades)}</td>
+                                <td className={`py-3 px-3 text-right ${pctColor(pctOrdenes)}`}>{fmtPct(pctOrdenes)}</td>
+                              </tr>
+                            )
+                          })
+                        })()}
                       </tbody>
                     </table>
                   </div>
