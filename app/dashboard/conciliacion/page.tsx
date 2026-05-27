@@ -38,6 +38,7 @@ import {
   ArrowUp,
   ArrowDown,
   Tent,
+  Megaphone,
 } from 'lucide-react'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 
@@ -440,6 +441,12 @@ export default function ConciliacionPage() {
               <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Tent className="h-4 w-4 mr-2" />
                 Ferias
+              </Button>
+            </Link>
+            <Link href="/dashboard/marketing">
+              <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
+                <Megaphone className="h-4 w-4 mr-2" />
+                Marketing
               </Button>
             </Link>
             <Button variant="ghost" className="rounded-none border-b-2 border-[#1DA9EF] text-[#1A2238] py-4">

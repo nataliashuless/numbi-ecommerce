@@ -35,6 +35,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Tent,
+  Megaphone,
 } from 'lucide-react'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 
@@ -245,6 +246,7 @@ export default function AnaliticaPage() {
                 Ferias
               </Button>
             </Link>
+                        <Link href="/dashboard/marketing"><Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4"><Megaphone className="h-4 w-4 mr-2" />Marketing</Button></Link>
             <Link href="/dashboard/conciliacion"><Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4"><FileText className="h-4 w-4 mr-2" />Conciliación</Button></Link>
             <Button variant="ghost" className="rounded-none border-b-2 border-[#1DA9EF] text-[#1A2238] py-4"><TrendingUp className="h-4 w-4 mr-2" />Analítica</Button>
             <Link href="/dashboard/productos"><Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4"><Package className="h-4 w-4 mr-2" />Productos</Button></Link>
