@@ -36,12 +36,40 @@ function normalize(s: string | null | undefined): string {
 
 export const maxDuration = 300
 
+// Ferias from the historical Excel that may not be in the DB yet.
+// Idempotent: only inserts if name doesn't exist.
+const EXTRA_FERIAS_SEED: Array<{
+  nombre: string
+  ubicacion: string | null
+  fecha_inicio: string
+  fecha_fin: string
+  notas: string
+}> = [
+  {
+    nombre: 'Feria Diciembre 2023',
+    ubicacion: 'Bogotá',
+    fecha_inicio: '2023-12-01',
+    fecha_fin: '2023-12-31',
+    notas: '218 unidades, $27.4M en Excel ("Ventas Consolidadas"): Vassar 88u/$11.1M + EVA 130u/$16.4M. Ventana ampliada al mes completo porque las fechas exactas del evento no están registradas.',
+  },
+]
+
 export async function POST(request: Request) {
   const unauth = await authorize(request)
   if (unauth) return unauth
 
   const supabase = getAdminClient()
   const entries = excelNames as ExcelEntry[]
+
+  // 0) Ensure historical-from-Excel ferias exist (idempotent by name)
+  const { data: existingFerias } = await supabase
+    .from('ferias')
+    .select('nombre')
+  const existingNames = new Set(((existingFerias || []) as Array<{ nombre: string }>).map(f => f.nombre))
+  const toInsert = EXTRA_FERIAS_SEED.filter(f => !existingNames.has(f.nombre))
+  if (toInsert.length > 0) {
+    await supabase.from('ferias').insert(toInsert.map(f => ({ ...f, activa: true })))
+  }
 
   // 1) Load ferias to map name -> id
   const { data: ferias, error: fErr } = await supabase
