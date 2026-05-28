@@ -91,6 +91,15 @@ export async function getMetaCredentials() {
   return data
 }
 
+export async function getGA4Credentials() {
+  const { data } = await getServiceClient()
+    .from('user_integrations')
+    .select('ga4_property_id, ga4_service_account_json')
+    .limit(1)
+    .maybeSingle()
+  return data
+}
+
 export async function getIntegration() {
   const { data } = await getServiceClient()
     .from('user_integrations')

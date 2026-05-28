@@ -93,6 +93,9 @@ interface Integration {
   meta_access_token: string | null
   meta_ad_account_id: string | null
   meta_token_expires_at: string | null
+  // GA4
+  ga4_property_id: string | null
+  ga4_service_account_json: string | null
 }
 
 export default function ConfiguracionPage() {
@@ -125,12 +128,19 @@ export default function ConfiguracionPage() {
     meta_access_token: null,
     meta_ad_account_id: null,
     meta_token_expires_at: null,
+    ga4_property_id: null,
+    ga4_service_account_json: null,
   })
 
   const [savingMeta, setSavingMeta] = useState(false)
   const [testingMeta, setTestingMeta] = useState(false)
   const [metaConnected, setMetaConnected] = useState<boolean | null>(null)
   const [metaError, setMetaError] = useState<string | null>(null)
+
+  const [savingGa4, setSavingGa4] = useState(false)
+  const [testingGa4, setTestingGa4] = useState(false)
+  const [ga4Connected, setGa4Connected] = useState<boolean | null>(null)
+  const [ga4Info, setGa4Info] = useState<string | null>(null)
 
   // Siigo payment methods state
   const [siigoPaymentMethods, setSiigoPaymentMethods] = useState<SiigoPaymentMethod[]>([])
@@ -266,6 +276,27 @@ export default function ConfiguracionPage() {
       setShopifyConnected(false)
     } finally {
       setTestingShopify(false)
+    }
+  }
+
+  async function testGa4Connection() {
+    setTestingGa4(true)
+    setGa4Info(null)
+    try {
+      const res = await fetch('/api/ga4/test')
+      const data = await res.json()
+      if (res.ok && data.ok) {
+        setGa4Connected(true)
+        setGa4Info(`✓ Propiedad: ${data.property?.displayName || ''} · TZ ${data.property?.timeZone || ''} · Service account: ${data.serviceAccountEmail || ''}`)
+      } else {
+        setGa4Connected(false)
+        setGa4Info((data.error || 'Error') + (data.hint ? `\n${data.hint}` : '') + (data.serviceAccountEmail ? `\nDale acceso "Viewer" a: ${data.serviceAccountEmail}` : ''))
+      }
+    } catch (e) {
+      setGa4Connected(false)
+      setGa4Info(e instanceof Error ? e.message : 'Error')
+    } finally {
+      setTestingGa4(false)
     }
   }
 
@@ -664,6 +695,104 @@ export default function ConfiguracionPage() {
                     disabled={testingMeta}
                   >
                     {testingMeta ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Probar Conexión
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Google Analytics 4 */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5 text-[#F9AB00]" />
+                    <CardTitle>Google Analytics 4</CardTitle>
+                  </div>
+                  {ga4Connected !== null && (
+                    ga4Connected ? (
+                      <span className="flex items-center text-green-600 text-sm">
+                        <CheckCircle className="h-4 w-4 mr-1" /> Conectado
+                      </span>
+                    ) : (
+                      <span className="flex items-center text-red-500 text-sm">
+                        <XCircle className="h-4 w-4 mr-1" /> Sin conexión
+                      </span>
+                    )
+                  )}
+                </div>
+                <CardDescription>
+                  Visits, sessions, CVR reales via GA4. Reemplaza ShopifyQL (que Shopify removió del Admin API).
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="ga4_property_id">Property ID</Label>
+                  <Input
+                    id="ga4_property_id"
+                    placeholder="123456789"
+                    value={integration.ga4_property_id || ''}
+                    onChange={e => setIntegration(prev => ({ ...prev, ga4_property_id: e.target.value }))}
+                  />
+                  <p className="text-xs text-[#545454] mt-1">
+                    En GA4 Admin → Property → Property details: el campo &quot;Property ID&quot; (numérico, ej. <code className="bg-gray-100 px-1 rounded">123456789</code>).
+                    <b> NO</b> es el &quot;Measurement ID&quot; <code className="bg-gray-100 px-1 rounded">G-XXXXXX</code>.
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="ga4_service_account_json">Service Account JSON</Label>
+                  <textarea
+                    id="ga4_service_account_json"
+                    rows={6}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+                    placeholder='{"type":"service_account","project_id":"...","client_email":"...","private_key":"..."}'
+                    value={integration.ga4_service_account_json || ''}
+                    onChange={e => setIntegration(prev => ({ ...prev, ga4_service_account_json: e.target.value }))}
+                  />
+                  <p className="text-xs text-[#545454] mt-1">
+                    Pegá el JSON completo del archivo descargado de Google Cloud Console.
+                  </p>
+                </div>
+                <details className="text-xs text-[#545454]">
+                  <summary className="cursor-pointer text-[#1A2238] font-medium">Cómo conseguir las credenciales (5 pasos, ~10 min)</summary>
+                  <ol className="mt-2 space-y-1.5 list-decimal pl-5">
+                    <li>Andate a <a href="https://console.cloud.google.com" target="_blank" rel="noreferrer" className="text-[#1DA9EF] underline">console.cloud.google.com</a> (creá un proyecto si no tenés).</li>
+                    <li>Habilitá <a href="https://console.cloud.google.com/apis/library/analyticsdata.googleapis.com" target="_blank" rel="noreferrer" className="text-[#1DA9EF] underline">Google Analytics Data API</a> y <a href="https://console.cloud.google.com/apis/library/analyticsadmin.googleapis.com" target="_blank" rel="noreferrer" className="text-[#1DA9EF] underline">Google Analytics Admin API</a> (botón &quot;Enable&quot;).</li>
+                    <li>IAM &amp; Admin → <b>Service Accounts</b> → Create. Nombre: &quot;shuless-ga4-reader&quot;. No le des roles (no hace falta).</li>
+                    <li>Click en el service account creado → tab <b>Keys</b> → Add Key → Create new key → <b>JSON</b> → descarga el archivo. Copiá el contenido completo y pegalo arriba.</li>
+                    <li>En GA4 (analytics.google.com) → Admin → Property → <b>Property Access Management</b> → Add. Pegá el email del service account (formato <code>xxx@xxx.iam.gserviceaccount.com</code>) → Role: <b>Viewer</b>.</li>
+                  </ol>
+                  <p className="mt-2">Property ID está en GA4 Admin → Property Settings → arriba dice &quot;Property ID&quot;.</p>
+                </details>
+                {ga4Info && (
+                  <div className={`text-sm p-2 rounded whitespace-pre-line ${ga4Connected ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                    {ga4Info}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    onClick={async () => {
+                      setSavingGa4(true)
+                      await handleSave(
+                        {
+                          ga4_property_id: integration.ga4_property_id,
+                          ga4_service_account_json: integration.ga4_service_account_json,
+                        },
+                        setSavingGa4
+                      )
+                    }}
+                    disabled={savingGa4}
+                    className="bg-[#F9AB00] hover:bg-[#E69900] text-white"
+                  >
+                    {savingGa4 ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Guardar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={testGa4Connection}
+                    disabled={testingGa4}
+                  >
+                    {testingGa4 ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                     Probar Conexión
                   </Button>
                 </div>

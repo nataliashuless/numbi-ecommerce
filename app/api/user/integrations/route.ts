@@ -60,6 +60,8 @@ export async function PATCH(request: Request) {
     'meta_access_token',
     'meta_ad_account_id',
     'meta_token_expires_at',
+    'ga4_property_id',
+    'ga4_service_account_json',
   ]
 
   const sanitizedUpdates: Record<string, unknown> = {}
