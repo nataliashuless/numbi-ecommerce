@@ -9,11 +9,16 @@ import { requireAuth, getShopifyCredentials } from '@/lib/auth-helpers'
 type QLColumn = { name: string; dataType: string }
 type QLTable = { columns: QLColumn[]; rowData: string[][] }
 
+// ShopifyQL note: shopifyqlQuery was REMOVED from the Admin GraphQL API in
+// version 2025-07. We pin to 2024-10 which still has it. The endpoint stays
+// supported as a "legacy" query in 2024-10.
+const SHOPIFYQL_API_VERSION = '2024-10'
+
 async function shopifyql(shop: string, accessToken: string, query: string): Promise<
   | { ok: true; table: QLTable; raw: unknown }
   | { ok: false; code: string; message: string; raw: unknown }
 > {
-  const res = await fetch(`https://${shop}/admin/api/2025-07/graphql.json`, {
+  const res = await fetch(`https://${shop}/admin/api/${SHOPIFYQL_API_VERSION}/graphql.json`, {
     method: 'POST',
     headers: {
       'X-Shopify-Access-Token': accessToken,
