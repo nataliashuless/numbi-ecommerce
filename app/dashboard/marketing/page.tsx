@@ -114,9 +114,37 @@ interface QlData {
   bySource?: Array<{ referrer_source: string; total_sessions?: number }>
 }
 
+interface MetaCampaign {
+  key: string
+  campaign_id?: string
+  campaign_name?: string
+  spend: number
+  impressions: number
+  clicks: number
+  ctr: number
+  cpc: number
+  cpm: number
+  cpa: number
+  roas: number
+  reach: number
+  purchases: number
+  purchase_value: number
+  add_to_cart: number
+  initiate_checkout: number
+}
+
+interface MetaData {
+  connected: boolean
+  error?: string
+  range?: { start: string; end: string }
+  items?: MetaCampaign[]
+  totals?: MetaCampaign & { spend: number; purchases: number }
+}
+
 export default function MarketingPage() {
   const [data, setData] = useState<AnalyticsData | null>(null)
   const [ql, setQl] = useState<QlData | null>(null)
+  const [meta, setMeta] = useState<MetaData | null>(null)
   const [loading, setLoading] = useState(true)
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
 
@@ -130,12 +158,14 @@ export default function MarketingPage() {
     try {
       const s = format(dateRange.from, 'yyyy-MM-dd')
       const e = format(dateRange.to, 'yyyy-MM-dd')
-      const [resOrders, resQl] = await Promise.all([
+      const [resOrders, resQl, resMeta] = await Promise.all([
         fetch(`/api/shopify/analytics?start_date=${s}&end_date=${e}`),
         fetch(`/api/shopify/analytics-ql?start_date=${s}&end_date=${e}`),
+        fetch(`/api/meta/insights?start_date=${s}&end_date=${e}&level=campaign`),
       ])
       if (resOrders.ok) setData(await resOrders.json())
       if (resQl.ok) setQl(await resQl.json())
+      if (resMeta.ok) setMeta(await resMeta.json())
     } finally {
       setLoading(false)
     }

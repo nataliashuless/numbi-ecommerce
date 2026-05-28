@@ -27,6 +27,7 @@ import {
   XCircle,
   Truck,
   Receipt,
+  Facebook,
   LogOut,
   Plus,
   Trash2,
@@ -88,6 +89,10 @@ interface Integration {
   siigo_whatsapp_iva_tax_id: number | null
   siigo_whatsapp_default_document_id: number | null
   siigo_whatsapp_default_document_name: string | null
+  // Meta Marketing API
+  meta_access_token: string | null
+  meta_ad_account_id: string | null
+  meta_token_expires_at: string | null
 }
 
 export default function ConfiguracionPage() {
@@ -117,7 +122,15 @@ export default function ConfiguracionPage() {
     siigo_whatsapp_iva_tax_id: null,
     siigo_whatsapp_default_document_id: null,
     siigo_whatsapp_default_document_name: null,
+    meta_access_token: null,
+    meta_ad_account_id: null,
+    meta_token_expires_at: null,
   })
+
+  const [savingMeta, setSavingMeta] = useState(false)
+  const [testingMeta, setTestingMeta] = useState(false)
+  const [metaConnected, setMetaConnected] = useState<boolean | null>(null)
+  const [metaError, setMetaError] = useState<string | null>(null)
 
   // Siigo payment methods state
   const [siigoPaymentMethods, setSiigoPaymentMethods] = useState<SiigoPaymentMethod[]>([])
@@ -253,6 +266,29 @@ export default function ConfiguracionPage() {
       setShopifyConnected(false)
     } finally {
       setTestingShopify(false)
+    }
+  }
+
+  async function testMetaConnection() {
+    setTestingMeta(true)
+    setMetaError(null)
+    try {
+      const res = await fetch('/api/meta/test')
+      const data = await res.json()
+      if (res.ok && data.ok) {
+        setMetaConnected(true)
+        if (data.account?.name) {
+          setMetaError(`✓ Cuenta: ${data.account.name} · ${data.account.currency || ''} ${data.account.business_name ? `· ${data.account.business_name}` : ''}`)
+        }
+      } else {
+        setMetaConnected(false)
+        setMetaError(data.error || 'Error de conexión')
+      }
+    } catch (e) {
+      setMetaConnected(false)
+      setMetaError(e instanceof Error ? e.message : 'Error')
+    } finally {
+      setTestingMeta(false)
     }
   }
 
@@ -532,6 +568,102 @@ export default function ConfiguracionPage() {
                     disabled={testingShopify}
                   >
                     {testingShopify ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Probar Conexión
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Meta Marketing API */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Facebook className="h-5 w-5 text-[#1877F2]" />
+                    <CardTitle>Meta Ads</CardTitle>
+                  </div>
+                  {metaConnected !== null && (
+                    metaConnected ? (
+                      <span className="flex items-center text-green-600 text-sm">
+                        <CheckCircle className="h-4 w-4 mr-1" /> Conectado
+                      </span>
+                    ) : (
+                      <span className="flex items-center text-red-500 text-sm">
+                        <XCircle className="h-4 w-4 mr-1" /> Sin conexión
+                      </span>
+                    )
+                  )}
+                </div>
+                <CardDescription>
+                  Marketing API de Meta (Facebook/Instagram Ads). Usado para mostrar spend, impressions, CPA y ROAS en
+                  /dashboard/marketing.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="meta_ad_account_id">Ad Account ID</Label>
+                  <Input
+                    id="meta_ad_account_id"
+                    placeholder="act_1234567890"
+                    value={integration.meta_ad_account_id || ''}
+                    onChange={e => setIntegration(prev => ({ ...prev, meta_ad_account_id: e.target.value }))}
+                  />
+                  <p className="text-xs text-[#545454] mt-1">
+                    En Ads Manager → arriba a la izquierda, formato <code className="bg-gray-100 px-1 rounded">act_NNNNNNNNNN</code>.
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="meta_access_token">Access Token</Label>
+                  <Input
+                    id="meta_access_token"
+                    type="password"
+                    placeholder="EAA..."
+                    value={integration.meta_access_token || ''}
+                    onChange={e => setIntegration(prev => ({ ...prev, meta_access_token: e.target.value }))}
+                  />
+                  <p className="text-xs text-[#545454] mt-1">
+                    Token long-lived (60 días) o de System User (no expira). Scope necesario: <code className="bg-gray-100 px-1 rounded">ads_read</code>.
+                  </p>
+                </div>
+                <details className="text-xs text-[#545454]">
+                  <summary className="cursor-pointer text-[#1A2238] font-medium">Cómo obtener el token (paso a paso)</summary>
+                  <ol className="mt-2 space-y-1 list-decimal pl-5">
+                    <li>Andate a <a href="https://developers.facebook.com" target="_blank" rel="noreferrer" className="text-[#1DA9EF] underline">developers.facebook.com</a> → Mis Apps → crear app tipo Business.</li>
+                    <li>Agregar producto &quot;Marketing API&quot;.</li>
+                    <li>Tools → Graph API Explorer → seleccionar app → Generate Access Token con scope <code>ads_read</code>.</li>
+                    <li><b>Mejor</b>: en Business Settings → Users → System Users → crear uno, asignarle el ad account, y generar token (no expira).</li>
+                    <li>Para Ad Account ID: Ads Manager → arriba izquierda, copiar el ID con prefijo <code>act_</code>.</li>
+                  </ol>
+                </details>
+                {metaError && (
+                  <div className={`text-sm p-2 rounded ${metaConnected ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                    {metaError}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    onClick={async () => {
+                      setSavingMeta(true)
+                      await handleSave(
+                        {
+                          meta_access_token: integration.meta_access_token,
+                          meta_ad_account_id: integration.meta_ad_account_id,
+                        },
+                        setSavingMeta
+                      )
+                    }}
+                    disabled={savingMeta}
+                    className="bg-[#1877F2] hover:bg-[#0d65d9]"
+                  >
+                    {savingMeta ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Guardar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={testMetaConnection}
+                    disabled={testingMeta}
+                  >
+                    {testingMeta ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                     Probar Conexión
                   </Button>
                 </div>

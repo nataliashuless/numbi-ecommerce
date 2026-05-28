@@ -82,6 +82,15 @@ export async function getSiigoCredentials() {
   return data
 }
 
+export async function getMetaCredentials() {
+  const { data } = await getServiceClient()
+    .from('user_integrations')
+    .select('meta_access_token, meta_ad_account_id, meta_token_expires_at')
+    .limit(1)
+    .maybeSingle()
+  return data
+}
+
 export async function getIntegration() {
   const { data } = await getServiceClient()
     .from('user_integrations')

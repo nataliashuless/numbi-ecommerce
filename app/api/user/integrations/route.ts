@@ -57,6 +57,9 @@ export async function PATCH(request: Request) {
     'siigo_whatsapp_iva_tax_id',
     'siigo_whatsapp_default_document_id',
     'siigo_whatsapp_default_document_name',
+    'meta_access_token',
+    'meta_ad_account_id',
+    'meta_token_expires_at',
   ]
 
   const sanitizedUpdates: Record<string, unknown> = {}
