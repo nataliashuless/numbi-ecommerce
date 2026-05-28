@@ -75,6 +75,47 @@ function tableToRows(t: QLTable): Array<Record<string, string | number>> {
   })
 }
 
+// ShopifyQL syntax has shifted across Shopify Admin API versions. We try
+// multiple known-good schemas and pick the first that returns data, so a
+// single codepath works across stores on different plans / API ages.
+type SchemaVariant = {
+  name: string
+  totals: string
+  daily: string
+  bySource: string
+  sessionsField: string
+  visitorsField: string
+}
+
+function buildVariants(dateClause: string): SchemaVariant[] {
+  return [
+    {
+      name: 'customer_journey_summary',
+      sessionsField: 'sessions',
+      visitorsField: 'visitors',
+      totals: `FROM customer_journey_summary SHOW sessions, visitors ${dateClause}`,
+      daily: `FROM customer_journey_summary SHOW sessions, visitors GROUP BY day ${dateClause} ORDER BY day ASC`,
+      bySource: `FROM customer_journey_summary SHOW sessions GROUP BY referrer_source ${dateClause} ORDER BY sessions DESC`,
+    },
+    {
+      name: 'sessions (online_store_*)',
+      sessionsField: 'online_store_sessions',
+      visitorsField: 'online_store_visitors',
+      totals: `FROM sessions SHOW online_store_sessions, online_store_visitors ${dateClause}`,
+      daily: `FROM sessions SHOW online_store_sessions, online_store_visitors GROUP BY day ${dateClause} ORDER BY day ASC`,
+      bySource: `FROM sessions SHOW online_store_sessions GROUP BY referrer_source ${dateClause} ORDER BY online_store_sessions DESC`,
+    },
+    {
+      name: 'sessions (short names)',
+      sessionsField: 'sessions',
+      visitorsField: 'visitors',
+      totals: `FROM sessions SHOW sessions, visitors ${dateClause}`,
+      daily: `FROM sessions SHOW sessions, visitors GROUP BY day ${dateClause} ORDER BY day ASC`,
+      bySource: `FROM sessions SHOW sessions GROUP BY referrer_source ${dateClause} ORDER BY sessions DESC`,
+    },
+  ]
+}
+
 export async function GET(request: Request) {
   const { error } = await requireAuth()
   if (error) return error
@@ -91,9 +132,10 @@ export async function GET(request: Request) {
   const end = searchParams.get('end_date') || new Date().toISOString().slice(0, 10)
   const dateClause = `SINCE ${start} UNTIL ${end}`
 
-  // Try a single small query first to detect scope issues cheaply.
-  const ping = await shopifyql(shop, accessToken, `FROM sessions SHOW total_sessions ${dateClause}`)
-
+  // First, see if ShopifyQL works at all (and surface scope errors). The
+  // `sales` dataset is the universal smoke-test that exists on all plans
+  // — if it fails, it's a scope / token problem, not a field-name problem.
+  const ping = await shopifyql(shop, accessToken, `FROM sales SHOW total_sales ${dateClause}`)
   if (!ping.ok) {
     const isScopeError =
       /scope/i.test(ping.message) ||
@@ -111,44 +153,62 @@ export async function GET(request: Request) {
     })
   }
 
-  // Now run the full set of queries in parallel
-  const [
-    totals,
-    daily,
-    bySource,
-  ] = await Promise.all([
-    // Aggregated KPIs for the period
-    shopifyql(shop, accessToken, `
-      FROM sessions
-      SHOW total_sessions, online_store_visitors
-      ${dateClause}
-    `),
-    // Daily trend
-    shopifyql(shop, accessToken, `
-      FROM sessions
-      SHOW total_sessions, online_store_visitors
-      GROUP BY day
-      ${dateClause}
-      ORDER BY day ASC
-    `),
-    // Sessions by referrer source (organic, direct, social, ads, …)
-    shopifyql(shop, accessToken, `
-      FROM sessions
-      SHOW total_sessions
-      GROUP BY referrer_source
-      ${dateClause}
-      ORDER BY total_sessions DESC
-    `),
+  // ShopifyQL is reachable — now find the right schema for visitor data.
+  // Try variants in order; first that returns a non-empty response wins.
+  const variants = buildVariants(dateClause)
+  const variantAttempts: Array<{ name: string; ok: boolean; code?: string; message?: string }> = []
+  let chosenVariant: SchemaVariant | null = null
+  let totalsTable: QLTable | null = null
+  for (const v of variants) {
+    const r = await shopifyql(shop, accessToken, v.totals)
+    variantAttempts.push({ name: v.name, ok: r.ok, code: r.ok ? undefined : r.code, message: r.ok ? undefined : r.message })
+    if (r.ok) {
+      chosenVariant = v
+      totalsTable = r.table
+      break
+    }
+  }
+
+  if (!chosenVariant || !totalsTable) {
+    return NextResponse.json({
+      available: false,
+      error: 'No working ShopifyQL schema found for visitor data',
+      code: 'NO_SCHEMA_MATCHED',
+      hint: 'Tu token tiene scope ShopifyQL pero ninguna sintaxis conocida para visitors funcionó. Compartime el "diagnostics.attempts" abajo y ajusto el endpoint a tu plan/versión.',
+      diagnostics: { attempts: variantAttempts },
+    })
+  }
+
+  // Fetch daily + by-source using the chosen variant
+  const [daily, bySource] = await Promise.all([
+    shopifyql(shop, accessToken, chosenVariant.daily),
+    shopifyql(shop, accessToken, chosenVariant.bySource),
   ])
+
+  // Normalize: the UI expects keys total_sessions, online_store_visitors,
+  // day, referrer_source. Rename based on the chosen schema.
+  function rename(rows: Array<Record<string, string | number>>): Array<Record<string, string | number>> {
+    return rows.map(r => {
+      const out: Record<string, string | number> = { ...r }
+      if (chosenVariant && chosenVariant.sessionsField !== 'total_sessions') {
+        out.total_sessions = r[chosenVariant.sessionsField] ?? 0
+      }
+      if (chosenVariant && chosenVariant.visitorsField !== 'online_store_visitors') {
+        out.online_store_visitors = r[chosenVariant.visitorsField] ?? 0
+      }
+      return out
+    })
+  }
 
   return NextResponse.json({
     available: true,
     range: { start, end },
-    totals: totals.ok ? tableToRows(totals.table)[0] || null : null,
-    daily: daily.ok ? tableToRows(daily.table) : [],
-    bySource: bySource.ok ? tableToRows(bySource.table) : [],
+    schema: chosenVariant.name,
+    totals: rename(tableToRows(totalsTable))[0] || null,
+    daily: daily.ok ? rename(tableToRows(daily.table)) : [],
+    bySource: bySource.ok ? rename(tableToRows(bySource.table)) : [],
     diagnostics: {
-      totals_error: totals.ok ? null : { code: totals.code, message: totals.message },
+      attempts: variantAttempts,
       daily_error: daily.ok ? null : { code: daily.code, message: daily.message },
       bySource_error: bySource.ok ? null : { code: bySource.code, message: bySource.message },
     },
