@@ -9,16 +9,16 @@ import { requireAuth, getShopifyCredentials } from '@/lib/auth-helpers'
 type QLColumn = { name: string; dataType: string }
 type QLTable = { columns: QLColumn[]; rowData: string[][] }
 
-// ShopifyQL note: shopifyqlQuery was REMOVED from the Admin GraphQL API in
-// version 2025-07. We pin to 2024-10 which still has it. The endpoint stays
-// supported as a "legacy" query in 2024-10.
-const SHOPIFYQL_API_VERSION = '2024-10'
+// ShopifyQL note: shopifyqlQuery has been progressively removed from the
+// Admin GraphQL API. We try several versions in order until one accepts it,
+// or surface a clean "removed" error if none do.
+const SHOPIFYQL_VERSIONS_TO_TRY = ['2024-10', '2024-07', '2024-04', '2024-01', '2023-10']
 
-async function shopifyql(shop: string, accessToken: string, query: string): Promise<
-  | { ok: true; table: QLTable; raw: unknown }
-  | { ok: false; code: string; message: string; raw: unknown }
+async function shopifyqlAt(shop: string, accessToken: string, apiVersion: string, query: string): Promise<
+  | { ok: true; table: QLTable; raw: unknown; apiVersion: string }
+  | { ok: false; code: string; message: string; raw: unknown; apiVersion: string }
 > {
-  const res = await fetch(`https://${shop}/admin/api/${SHOPIFYQL_API_VERSION}/graphql.json`, {
+  const res = await fetch(`https://${shop}/admin/api/${apiVersion}/graphql.json`, {
     method: 'POST',
     headers: {
       'X-Shopify-Access-Token': accessToken,
@@ -46,23 +46,50 @@ async function shopifyql(shop: string, accessToken: string, query: string): Prom
   const raw = await res.json().catch(() => ({}))
 
   if (!res.ok) {
-    return { ok: false, code: `HTTP_${res.status}`, message: JSON.stringify(raw).slice(0, 500), raw }
+    return { ok: false, code: `HTTP_${res.status}`, message: JSON.stringify(raw).slice(0, 500), raw, apiVersion }
   }
   if (raw?.errors?.length) {
     const first = raw.errors[0]
-    return { ok: false, code: first?.extensions?.code || 'GRAPHQL_ERROR', message: first?.message || 'GraphQL error', raw }
+    return { ok: false, code: first?.extensions?.code || 'GRAPHQL_ERROR', message: first?.message || 'GraphQL error', raw, apiVersion }
   }
   const node = raw?.data?.shopifyqlQuery
   if (!node) {
-    return { ok: false, code: 'EMPTY_RESPONSE', message: 'shopifyqlQuery returned null', raw }
+    return { ok: false, code: 'EMPTY_RESPONSE', message: 'shopifyqlQuery returned null', raw, apiVersion }
   }
   if (node.__typename === 'ParseError') {
-    return { ok: false, code: node.code || 'PARSE_ERROR', message: node.message || 'Parse error', raw }
+    return { ok: false, code: node.code || 'PARSE_ERROR', message: node.message || 'Parse error', raw, apiVersion }
   }
   if (node.__typename === 'TableResponse') {
-    return { ok: true, table: node.tableData as QLTable, raw }
+    return { ok: true, table: node.tableData as QLTable, raw, apiVersion }
   }
-  return { ok: false, code: 'UNKNOWN_RESPONSE_TYPE', message: node.__typename || 'unknown', raw }
+  return { ok: false, code: 'UNKNOWN_RESPONSE_TYPE', message: node.__typename || 'unknown', raw, apiVersion }
+}
+
+// Wrapper that finds the first API version where shopifyqlQuery is accepted.
+// Caches the discovered version per process so subsequent calls don't pay the
+// probe cost again.
+let cachedWorkingApiVersion: string | null = null
+async function shopifyql(shop: string, accessToken: string, query: string): Promise<
+  | { ok: true; table: QLTable; raw: unknown; apiVersion: string }
+  | { ok: false; code: string; message: string; raw: unknown; apiVersion: string }
+> {
+  const versionsToTry = cachedWorkingApiVersion
+    ? [cachedWorkingApiVersion, ...SHOPIFYQL_VERSIONS_TO_TRY.filter(v => v !== cachedWorkingApiVersion)]
+    : SHOPIFYQL_VERSIONS_TO_TRY
+  let last: Awaited<ReturnType<typeof shopifyqlAt>> | null = null
+  for (const ver of versionsToTry) {
+    const r = await shopifyqlAt(shop, accessToken, ver, query)
+    if (r.ok) {
+      cachedWorkingApiVersion = ver
+      return r
+    }
+    last = r
+    // If it's NOT a "field doesn't exist" error, stop early — older versions
+    // won't help with scope/parse errors.
+    const fieldGone = /doesn'?t exist|not defined|unknown field/i.test(r.message || '')
+    if (!fieldGone) break
+  }
+  return last as Awaited<ReturnType<typeof shopifyqlAt>>
 }
 
 function tableToRows(t: QLTable): Array<Record<string, string | number>> {
@@ -147,12 +174,17 @@ export async function GET(request: Request) {
       /access denied/i.test(ping.message) ||
       ping.code === 'ACCESS_DENIED' ||
       ping.code === 'HTTP_403'
+    const fieldRemoved = /doesn'?t exist|not defined|unknown field/i.test(ping.message || '')
     return NextResponse.json({
       available: false,
       error: ping.message,
       code: ping.code,
+      apiVersionTried: ping.apiVersion,
+      versionsTried: SHOPIFYQL_VERSIONS_TO_TRY,
       hint: isScopeError
         ? 'El access token no tiene el scope read_reports. Pasos: 1) En Shopify Admin → Settings → Apps → Develop apps → la app conectada, agregá el scope read_reports. 2) Re-instalá la app (re-authorize). 3) El token nuevo ya devuelve datos de ShopifyQL.'
+        : fieldRemoved
+        ? `Shopify eliminó el field shopifyqlQuery en TODAS las versiones de API que probamos (${SHOPIFYQL_VERSIONS_TO_TRY.join(', ')}). Esto es un cambio de Shopify, no del token. Alternativas: 1) Migrar a GA4 (Google Analytics) que sigue dando sessions/CVR. 2) Usar el reporting nativo de Shopify Admin (no expone API). 3) Esperar a que Shopify libere el reemplazo de Analytics API.`
         : null,
       raw: ping.raw,
     })

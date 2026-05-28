@@ -269,8 +269,8 @@ export default function MarketingPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-sm text-[#1A2238] mb-3">
-                        El access token actual de Shopify no tiene permiso para leer Analytics (ShopifyQL).
+                      <p className="text-sm text-[#1A2238] mb-3 font-medium">
+                        {ql.error || 'ShopifyQL no disponible.'}
                       </p>
                       {ql.hint && (
                         <div className="bg-[#FEF3C7] border border-[#F59E0B]/30 rounded-md p-3 mb-3 text-sm text-[#92400E]">
@@ -279,7 +279,7 @@ export default function MarketingPage() {
                       )}
                       <details className="text-xs text-[#545454]">
                         <summary className="cursor-pointer">Detalle técnico ({ql.code})</summary>
-                        <pre className="mt-2 bg-gray-50 p-2 rounded overflow-x-auto">{ql.error}</pre>
+                        <pre className="mt-2 bg-gray-50 p-2 rounded overflow-x-auto whitespace-pre-wrap">{JSON.stringify(ql, null, 2)}</pre>
                       </details>
                     </CardContent>
                   </Card>
