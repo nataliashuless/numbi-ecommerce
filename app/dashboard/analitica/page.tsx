@@ -99,6 +99,237 @@ function sumTiendasStats(tiendas: Record<string, ChannelStats>): ChannelStats {
   return { qty, amount, invoices }
 }
 
+interface YtdBucket { unidades: number; monto: number; ordenes: number }
+interface YtdFamilyRow { family: string; current: YtdBucket; previous: YtdBucket }
+interface YtdDesignRow { design: string; family: string; current: YtdBucket; previous: YtdBucket }
+interface YtdResponse {
+  asOf: string
+  currentRange: { start: string; end: string }
+  previousRange: { start: string; end: string }
+  families: YtdFamilyRow[]
+  designs: YtdDesignRow[]
+  familyMap: Record<string, string>
+}
+
+function pctChange(curr: number, prev: number): number | null {
+  if (prev === 0) return curr > 0 ? Infinity : 0
+  return ((curr - prev) / prev) * 100
+}
+function fmtPct(v: number | null): string {
+  if (v === null) return '—'
+  if (!isFinite(v)) return v > 0 ? '+∞' : '—'
+  const sign = v >= 0 ? '+' : ''
+  return `${sign}${v.toFixed(1)}%`
+}
+function pctColor(v: number | null): string {
+  if (v === null || v === 0) return 'text-[#6B7280]'
+  if (!isFinite(v)) return v > 0 ? 'text-green-600' : 'text-red-600'
+  return v > 0 ? 'text-green-600' : 'text-red-600'
+}
+
+function YtdFamiliasView() {
+  const [data, setData] = useState<YtdResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [expandedFamily, setExpandedFamily] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    setLoading(true)
+    fetch('/api/analitica/familias')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setData(d) })
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading || !data) {
+    return (
+      <div className="flex items-center justify-center py-12 text-[#545454]">
+        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+        Cargando YTD…
+      </div>
+    )
+  }
+
+  const designsByFamily = new Map<string, YtdDesignRow[]>()
+  for (const d of data.designs) {
+    const arr = designsByFamily.get(d.family) || []
+    arr.push(d)
+    designsByFamily.set(d.family, arr)
+  }
+
+  const totals = data.families.reduce(
+    (acc, f) => ({
+      curUnits: acc.curUnits + f.current.unidades,
+      prevUnits: acc.prevUnits + f.previous.unidades,
+      curMonto: acc.curMonto + f.current.monto,
+      prevMonto: acc.prevMonto + f.previous.monto,
+    }),
+    { curUnits: 0, prevUnits: 0, curMonto: 0, prevMonto: 0 },
+  )
+
+  const yyyyThis = new Date(data.asOf + 'T12:00:00').getFullYear()
+  const yyyyPrev = yyyyThis - 1
+
+  function toggleFamily(name: string) {
+    setExpandedFamily(prev => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
+
+  return (
+    <div>
+      <div className="text-xs text-[#6B7280] mb-4">
+        YTD: {data.currentRange.start} → {data.currentRange.end} vs {data.previousRange.start} → {data.previousRange.end}.
+        Mapeo familia↔diseño definido en código (edítalo en <code className="bg-gray-100 px-1 rounded">app/api/analitica/familias/route.ts</code> si está mal).
+      </div>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-lg">Resumen por familia</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm tabular-nums">
+              <thead>
+                <tr className="border-b border-[#E5E7EB]">
+                  <th className="text-left py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Familia</th>
+                  <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">YTD {yyyyPrev}</th>
+                  <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">YTD {yyyyThis}</th>
+                  <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Δ Monto</th>
+                  <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Δ Unidades</th>
+                  <th className="w-8"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.families.map(f => {
+                  const designs = designsByFamily.get(f.family) || []
+                  const expanded = expandedFamily.has(f.family)
+                  const dMon = pctChange(f.current.monto, f.previous.monto)
+                  const dUni = pctChange(f.current.unidades, f.previous.unidades)
+                  return (
+                    <Fragment key={f.family}>
+                      <tr
+                        className="border-b border-[#F3F4F6] hover:bg-[#F9FAFB] cursor-pointer"
+                        onClick={() => toggleFamily(f.family)}
+                      >
+                        <td className="py-3 px-3 font-medium text-[#1A2238]">{f.family}</td>
+                        <td className="py-3 px-3 text-right text-[#6B7280]">
+                          <div>{formatCurrency(f.previous.monto)}</div>
+                          <div className="text-xs">{f.previous.unidades.toLocaleString()}u</div>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <div className="text-[#1A2238]">{formatCurrency(f.current.monto)}</div>
+                          <div className="text-xs text-[#6B7280]">{f.current.unidades.toLocaleString()}u</div>
+                        </td>
+                        <td className={`py-3 px-3 text-right ${pctColor(dMon)}`}>{fmtPct(dMon)}</td>
+                        <td className={`py-3 px-3 text-right ${pctColor(dUni)}`}>{fmtPct(dUni)}</td>
+                        <td className="py-3 px-3 text-right text-[#9CA3AF]">
+                          {expanded ? <ChevronDown className="h-4 w-4 inline" /> : <ChevronRight className="h-4 w-4 inline" />}
+                        </td>
+                      </tr>
+                      {expanded && designs.map(d => {
+                        const dDmon = pctChange(d.current.monto, d.previous.monto)
+                        const dDuni = pctChange(d.current.unidades, d.previous.unidades)
+                        return (
+                          <tr key={`${f.family}-${d.design}`} className="border-b border-[#F3F4F6] bg-[#F9FAFB]/50">
+                            <td className="py-2.5 px-3 pl-8 text-sm text-[#1A2238]">
+                              <span className="text-[#6B7280] mr-1">↳</span>{d.design}
+                            </td>
+                            <td className="py-2.5 px-3 text-right text-[#6B7280] text-sm">
+                              <div>{formatCurrency(d.previous.monto)}</div>
+                              <div className="text-xs">{d.previous.unidades.toLocaleString()}u</div>
+                            </td>
+                            <td className="py-2.5 px-3 text-right text-sm">
+                              <div className="text-[#1A2238]">{formatCurrency(d.current.monto)}</div>
+                              <div className="text-xs text-[#6B7280]">{d.current.unidades.toLocaleString()}u</div>
+                            </td>
+                            <td className={`py-2.5 px-3 text-right text-sm ${pctColor(dDmon)}`}>{fmtPct(dDmon)}</td>
+                            <td className={`py-2.5 px-3 text-right text-sm ${pctColor(dDuni)}`}>{fmtPct(dDuni)}</td>
+                            <td></td>
+                          </tr>
+                        )
+                      })}
+                    </Fragment>
+                  )
+                })}
+                {(() => {
+                  const dMon = pctChange(totals.curMonto, totals.prevMonto)
+                  const dUni = pctChange(totals.curUnits, totals.prevUnits)
+                  return (
+                    <tr className="font-semibold bg-[#F9FAFB] border-t-2 border-[#E5E7EB]">
+                      <td className="py-3 px-3 text-[#1A2238]">Total</td>
+                      <td className="py-3 px-3 text-right text-[#6B7280]">
+                        <div>{formatCurrency(totals.prevMonto)}</div>
+                        <div className="text-xs">{totals.prevUnits.toLocaleString()}u</div>
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <div className="text-[#1A2238]">{formatCurrency(totals.curMonto)}</div>
+                        <div className="text-xs text-[#6B7280]">{totals.curUnits.toLocaleString()}u</div>
+                      </td>
+                      <td className={`py-3 px-3 text-right ${pctColor(dMon)}`}>{fmtPct(dMon)}</td>
+                      <td className={`py-3 px-3 text-right ${pctColor(dUni)}`}>{fmtPct(dUni)}</td>
+                      <td></td>
+                    </tr>
+                  )
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Detalle por diseño (todos)</CardTitle>
+          <p className="text-xs text-[#545454]">Ordenado por revenue YTD {yyyyThis} descendente.</p>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm tabular-nums">
+              <thead>
+                <tr className="border-b border-[#E5E7EB]">
+                  <th className="text-left py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Diseño</th>
+                  <th className="text-left py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Familia</th>
+                  <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">YTD {yyyyPrev}</th>
+                  <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">YTD {yyyyThis}</th>
+                  <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Δ Monto</th>
+                  <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Δ Unidades</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.designs.map(d => {
+                  const dMon = pctChange(d.current.monto, d.previous.monto)
+                  const dUni = pctChange(d.current.unidades, d.previous.unidades)
+                  return (
+                    <tr key={d.design} className="border-b border-[#F3F4F6]">
+                      <td className="py-2.5 px-3 font-medium text-[#1A2238]">{d.design}</td>
+                      <td className="py-2.5 px-3 text-[#6B7280]">
+                        {d.family === 'Otros' ? <span className="text-xs italic">{d.family}</span> : d.family}
+                      </td>
+                      <td className="py-2.5 px-3 text-right text-[#6B7280]">
+                        <div>{formatCurrency(d.previous.monto)}</div>
+                        <div className="text-xs">{d.previous.unidades.toLocaleString()}u</div>
+                      </td>
+                      <td className="py-2.5 px-3 text-right">
+                        <div className="text-[#1A2238]">{formatCurrency(d.current.monto)}</div>
+                        <div className="text-xs text-[#6B7280]">{d.current.unidades.toLocaleString()}u</div>
+                      </td>
+                      <td className={`py-2.5 px-3 text-right ${pctColor(dMon)}`}>{fmtPct(dMon)}</td>
+                      <td className={`py-2.5 px-3 text-right ${pctColor(dUni)}`}>{fmtPct(dUni)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 export default function AnaliticaPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
 
@@ -106,6 +337,7 @@ export default function AnaliticaPage() {
     setDateRange({ from: subMonths(new Date(), 6), to: new Date() })
   }, [])
 
+  const [activeTab, setActiveTab] = useState<'canal' | 'ytd'>('canal')
   const [data, setData] = useState<AnalyticsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -257,18 +489,52 @@ export default function AnaliticaPage() {
       </div>
 
       <main className="container mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-[#1A2238] mb-2">Analítica por producto y canal</h1>
-            <p className="text-[#545454]">Referencias agrupadas. Click una fila para ver las tallas; usá el botón a la derecha de Tiendas para desplegar/contraer todas las tiendas en columnas.</p>
+            <h1 className="text-3xl font-bold text-[#1A2238] mb-2">Analítica</h1>
+            <p className="text-[#545454]">Productos por canal y comparativo YTD por familia/diseño.</p>
           </div>
           <div className="flex items-center gap-2">
-            <DateRangePicker date={dateRange} onDateChange={setDateRange} />
-            <Button variant="outline" size="icon" onClick={fetchData} disabled={loading}>
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            </Button>
+            {activeTab === 'canal' && (
+              <>
+                <DateRangePicker date={dateRange} onDateChange={setDateRange} />
+                <Button variant="outline" size="icon" onClick={fetchData} disabled={loading}>
+                  <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                </Button>
+              </>
+            )}
           </div>
         </div>
+
+        {/* Tabs */}
+        <div className="border-b border-[#E5E7EB] mb-6">
+          <div className="flex gap-1">
+            <button
+              onClick={() => setActiveTab('canal')}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'canal'
+                  ? 'border-[#1DA9EF] text-[#1A2238]'
+                  : 'border-transparent text-[#6B7280] hover:text-[#1A2238] hover:border-[#1DA9EF]/30'
+              }`}
+            >
+              Productos por canal
+            </button>
+            <button
+              onClick={() => setActiveTab('ytd')}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'ytd'
+                  ? 'border-[#1DA9EF] text-[#1A2238]'
+                  : 'border-transparent text-[#6B7280] hover:text-[#1A2238] hover:border-[#1DA9EF]/30'
+              }`}
+            >
+              YTD por familia y diseño
+            </button>
+          </div>
+        </div>
+
+        {activeTab === 'ytd' && <YtdFamiliasView />}
+
+        {activeTab === 'canal' && <>
 
         {error && (
           <Card className="mb-6 border-red-200 bg-red-50">
@@ -485,6 +751,7 @@ export default function AnaliticaPage() {
             )}
           </CardContent>
         </Card>
+        </>}
       </main>
     </div>
   )
