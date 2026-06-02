@@ -776,11 +776,14 @@ export default function DashboardPage() {
                           <YAxis
                             tick={{ fontSize: 12 }}
                             stroke="#545454"
-                            tickFormatter={(value) =>
-                              metric === 'ventas'
-                                ? `$${(value / 1000).toFixed(0)}k`
-                                : Number(value).toLocaleString()
-                            }
+                            tickFormatter={(value) => {
+                              if (metric !== 'ventas') return Number(value).toLocaleString()
+                              const v = Number(value) || 0
+                              if (v >= 1_000_000_000) return `$${(v / 1_000_000_000).toFixed(1)}B`
+                              if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(v >= 10_000_000 ? 0 : 1)}M`
+                              if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}k`
+                              return `$${v}`
+                            }}
                           />
                           <Tooltip
                             content={(props) => {
