@@ -100,7 +100,7 @@ const COLORS = ['#1A2238', '#14B8A6', '#1DA9EF', '#F59E0B']
 
 const FERIA_COLOR = '#F59E0B'
 
-function getGroupKey(dateStr: string, groupBy: 'day' | 'week' | 'month' | 'quarter'): string {
+function getGroupKey(dateStr: string, groupBy: 'day' | 'week' | 'month' | 'quarter' | 'year'): string {
   const date = new Date(dateStr + 'T12:00:00')
   if (groupBy === 'month') {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
@@ -114,6 +114,8 @@ function getGroupKey(dateStr: string, groupBy: 'day' | 'week' | 'month' | 'quart
   } else if (groupBy === 'quarter') {
     const quarter = Math.floor(date.getMonth() / 3) + 1
     return `${date.getFullYear()}-Q${quarter}`
+  } else if (groupBy === 'year') {
+    return `${date.getFullYear()}`
   }
   return dateStr
 }
@@ -123,7 +125,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [shop, setShop] = useState('')
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
-  const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month' | 'quarter'>('month')
+  const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month' | 'quarter' | 'year'>('month')
   const [metric, setMetric] = useState<Metric>('ventas')
 
   const [autoMatchTick, setAutoMatchTick] = useState(0)
@@ -459,6 +461,8 @@ export default function DashboardPage() {
       displayDate = format(new Date(parseInt(year), parseInt(month) - 1, 1), 'MMM yyyy', { locale: es })
     } else if (groupBy === 'quarter') {
       displayDate = d.date // e.g., "2024-Q1"
+    } else if (groupBy === 'year') {
+      displayDate = d.date // e.g., "2024"
     }
     return { ...d, displayDate }
   }) || []
@@ -751,6 +755,14 @@ export default function DashboardPage() {
                       className={groupBy === 'quarter' ? 'bg-[#1DA9EF] text-[#1A2238] hover:bg-[#1DA9EF]/90' : ''}
                     >
                       Trimestre
+                    </Button>
+                    <Button
+                      variant={groupBy === 'year' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setGroupBy('year')}
+                      className={groupBy === 'year' ? 'bg-[#1DA9EF] text-[#1A2238] hover:bg-[#1DA9EF]/90' : ''}
+                    >
+                      Año
                     </Button>
                   </div>
                 </CardHeader>
