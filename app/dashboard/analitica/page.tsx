@@ -108,7 +108,8 @@ interface YtdResponse {
   previousRange: { start: string; end: string }
   families: YtdFamilyRow[]
   designs: YtdDesignRow[]
-  familyMap: Record<string, string>
+  patterns?: Array<{ keyword: string; design: string; family: string }>
+  unmappedExamples?: Array<{ reference: string; count: number; unidades: number; monto: number }>
 }
 
 function pctChange(curr: number, prev: number): number | null {
@@ -182,8 +183,42 @@ function YtdFamiliasView() {
     <div>
       <div className="text-xs text-[#6B7280] mb-4">
         YTD: {data.currentRange.start} → {data.currentRange.end} vs {data.previousRange.start} → {data.previousRange.end}.
-        Mapeo familia↔diseño definido en código (edítalo en <code className="bg-gray-100 px-1 rounded">app/api/analitica/familias/route.ts</code> si está mal).
       </div>
+
+      {(data.unmappedExamples && data.unmappedExamples.length > 0) && (
+        <Card className="mb-6 border-l-4 border-l-[#F59E0B]">
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2 text-[#1A2238]">
+              ⚠ Descripciones sin familia ({data.unmappedExamples.length})
+            </CardTitle>
+            <p className="text-xs text-[#545454]">
+              Estos items cayeron en &quot;Otros&quot; porque no contienen ninguno de los keywords del mapping. Pasame los nombres y los agrego.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm tabular-nums">
+                <thead>
+                  <tr className="border-b border-[#E5E7EB]">
+                    <th className="text-left py-2 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Descripción</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Unidades</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Monto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.unmappedExamples.slice(0, 25).map(u => (
+                    <tr key={u.reference} className="border-b border-[#F3F4F6]">
+                      <td className="py-2 px-3 font-mono text-[#1A2238]">{u.reference}</td>
+                      <td className="py-2 px-3 text-right">{u.unidades.toLocaleString()}</td>
+                      <td className="py-2 px-3 text-right">${u.monto.toLocaleString('es-CO')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="mb-6">
         <CardHeader>

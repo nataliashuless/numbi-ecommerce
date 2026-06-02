@@ -8,20 +8,25 @@ import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 // Edit FAMILY_MAP to change the family of each design. Unknown designs
 // fall into "Otros".
 
-const FAMILY_MAP: Record<string, string> = {
-  // Pequeños Caminantes (basics / first walkers)
-  'Blanco': 'Pequeños Caminantes',
-  'Rosa': 'Pequeños Caminantes',
-  'Niño': 'Pequeños Caminantes',
-  'Niña': 'Pequeños Caminantes',
-  'Chocolate': 'Pequeños Caminantes',
-  // Exploradores (animal / adventure designs)
-  'Elefante': 'Exploradores',
-  'Globo': 'Exploradores',
-  'Jirafa': 'Exploradores',
-  'Espacio': 'Exploradores',
-  'Leo': 'Exploradores',
-}
+// Each entry maps ANY keyword that may appear in the Siigo description
+// (case-insensitive, accent-insensitive) to a canonical design name + family.
+// The first pattern that matches wins. If nothing matches → "Otros".
+const DESIGN_PATTERNS: Array<{ keyword: string; design: string; family: string }> = [
+  // Pequeños Caminantes
+  { keyword: 'blanco',    design: 'Blanco',    family: 'Pequeños Caminantes' },
+  { keyword: 'rosa',      design: 'Rosa',      family: 'Pequeños Caminantes' },
+  { keyword: 'niño',      design: 'Niño',      family: 'Pequeños Caminantes' },
+  { keyword: 'nino',      design: 'Niño',      family: 'Pequeños Caminantes' },
+  { keyword: 'niña',      design: 'Niña',      family: 'Pequeños Caminantes' },
+  { keyword: 'nina',      design: 'Niña',      family: 'Pequeños Caminantes' },
+  { keyword: 'chocolate', design: 'Chocolate', family: 'Pequeños Caminantes' },
+  // Exploradores
+  { keyword: 'elefante',  design: 'Elefante',  family: 'Exploradores' },
+  { keyword: 'globo',     design: 'Globo',     family: 'Exploradores' },
+  { keyword: 'jirafa',    design: 'Jirafa',    family: 'Exploradores' },
+  { keyword: 'espacio',   design: 'Espacio',   family: 'Exploradores' },
+  { keyword: 'leo',       design: 'Leo',       family: 'Exploradores' },
+]
 
 type Item = { code: string; description: string; quantity: number; price: number; total?: number }
 type CachedInvoice = {
@@ -53,12 +58,15 @@ function parseReference(desc: string): string {
   return trimmed || '—'
 }
 
-function familyOf(reference: string): string {
-  const refNorm = norm(reference)
-  for (const [design, family] of Object.entries(FAMILY_MAP)) {
-    if (norm(design) === refNorm) return family
+// Resolve a (description) -> canonical design + family.
+// Looks for any of the keywords as a substring in the normalized text.
+// Returns null if nothing matched (caller decides how to bucket it).
+function resolveDesign(description: string): { design: string; family: string } | null {
+  const text = norm(description)
+  for (const { keyword, design, family } of DESIGN_PATTERNS) {
+    if (text.includes(norm(keyword))) return { design, family }
   }
-  return 'Otros'
+  return null
 }
 
 type Bucket = { unidades: number; monto: number; ordenes: number }
@@ -87,14 +95,18 @@ async function loadInvoicesInRange(start: string, end: string): Promise<CachedIn
 function aggregate(invoices: CachedInvoice[]) {
   const byFamily = new Map<string, Bucket>()
   const byDesign = new Map<string, Bucket & { family: string }>()
+  // Diagnostic: descriptions that didn't match any keyword, with their qty totals.
+  const unmapped = new Map<string, { count: number; unidades: number; monto: number; reference: string }>()
 
   for (const inv of invoices) {
     for (const it of inv.items || []) {
       if (!it.code || it.code === 'ENVIO') continue
-      const reference = parseReference(it.description || '')
-      const family = familyOf(reference)
       const qty = Number(it.quantity) || 0
       const amount = Number(it.total ?? (it.quantity * it.price)) || 0
+
+      const resolved = resolveDesign(it.description || '')
+      const design = resolved?.design || 'Otros'
+      const family = resolved?.family || 'Otros'
 
       const fb = byFamily.get(family) || { unidades: 0, monto: 0, ordenes: 0 }
       fb.unidades += qty
@@ -102,14 +114,25 @@ function aggregate(invoices: CachedInvoice[]) {
       fb.ordenes += 1
       byFamily.set(family, fb)
 
-      const db = byDesign.get(reference) || { unidades: 0, monto: 0, ordenes: 0, family }
+      const db = byDesign.get(design) || { unidades: 0, monto: 0, ordenes: 0, family }
       db.unidades += qty
       db.monto += amount
       db.ordenes += 1
-      byDesign.set(reference, db)
+      byDesign.set(design, db)
+
+      if (!resolved) {
+        // Track the raw description (parsed reference) so we can extend the
+        // pattern list to cover whatever is leaking through.
+        const ref = parseReference(it.description || '')
+        const u = unmapped.get(ref) || { count: 0, unidades: 0, monto: 0, reference: ref }
+        u.count += 1
+        u.unidades += qty
+        u.monto += amount
+        unmapped.set(ref, u)
+      }
     }
   }
-  return { byFamily, byDesign }
+  return { byFamily, byDesign, unmapped }
 }
 
 export async function GET(request: Request) {
@@ -145,15 +168,32 @@ export async function GET(request: Request) {
 
     const designKeys = new Set<string>([...a.byDesign.keys(), ...b.byDesign.keys()])
     const designs = Array.from(designKeys).map(key => {
-      const cur = a.byDesign.get(key) || { unidades: 0, monto: 0, ordenes: 0, family: familyOf(key) }
-      const prev = b.byDesign.get(key) || { unidades: 0, monto: 0, ordenes: 0, family: familyOf(key) }
+      const cur = a.byDesign.get(key)
+      const prev = b.byDesign.get(key)
+      const family = cur?.family || prev?.family || 'Otros'
       return {
         design: key,
-        family: cur.family || prev.family || familyOf(key),
-        current: { unidades: cur.unidades, monto: cur.monto, ordenes: cur.ordenes },
-        previous: { unidades: prev.unidades, monto: prev.monto, ordenes: prev.ordenes },
+        family,
+        current: { unidades: cur?.unidades || 0, monto: cur?.monto || 0, ordenes: cur?.ordenes || 0 },
+        previous: { unidades: prev?.unidades || 0, monto: prev?.monto || 0, ordenes: prev?.ordenes || 0 },
       }
     }).sort((x, y) => y.current.monto - x.current.monto)
+
+    // Combine unmapped from both periods so we get a complete view of what
+    // descriptions aren't matching any keyword.
+    const unmappedMerged = new Map<string, { reference: string; count: number; unidades: number; monto: number }>()
+    for (const m of [a.unmapped, b.unmapped]) {
+      for (const [ref, vals] of m) {
+        const cur = unmappedMerged.get(ref) || { reference: ref, count: 0, unidades: 0, monto: 0 }
+        cur.count += vals.count
+        cur.unidades += vals.unidades
+        cur.monto += vals.monto
+        unmappedMerged.set(ref, cur)
+      }
+    }
+    const unmappedExamples = Array.from(unmappedMerged.values())
+      .sort((x, y) => y.unidades - x.unidades)
+      .slice(0, 40)
 
     return NextResponse.json({
       asOf: fmt(asOf),
@@ -161,7 +201,8 @@ export async function GET(request: Request) {
       previousRange: { start: lastStart, end: lastEnd },
       families,
       designs,
-      familyMap: FAMILY_MAP,
+      patterns: DESIGN_PATTERNS,
+      unmappedExamples,
     })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error' }, { status: 500 })
