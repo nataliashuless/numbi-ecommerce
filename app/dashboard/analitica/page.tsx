@@ -109,7 +109,8 @@ interface YtdResponse {
   families: YtdFamilyRow[]
   designs: YtdDesignRow[]
   patterns?: Array<{ keyword: string; design: string; family: string }>
-  unmappedExamples?: Array<{ reference: string; count: number; unidades: number; monto: number }>
+  unmappedExamples?: Array<{ reference: string; sku?: string; count: number; unidades: number; monto: number }>
+  shopify?: { productTypes: string[]; skuCount: number }
 }
 
 function pctChange(curr: number, prev: number): number | null {
@@ -183,6 +184,15 @@ function YtdFamiliasView() {
     <div>
       <div className="text-xs text-[#6B7280] mb-4">
         YTD: {data.currentRange.start} → {data.currentRange.end} vs {data.previousRange.start} → {data.previousRange.end}.
+        {data.shopify && data.shopify.skuCount > 0 && (
+          <span className="ml-2">
+            {' · '}
+            <span className="text-[#1A2238]">{data.shopify.skuCount.toLocaleString()} SKUs mapeados desde Shopify</span>
+            {data.shopify.productTypes.length > 0 && (
+              <span> · Categorías: <code className="bg-gray-100 px-1 rounded text-[10px]">{data.shopify.productTypes.join(' · ')}</code></span>
+            )}
+          </span>
+        )}
       </div>
 
       {(data.unmappedExamples && data.unmappedExamples.length > 0) && (
@@ -206,9 +216,12 @@ function YtdFamiliasView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.unmappedExamples.slice(0, 25).map(u => (
-                    <tr key={u.reference} className="border-b border-[#F3F4F6]">
-                      <td className="py-2 px-3 font-mono text-[#1A2238]">{u.reference}</td>
+                  {data.unmappedExamples.slice(0, 25).map((u, i) => (
+                    <tr key={`${u.sku || ''}-${u.reference}-${i}`} className="border-b border-[#F3F4F6]">
+                      <td className="py-2 px-3 text-[#1A2238]">
+                        <div className="font-medium">{u.reference}</div>
+                        {u.sku && <div className="text-xs font-mono text-[#6B7280]">SKU: {u.sku}</div>}
+                      </td>
                       <td className="py-2 px-3 text-right">{u.unidades.toLocaleString()}</td>
                       <td className="py-2 px-3 text-right">${u.monto.toLocaleString('es-CO')}</td>
                     </tr>

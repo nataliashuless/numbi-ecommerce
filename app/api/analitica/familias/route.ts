@@ -1,5 +1,57 @@
 import { NextResponse } from 'next/server'
-import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
+import { requireAuth, getAdminClient, getShopifyCredentials } from '@/lib/auth-helpers'
+
+export const maxDuration = 60
+
+// Pulls every product+variant from Shopify and returns SKU -> product_type map.
+// Cached in-process so subsequent invocations don't hit Shopify again until
+// the function instance is recycled.
+type ShopifyVariant = { sku: string | null }
+type ShopifyProduct = { id: number; title: string; product_type: string; vendor: string; tags: string; variants: ShopifyVariant[] }
+let shopifyMapCache: { skuToType: Map<string, { productType: string; title: string; vendor: string }>; productTypes: Set<string>; fetchedAt: number } | null = null
+const CACHE_TTL_MS = 30 * 60 * 1000 // 30 min
+
+async function loadShopifyMap(): Promise<typeof shopifyMapCache | null> {
+  if (shopifyMapCache && Date.now() - shopifyMapCache.fetchedAt < CACHE_TTL_MS) {
+    return shopifyMapCache
+  }
+  const creds = await getShopifyCredentials()
+  const shop = creds?.shopify_shop
+  const token = creds?.shopify_access_token
+  if (!shop || !token) return null
+
+  const skuToType = new Map<string, { productType: string; title: string; vendor: string }>()
+  const productTypes = new Set<string>()
+
+  let nextUrl: string | null = `https://${shop}/admin/api/2024-10/products.json?limit=250&fields=id,title,product_type,vendor,tags,variants`
+  let pages = 0
+  while (nextUrl && pages < 30) {
+    pages++
+    const res: Response = await fetch(nextUrl, {
+      headers: { 'X-Shopify-Access-Token': token },
+      cache: 'no-store',
+    })
+    if (!res.ok) break
+    const data = await res.json()
+    const products: ShopifyProduct[] = data.products || []
+    for (const p of products) {
+      const productType = (p.product_type || '').trim()
+      if (productType) productTypes.add(productType)
+      for (const v of p.variants || []) {
+        if (v.sku) {
+          skuToType.set(v.sku.trim(), { productType, title: p.title || '', vendor: p.vendor || '' })
+        }
+      }
+    }
+    // Parse Link header for the next page cursor
+    const link = res.headers.get('link') || ''
+    const nextMatch = link.match(/<([^>]+)>;\s*rel="next"/)
+    nextUrl = nextMatch ? nextMatch[1] : null
+  }
+
+  shopifyMapCache = { skuToType, productTypes, fetchedAt: Date.now() }
+  return shopifyMapCache
+}
 
 // YTD comparison by product family + design (reference).
 // Reads sales from siigo_invoices, parses the item description for the
@@ -92,11 +144,15 @@ async function loadInvoicesInRange(start: string, end: string): Promise<CachedIn
   return out
 }
 
-function aggregate(invoices: CachedInvoice[]) {
+function aggregate(
+  invoices: CachedInvoice[],
+  skuMap: Map<string, { productType: string; title: string; vendor: string }> | null,
+) {
   const byFamily = new Map<string, Bucket>()
   const byDesign = new Map<string, Bucket & { family: string }>()
-  // Diagnostic: descriptions that didn't match any keyword, with their qty totals.
-  const unmapped = new Map<string, { count: number; unidades: number; monto: number; reference: string }>()
+  // Diagnostic: descriptions that didn't match any keyword AND don't have a
+  // Shopify SKU mapping, with their qty totals.
+  const unmapped = new Map<string, { count: number; unidades: number; monto: number; reference: string; sku: string }>()
 
   for (const inv of invoices) {
     for (const it of inv.items || []) {
@@ -104,9 +160,16 @@ function aggregate(invoices: CachedInvoice[]) {
       const qty = Number(it.quantity) || 0
       const amount = Number(it.total ?? (it.quantity * it.price)) || 0
 
-      const resolved = resolveDesign(it.description || '')
-      const design = resolved?.design || 'Otros'
-      const family = resolved?.family || 'Otros'
+      // 1) Try SKU -> Shopify product_type
+      const shopifyMatch = skuMap?.get((it.code || '').trim())
+      // 2) Fall back to keyword in description
+      const keywordMatch = resolveDesign(it.description || '')
+
+      const family = shopifyMatch?.productType?.trim() || keywordMatch?.family || 'Otros'
+      const design = keywordMatch?.design
+        || parseReference(it.description || '')
+        || shopifyMatch?.title
+        || 'Otros'
 
       const fb = byFamily.get(family) || { unidades: 0, monto: 0, ordenes: 0 }
       fb.unidades += qty
@@ -120,15 +183,14 @@ function aggregate(invoices: CachedInvoice[]) {
       db.ordenes += 1
       byDesign.set(design, db)
 
-      if (!resolved) {
-        // Track the raw description (parsed reference) so we can extend the
-        // pattern list to cover whatever is leaking through.
+      if (family === 'Otros') {
         const ref = parseReference(it.description || '')
-        const u = unmapped.get(ref) || { count: 0, unidades: 0, monto: 0, reference: ref }
+        const key = `${it.code}::${ref}`
+        const u = unmapped.get(key) || { count: 0, unidades: 0, monto: 0, reference: ref, sku: it.code }
         u.count += 1
         u.unidades += qty
         u.monto += amount
-        unmapped.set(ref, u)
+        unmapped.set(key, u)
       }
     }
   }
@@ -151,12 +213,14 @@ export async function GET(request: Request) {
   const lastEnd = `${year - 1}-${String(asOf.getMonth() + 1).padStart(2, '0')}-${String(asOf.getDate()).padStart(2, '0')}`
 
   try {
-    const [thisYear, lastYear] = await Promise.all([
+    const [thisYear, lastYear, shopifyMap] = await Promise.all([
       loadInvoicesInRange(thisStart, thisEnd),
       loadInvoicesInRange(lastStart, lastEnd),
+      loadShopifyMap(),
     ])
-    const a = aggregate(thisYear)
-    const b = aggregate(lastYear)
+    const skuMap = shopifyMap?.skuToType || null
+    const a = aggregate(thisYear, skuMap)
+    const b = aggregate(lastYear, skuMap)
 
     // Merge family keys
     const familyKeys = new Set<string>([...a.byFamily.keys(), ...b.byFamily.keys()])
@@ -203,6 +267,10 @@ export async function GET(request: Request) {
       designs,
       patterns: DESIGN_PATTERNS,
       unmappedExamples,
+      shopify: {
+        productTypes: shopifyMap ? Array.from(shopifyMap.productTypes).sort() : [],
+        skuCount: skuMap ? skuMap.size : 0,
+      },
     })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error' }, { status: 500 })
