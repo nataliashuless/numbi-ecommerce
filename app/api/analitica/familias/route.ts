@@ -60,25 +60,38 @@ async function loadShopifyMap(): Promise<typeof shopifyMapCache | null> {
 // Edit FAMILY_MAP to change the family of each design. Unknown designs
 // fall into "Otros".
 
-// Each entry maps ANY keyword that may appear in the Siigo description
-// (case-insensitive, accent-insensitive) to a canonical design name + family.
-// The first pattern that matches wins. If nothing matches → "Otros".
-const DESIGN_PATTERNS: Array<{ keyword: string; design: string; family: string }> = [
-  // Pequeños Caminantes
-  { keyword: 'blanco',    design: 'Blanco',    family: 'Pequeños Caminantes' },
-  { keyword: 'rosa',      design: 'Rosa',      family: 'Pequeños Caminantes' },
-  { keyword: 'niño',      design: 'Niño',      family: 'Pequeños Caminantes' },
-  { keyword: 'nino',      design: 'Niño',      family: 'Pequeños Caminantes' },
-  { keyword: 'niña',      design: 'Niña',      family: 'Pequeños Caminantes' },
-  { keyword: 'nina',      design: 'Niña',      family: 'Pequeños Caminantes' },
-  { keyword: 'chocolate', design: 'Chocolate', family: 'Pequeños Caminantes' },
-  // Exploradores
-  { keyword: 'elefante',  design: 'Elefante',  family: 'Exploradores' },
-  { keyword: 'globo',     design: 'Globo',     family: 'Exploradores' },
-  { keyword: 'jirafa',    design: 'Jirafa',    family: 'Exploradores' },
-  { keyword: 'espacio',   design: 'Espacio',   family: 'Exploradores' },
-  { keyword: 'leo',       design: 'Leo',       family: 'Exploradores' },
+// Real categorization on shuless.co is by SIZE, not by design name:
+//   Pequeños Caminantes = Talla 19-22 (collection "bebe")
+//   Exploradores        = Talla 23-29 (collection "infantil")
+// The same design (e.g. "Blanco") appears in both families depending on size.
+const FAMILY_BY_SIZE: Array<{ min: number; max: number; family: string }> = [
+  { min: 19, max: 22, family: 'Pequeños Caminantes' },
+  { min: 23, max: 29, family: 'Exploradores' },
 ]
+
+function familyFromSize(size: string | null): string {
+  if (!size) return 'Otros'
+  const n = parseFloat(size.replace(',', '.'))
+  if (isNaN(n)) return 'Otros'
+  for (const r of FAMILY_BY_SIZE) {
+    if (n >= r.min && n <= r.max) return r.family
+  }
+  return 'Otros'
+}
+
+// Design keywords are still useful to canonicalize the design name from raw
+// Siigo descriptions like "EVA Blanco 22", "TENIS BLANCO 22", etc. Family is
+// derived from size, not from keyword.
+const DESIGN_KEYWORDS: string[] = [
+  'blanco', 'rosa', 'niño', 'nino', 'niña', 'nina', 'chocolate',
+  'elefante', 'globo', 'jirafa', 'espacio', 'leo',
+]
+const DESIGN_CANONICAL: Record<string, string> = {
+  'blanco': 'Blanco', 'rosa': 'Rosa', 'niño': 'Niño', 'nino': 'Niño',
+  'niña': 'Niña', 'nina': 'Niña', 'chocolate': 'Chocolate',
+  'elefante': 'Elefante', 'globo': 'Globo', 'jirafa': 'Jirafa',
+  'espacio': 'Espacio', 'leo': 'Leo',
+}
 
 type Item = { code: string; description: string; quantity: number; price: number; total?: number }
 type CachedInvoice = {
@@ -110,13 +123,25 @@ function parseReference(desc: string): string {
   return trimmed || '—'
 }
 
-// Resolve a (description) -> canonical design + family.
-// Looks for any of the keywords as a substring in the normalized text.
-// Returns null if nothing matched (caller decides how to bucket it).
-function resolveDesign(description: string): { design: string; family: string } | null {
-  const text = norm(description)
-  for (const { keyword, design, family } of DESIGN_PATTERNS) {
-    if (text.includes(norm(keyword))) return { design, family }
+// Extract size (integer) from any description. Handles formats like
+// "Foo Talla 22", "Foo - 22", "Foo 22", "FooT22".
+function extractSize(desc: string): string | null {
+  const t = (desc || '').trim()
+  let m = t.match(/talla\s+(\d+(?:[.,]\d+)?)/i)
+  if (m) return m[1]
+  m = t.match(/[\s\-–—](\d{2})(?:\s|$)/)
+  if (m) return m[1]
+  m = t.match(/(\d{2})$/)
+  if (m) return m[1]
+  return null
+}
+
+// Find a canonical design name from a description by looking for any
+// known design keyword as a substring (case + accent insensitive).
+function canonicalDesign(desc: string): string | null {
+  const text = norm(desc)
+  for (const kw of DESIGN_KEYWORDS) {
+    if (text.includes(norm(kw))) return DESIGN_CANONICAL[kw]
   }
   return null
 }
@@ -150,9 +175,9 @@ function aggregate(
 ) {
   const byFamily = new Map<string, Bucket>()
   const byDesign = new Map<string, Bucket & { family: string }>()
-  // Diagnostic: descriptions that didn't match any keyword AND don't have a
-  // Shopify SKU mapping, with their qty totals.
-  const unmapped = new Map<string, { count: number; unidades: number; monto: number; reference: string; sku: string }>()
+  // Diagnostic: items whose size doesn't fall into any family bucket
+  // (or has no parseable size at all).
+  const unmapped = new Map<string, { count: number; unidades: number; monto: number; reference: string; sku: string; size: string }>()
 
   for (const inv of invoices) {
     for (const it of inv.items || []) {
@@ -160,15 +185,17 @@ function aggregate(
       const qty = Number(it.quantity) || 0
       const amount = Number(it.total ?? (it.quantity * it.price)) || 0
 
-      // 1) Try SKU -> Shopify product_type
+      // Family is derived from SIZE (which is how shuless.co collections split):
+      //   19-22 -> Pequeños Caminantes ; 23-29 -> Exploradores ; else -> Otros
+      // Design name comes from a keyword match against the canonical list,
+      // falling back to the parsed reference if no keyword matched.
       const shopifyMatch = skuMap?.get((it.code || '').trim())
-      // 2) Fall back to keyword in description
-      const keywordMatch = resolveDesign(it.description || '')
-
-      const family = shopifyMatch?.productType?.trim() || keywordMatch?.family || 'Otros'
-      const design = keywordMatch?.design
-        || parseReference(it.description || '')
-        || shopifyMatch?.title
+      const desc = it.description || ''
+      const size = extractSize(desc)
+      const family = familyFromSize(size)
+      const design = canonicalDesign(desc)
+        || canonicalDesign(shopifyMatch?.title || '')
+        || parseReference(desc)
         || 'Otros'
 
       const fb = byFamily.get(family) || { unidades: 0, monto: 0, ordenes: 0 }
@@ -184,9 +211,9 @@ function aggregate(
       byDesign.set(design, db)
 
       if (family === 'Otros') {
-        const ref = parseReference(it.description || '')
-        const key = `${it.code}::${ref}`
-        const u = unmapped.get(key) || { count: 0, unidades: 0, monto: 0, reference: ref, sku: it.code }
+        const ref = parseReference(desc)
+        const key = `${it.code}::${ref}::${size || ''}`
+        const u = unmapped.get(key) || { count: 0, unidades: 0, monto: 0, reference: ref, sku: it.code, size: size || '—' }
         u.count += 1
         u.unidades += qty
         u.monto += amount
@@ -265,7 +292,7 @@ export async function GET(request: Request) {
       previousRange: { start: lastStart, end: lastEnd },
       families,
       designs,
-      patterns: DESIGN_PATTERNS,
+      sizeRules: FAMILY_BY_SIZE,
       unmappedExamples,
       shopify: {
         productTypes: shopifyMap ? Array.from(shopifyMap.productTypes).sort() : [],

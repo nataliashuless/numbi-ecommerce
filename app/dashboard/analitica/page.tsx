@@ -108,8 +108,8 @@ interface YtdResponse {
   previousRange: { start: string; end: string }
   families: YtdFamilyRow[]
   designs: YtdDesignRow[]
-  patterns?: Array<{ keyword: string; design: string; family: string }>
-  unmappedExamples?: Array<{ reference: string; sku?: string; count: number; unidades: number; monto: number }>
+  sizeRules?: Array<{ min: number; max: number; family: string }>
+  unmappedExamples?: Array<{ reference: string; sku?: string; size?: string; count: number; unidades: number; monto: number }>
   shopify?: { productTypes: string[]; skuCount: number }
 }
 
@@ -184,13 +184,15 @@ function YtdFamiliasView() {
     <div>
       <div className="text-xs text-[#6B7280] mb-4">
         YTD: {data.currentRange.start} → {data.currentRange.end} vs {data.previousRange.start} → {data.previousRange.end}.
-        {data.shopify && data.shopify.skuCount > 0 && (
+        {data.sizeRules && (
           <span className="ml-2">
-            {' · '}
-            <span className="text-[#1A2238]">{data.shopify.skuCount.toLocaleString()} SKUs mapeados desde Shopify</span>
-            {data.shopify.productTypes.length > 0 && (
-              <span> · Categorías: <code className="bg-gray-100 px-1 rounded text-[10px]">{data.shopify.productTypes.join(' · ')}</code></span>
-            )}
+            {' · '}Categorización por talla:{' '}
+            {data.sizeRules.map((r, i) => (
+              <span key={i}>
+                <code className="bg-gray-100 px-1 rounded text-[10px]">T{r.min}–{r.max} → {r.family}</code>
+                {i < data.sizeRules!.length - 1 ? ' · ' : ''}
+              </span>
+            ))}
           </span>
         )}
       </div>
@@ -202,7 +204,8 @@ function YtdFamiliasView() {
               ⚠ Descripciones sin familia ({data.unmappedExamples.length})
             </CardTitle>
             <p className="text-xs text-[#545454]">
-              Estos items cayeron en &quot;Otros&quot; porque no contienen ninguno de los keywords del mapping. Pasame los nombres y los agrego.
+              Estos items cayeron en &quot;Otros&quot; porque su talla no está en los rangos definidos (19-22 o 23-29).
+              Pueden ser accesorios, productos especiales o errores en la descripción de Siigo.
             </p>
           </CardHeader>
           <CardContent>
@@ -211,6 +214,7 @@ function YtdFamiliasView() {
                 <thead>
                   <tr className="border-b border-[#E5E7EB]">
                     <th className="text-left py-2 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Descripción</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Talla</th>
                     <th className="text-right py-2 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Unidades</th>
                     <th className="text-right py-2 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Monto</th>
                   </tr>
@@ -222,6 +226,7 @@ function YtdFamiliasView() {
                         <div className="font-medium">{u.reference}</div>
                         {u.sku && <div className="text-xs font-mono text-[#6B7280]">SKU: {u.sku}</div>}
                       </td>
+                      <td className="py-2 px-3 text-[#6B7280]">{u.size || '—'}</td>
                       <td className="py-2 px-3 text-right">{u.unidades.toLocaleString()}</td>
                       <td className="py-2 px-3 text-right">${u.monto.toLocaleString('es-CO')}</td>
                     </tr>
