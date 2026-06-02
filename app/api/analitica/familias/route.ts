@@ -169,12 +169,16 @@ async function loadInvoicesInRange(start: string, end: string): Promise<CachedIn
   return out
 }
 
+type DesignBucket = Bucket & { byFamily: Record<string, Bucket> }
+
 function aggregate(
   invoices: CachedInvoice[],
   skuMap: Map<string, { productType: string; title: string; vendor: string }> | null,
 ) {
   const byFamily = new Map<string, Bucket>()
-  const byDesign = new Map<string, Bucket & { family: string }>()
+  // Each design is ONE entry regardless of how many families its sales fall into.
+  // The internal byFamily breakdown is preserved for the expandable family view.
+  const byDesign = new Map<string, DesignBucket>()
   // Diagnostic: items whose size doesn't fall into any family bucket
   // (or has no parseable size at all).
   const unmapped = new Map<string, { count: number; unidades: number; monto: number; reference: string; sku: string; size: string }>()
@@ -204,10 +208,15 @@ function aggregate(
       fb.ordenes += 1
       byFamily.set(family, fb)
 
-      const db = byDesign.get(design) || { unidades: 0, monto: 0, ordenes: 0, family }
+      const db = byDesign.get(design) || { unidades: 0, monto: 0, ordenes: 0, byFamily: {} }
       db.unidades += qty
       db.monto += amount
       db.ordenes += 1
+      const fam = db.byFamily[family] || { unidades: 0, monto: 0, ordenes: 0 }
+      fam.unidades += qty
+      fam.monto += amount
+      fam.ordenes += 1
+      db.byFamily[family] = fam
       byDesign.set(design, db)
 
       if (family === 'Otros') {
@@ -261,12 +270,20 @@ export async function GET(request: Request) {
     const designs = Array.from(designKeys).map(key => {
       const cur = a.byDesign.get(key)
       const prev = b.byDesign.get(key)
-      const family = cur?.family || prev?.family || 'Otros'
       return {
         design: key,
-        family,
-        current: { unidades: cur?.unidades || 0, monto: cur?.monto || 0, ordenes: cur?.ordenes || 0 },
-        previous: { unidades: prev?.unidades || 0, monto: prev?.monto || 0, ordenes: prev?.ordenes || 0 },
+        current: {
+          unidades: cur?.unidades || 0,
+          monto: cur?.monto || 0,
+          ordenes: cur?.ordenes || 0,
+          byFamily: cur?.byFamily || {},
+        },
+        previous: {
+          unidades: prev?.unidades || 0,
+          monto: prev?.monto || 0,
+          ordenes: prev?.ordenes || 0,
+          byFamily: prev?.byFamily || {},
+        },
       }
     }).sort((x, y) => y.current.monto - x.current.monto)
 

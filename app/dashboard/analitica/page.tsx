@@ -101,7 +101,8 @@ function sumTiendasStats(tiendas: Record<string, ChannelStats>): ChannelStats {
 
 interface YtdBucket { unidades: number; monto: number; ordenes: number }
 interface YtdFamilyRow { family: string; current: YtdBucket; previous: YtdBucket }
-interface YtdDesignRow { design: string; family: string; current: YtdBucket; previous: YtdBucket }
+interface YtdDesignBucket extends YtdBucket { byFamily: Record<string, YtdBucket> }
+interface YtdDesignRow { design: string; current: YtdDesignBucket; previous: YtdDesignBucket }
 interface YtdResponse {
   asOf: string
   currentRange: { start: string; end: string }
@@ -151,11 +152,23 @@ function YtdFamiliasView() {
     )
   }
 
-  const designsByFamily = new Map<string, YtdDesignRow[]>()
-  for (const d of data.designs) {
-    const arr = designsByFamily.get(d.family) || []
-    arr.push(d)
-    designsByFamily.set(d.family, arr)
+  // For the expandable view inside each family row: only include designs that
+  // have sales in THAT family (using the byFamily breakdown). Each row's
+  // numbers reflect ONLY the slice belonging to that family.
+  const allDesigns = data.designs
+  function designsInFamily(family: string): Array<{ design: string; current: YtdBucket; previous: YtdBucket }> {
+    const out: Array<{ design: string; current: YtdBucket; previous: YtdBucket }> = []
+    for (const d of allDesigns) {
+      const cur = d.current.byFamily[family]
+      const prev = d.previous.byFamily[family]
+      if (!cur && !prev) continue
+      out.push({
+        design: d.design,
+        current: cur || { unidades: 0, monto: 0, ordenes: 0 },
+        previous: prev || { unidades: 0, monto: 0, ordenes: 0 },
+      })
+    }
+    return out.sort((a, b) => b.current.monto - a.current.monto)
   }
 
   const totals = data.families.reduce(
@@ -257,7 +270,7 @@ function YtdFamiliasView() {
               </thead>
               <tbody>
                 {data.families.map(f => {
-                  const designs = designsByFamily.get(f.family) || []
+                  const designs = designsInFamily(f.family)
                   const expanded = expandedFamily.has(f.family)
                   const dMon = pctChange(f.current.monto, f.previous.monto)
                   const dUni = pctChange(f.current.unidades, f.previous.unidades)
@@ -335,8 +348,10 @@ function YtdFamiliasView() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Detalle por diseño (todos)</CardTitle>
-          <p className="text-xs text-[#545454]">Ordenado por revenue YTD {yyyyThis} descendente.</p>
+          <CardTitle className="text-lg">Detalle por diseño (consolidado)</CardTitle>
+          <p className="text-xs text-[#545454]">
+            Cada diseño en una sola fila con su total YTD; el desglose por familia (PC/E) muestra cuánto vendió en talla 19-22 vs 23-29.
+          </p>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -344,23 +359,24 @@ function YtdFamiliasView() {
               <thead>
                 <tr className="border-b border-[#E5E7EB]">
                   <th className="text-left py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Diseño</th>
-                  <th className="text-left py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Familia</th>
                   <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">YTD {yyyyPrev}</th>
                   <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">YTD {yyyyThis}</th>
                   <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Δ Monto</th>
                   <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Δ Unidades</th>
+                  <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Split (YTD {yyyyThis})</th>
                 </tr>
               </thead>
               <tbody>
                 {data.designs.map(d => {
                   const dMon = pctChange(d.current.monto, d.previous.monto)
                   const dUni = pctChange(d.current.unidades, d.previous.unidades)
+                  const pc = d.current.byFamily['Pequeños Caminantes']?.unidades || 0
+                  const ex = d.current.byFamily['Exploradores']?.unidades || 0
+                  const ot = d.current.byFamily['Otros']?.unidades || 0
+                  const total = pc + ex + ot
                   return (
                     <tr key={d.design} className="border-b border-[#F3F4F6]">
                       <td className="py-2.5 px-3 font-medium text-[#1A2238]">{d.design}</td>
-                      <td className="py-2.5 px-3 text-[#6B7280]">
-                        {d.family === 'Otros' ? <span className="text-xs italic">{d.family}</span> : d.family}
-                      </td>
                       <td className="py-2.5 px-3 text-right text-[#6B7280]">
                         <div>{formatCurrency(d.previous.monto)}</div>
                         <div className="text-xs">{d.previous.unidades.toLocaleString()}u</div>
@@ -371,6 +387,16 @@ function YtdFamiliasView() {
                       </td>
                       <td className={`py-2.5 px-3 text-right ${pctColor(dMon)}`}>{fmtPct(dMon)}</td>
                       <td className={`py-2.5 px-3 text-right ${pctColor(dUni)}`}>{fmtPct(dUni)}</td>
+                      <td className="py-2.5 px-3 text-right text-xs">
+                        {total > 0 ? (
+                          <div className="inline-flex items-center gap-2 whitespace-nowrap">
+                            <span className="text-[#1DA9EF]">PC {pc.toLocaleString()}u</span>
+                            <span className="text-[#6B7280]">·</span>
+                            <span className="text-[#F59E0B]">E {ex.toLocaleString()}u</span>
+                            {ot > 0 && <><span className="text-[#6B7280]">·</span><span className="text-[#6B7280]">Otr {ot.toLocaleString()}u</span></>}
+                          </div>
+                        ) : <span className="text-[#9CA3AF]">—</span>}
+                      </td>
                     </tr>
                   )
                 })}
