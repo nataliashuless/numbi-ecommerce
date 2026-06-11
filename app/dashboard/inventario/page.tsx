@@ -49,6 +49,7 @@ import {
   Tent,
   Megaphone,
   Download,
+  RefreshCw,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { Input } from '@/components/ui/input'
@@ -207,26 +208,63 @@ export default function InventarioPage() {
   const [stockSeguridad, setStockSeguridad] = useState('7')
   const [incluirConsignado, setIncluirConsignado] = useState(false)
 
-  useEffect(() => {
-    async function fetchInventario() {
-      try {
-        const res = await fetch('/api/inventario')
-        if (res.status === 401) {
-          window.location.href = '/api/auth/shopify'
-          return
-        }
-        if (!res.ok) {
-          throw new Error('Error al cargar inventario')
-        }
-        const json = await res.json()
-        setInventarioData(json)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error desconocido')
-      } finally {
-        setLoading(false)
+  const [lastStockSync, setLastStockSync] = useState<string | null>(null)
+  const [syncingStock, setSyncingStock] = useState(false)
+
+  async function fetchInventario() {
+    try {
+      const res = await fetch('/api/inventario')
+      if (res.status === 401) {
+        window.location.href = '/api/auth/shopify'
+        return
       }
+      if (!res.ok) {
+        throw new Error('Error al cargar inventario')
+      }
+      const json = await res.json()
+      setInventarioData(json)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido')
+    } finally {
+      setLoading(false)
     }
-    fetchInventario()
+  }
+
+  // Pull fresh stock from Siigo into the cache, then re-read inventory
+  // (and forecast if already computed) so the page reflects current numbers.
+  async function syncStockFromSiigo() {
+    setSyncingStock(true)
+    try {
+      const res = await fetch('/api/siigo/sync-stock', { method: 'POST' })
+      if (res.ok) {
+        const d = await res.json()
+        setLastStockSync(d.synced_at || new Date().toISOString())
+        await fetchInventario()
+        if (forecastData) await fetchForecast()
+      }
+    } catch {}
+    finally {
+      setSyncingStock(false)
+    }
+  }
+
+  useEffect(() => {
+    ;(async () => {
+      await fetchInventario()
+      // Check cache freshness; if older than 1 hour (or never synced),
+      // refresh from Siigo in the background.
+      try {
+        const res = await fetch('/api/siigo/sync-stock')
+        if (res.ok) {
+          const d = await res.json()
+          setLastStockSync(d.last_sync)
+          const ageMs = d.last_sync ? Date.now() - new Date(d.last_sync).getTime() : Infinity
+          if (ageMs > 60 * 60 * 1000) {
+            syncStockFromSiigo()
+          }
+        }
+      } catch {}
+    })()
   }, [])
 
   const fetchForecast = async () => {
@@ -500,7 +538,33 @@ export default function InventarioPage() {
       <main className="container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-[#1A2238]">Inventario y Forecast</h1>
+            <div>
+              <h1 className="text-2xl font-bold text-[#1A2238]">Inventario y Forecast</h1>
+              <div className="flex items-center gap-2 mt-1 text-xs text-[#545454]">
+                {syncingStock ? (
+                  <span className="inline-flex items-center gap-1 text-[#1DA9EF]">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Sincronizando stock desde Siigo…
+                  </span>
+                ) : (
+                  <>
+                    <span>
+                      Stock Siigo: {lastStockSync
+                        ? `actualizado ${new Date(lastStockSync).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                        : 'sin sincronizar'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={syncStockFromSiigo}
+                      className="inline-flex items-center gap-1 text-[#1DA9EF] hover:underline"
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                      Actualizar ahora
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
             <TabsList>
               <TabsTrigger value="inventario" className="flex items-center gap-2">
                 <Boxes className="h-4 w-4" />
