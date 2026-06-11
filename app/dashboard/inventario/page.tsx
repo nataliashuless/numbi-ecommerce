@@ -202,10 +202,10 @@ export default function InventarioPage() {
   const [activeTab, setActiveTab] = useState('inventario')
 
   // Forecast parameters
-  const [diasAnalisis, setDiasAnalisis] = useState('30')
-  const [leadTime, setLeadTime] = useState('14')
+  const [diasAnalisis, setDiasAnalisis] = useState('90')
+  const [leadTime, setLeadTime] = useState('52')
   const [stockSeguridad, setStockSeguridad] = useState('7')
-  const [incluirConsignado, setIncluirConsignado] = useState(true)
+  const [incluirConsignado, setIncluirConsignado] = useState(false)
 
   useEffect(() => {
     async function fetchInventario() {
