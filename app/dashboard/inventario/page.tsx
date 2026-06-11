@@ -48,7 +48,9 @@ import {
   ChevronLeft,
   Tent,
   Megaphone,
+  Download,
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
@@ -241,6 +243,72 @@ export default function InventarioPage() {
     } finally {
       setForecastLoading(false)
     }
+  }
+
+  function downloadForecastExcel() {
+    if (!forecastData) return
+    const PRIORIDAD_LABEL: Record<string, string> = {
+      critica: 'Crítica (≤7 días)',
+      alta: 'Alta (≤14 días)',
+      media: 'Media (≤30 días)',
+      baja: 'Baja',
+    }
+
+    // Sheet 1: Detalle por variante (SKU)
+    const detalle = forecastData.forecast.map(f => ({
+      'SKU': f.sku,
+      'Producto': f.producto,
+      'Variante': f.variante,
+      'Talla': f.size || '',
+      'Stock bodega': f.stockBodega,
+      'Stock consignado': f.stockConsignado,
+      'Stock total': f.stockTotal,
+      'Ventas Shopify': f.ventasShopify,
+      'Ventas WhatsApp': f.ventasWhatsApp,
+      'Ventas Tiendas': f.ventasTiendas,
+      'Ventas totales': f.ventasTotal,
+      'Velocidad diaria': Number(f.velocidadDiaria.toFixed(2)),
+      'Velocidad semanal': Number(f.velocidadSemanal.toFixed(2)),
+      'Días hasta agotamiento': f.diasHastaAgotamiento ?? '∞',
+      'Sugerencia producción': f.sugerenciaProduccion,
+      'Prioridad': PRIORIDAD_LABEL[f.prioridad] || f.prioridad,
+    }))
+
+    // Sheet 2: Resumen por referencia
+    const resumen = (forecastData.referencias || []).map(r => ({
+      'Referencia': r.reference,
+      'Variantes': r.variantCount,
+      'Stock bodega': r.stockBodega,
+      'Stock consignado': r.stockConsignado,
+      'Stock total': r.stockTotal,
+      'Ventas totales': r.ventasTotal,
+      'Velocidad diaria': Number(r.velocidadDiaria.toFixed(2)),
+      'Sugerencia producción': r.sugerenciaProduccion,
+      'Prioridad': PRIORIDAD_LABEL[r.prioridad] || r.prioridad,
+    }))
+
+    // Sheet 3: Parámetros usados
+    const parametros = [
+      { Parámetro: 'Período de análisis (días)', Valor: diasAnalisis },
+      { Parámetro: 'Lead time producción (días)', Valor: leadTime },
+      { Parámetro: 'Stock de seguridad (días)', Valor: stockSeguridad },
+      { Parámetro: 'Stock a descontar', Valor: incluirConsignado ? 'Bodega + Consignado' : 'Solo bodega' },
+      { Parámetro: 'Total a producir sugerido', Valor: forecastData.resumen.totalProducirSugerido },
+      { Parámetro: 'Ventas en el período', Valor: forecastData.resumen.totalVentasPeriodo },
+      { Parámetro: 'Urgentes (≤7 días)', Valor: forecastData.resumen.criticos },
+      { Parámetro: 'Alta prioridad (≤14 días)', Valor: forecastData.resumen.altos },
+      { Parámetro: 'Media prioridad (≤30 días)', Valor: forecastData.resumen.medios },
+      { Parámetro: 'Generado', Valor: new Date().toLocaleString('es-CO') },
+    ]
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumen), 'Por referencia')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle), 'Detalle por SKU')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(parametros), 'Parámetros')
+
+    const today = new Date()
+    const stamp = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`
+    XLSX.writeFile(wb, `forecast-produccion-${stamp}.xlsx`)
   }
 
   useEffect(() => {
@@ -823,6 +891,15 @@ export default function InventarioPage() {
                       </div>
                       <Button onClick={fetchForecast} className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]">
                         Recalcular
+                      </Button>
+                      <Button
+                        onClick={downloadForecastExcel}
+                        variant="outline"
+                        disabled={!forecastData}
+                        className="border-[#1A2238] text-[#1A2238] hover:bg-[#1A2238]/5"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Bajar Excel
                       </Button>
                     </div>
                     <div className="mt-4 pt-4 border-t flex items-center gap-3 flex-wrap">
