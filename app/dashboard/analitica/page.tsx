@@ -130,6 +130,264 @@ function pctColor(v: number | null): string {
   return v > 0 ? 'text-green-600' : 'text-red-600'
 }
 
+// ── Mes vs año anterior ────────────────────────────────────────────────────
+interface MesBucket { ventas: number; unidades: number; ordenes: number }
+interface MesDesignBucket extends MesBucket { byFamily: Record<string, MesBucket> }
+interface MesResponse {
+  currentMonth: string
+  previousMonth: string
+  currentRange: { start: string; end: string }
+  previousRange: { start: string; end: string }
+  total: { current: MesBucket; previous: MesBucket }
+  byChannel: Array<{ channel: string; current: MesBucket; previous: MesBucket }>
+  families: Array<{ family: string; current: MesBucket; previous: MesBucket }>
+  designs: Array<{ design: string; current: MesDesignBucket; previous: MesDesignBucket }>
+}
+
+const MONTH_LABELS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+function monthLabel(ym: string): string {
+  const [y, m] = ym.split('-').map(Number)
+  return `${MONTH_LABELS[m - 1]} ${y}`
+}
+
+const CHANNEL_META: Record<string, { label: string; color: string }> = {
+  shopify: { label: 'Shopify', color: '#1A2238' },
+  whatsapp: { label: 'WhatsApp', color: '#14B8A6' },
+  tiendas: { label: 'Tiendas', color: '#1DA9EF' },
+  ferias: { label: 'Ferias', color: '#F59E0B' },
+}
+
+function MesComparacionView() {
+  // Build a list of selectable months (last 24, current-first)
+  const monthOptions = useMemo(() => {
+    const opts: string[] = []
+    const today = new Date()
+    for (let i = 0; i < 24; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
+      opts.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+    }
+    return opts
+  }, [])
+
+  const [month, setMonth] = useState<string>(monthOptions[0])
+  const [data, setData] = useState<MesResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/analitica/mes?month=${month}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && !d.error) setData(d) })
+      .finally(() => setLoading(false))
+  }, [month])
+
+  const kpi = (label: string, cur: number, prev: number, isMoney: boolean) => {
+    const delta = pctChange(cur, prev)
+    return (
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-sm text-[#545454]">{label}</CardTitle></CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-[#1A2238]">
+            {isMoney ? formatCurrency(cur) : cur.toLocaleString()}
+          </div>
+          <div className="flex items-center gap-2 mt-1 text-xs">
+            <span className="text-[#6B7280]">vs {isMoney ? formatCurrency(prev) : prev.toLocaleString()}</span>
+            <span className={pctColor(delta)}>{fmtPct(delta)}</span>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
+        <label className="text-sm font-medium text-[#1A2238]">Mes a comparar:</label>
+        <select
+          value={month}
+          onChange={e => setMonth(e.target.value)}
+          className="rounded-md border border-input bg-background px-3 py-2 text-sm min-w-[180px]"
+        >
+          {monthOptions.map(m => (
+            <option key={m} value={m}>{monthLabel(m)}</option>
+          ))}
+        </select>
+        {data && (
+          <span className="text-sm text-[#6B7280]">
+            comparando <b className="text-[#1A2238]">{monthLabel(data.currentMonth)}</b> vs <b className="text-[#1A2238]">{monthLabel(data.previousMonth)}</b>
+          </span>
+        )}
+      </div>
+
+      {loading || !data ? (
+        <div className="flex items-center justify-center py-12 text-[#545454]">
+          <Loader2 className="h-5 w-5 animate-spin mr-2" />Cargando comparación…
+        </div>
+      ) : (
+        <>
+          {/* KPIs */}
+          <div className="grid gap-4 md:grid-cols-3 mb-6">
+            {kpi('Ventas', data.total.current.ventas, data.total.previous.ventas, true)}
+            {kpi('Unidades', data.total.current.unidades, data.total.previous.unidades, false)}
+            {kpi('Órdenes', data.total.current.ordenes, data.total.previous.ordenes, false)}
+          </div>
+
+          {/* Por canal */}
+          <Card className="mb-6">
+            <CardHeader><CardTitle className="text-lg">Por canal</CardTitle></CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm tabular-nums">
+                  <thead>
+                    <tr className="border-b border-[#E5E7EB]">
+                      <th className="text-left py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Canal</th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">{monthLabel(data.previousMonth)}</th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">{monthLabel(data.currentMonth)}</th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Δ Ventas</th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Δ Unidades</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.byChannel.map(c => {
+                      const meta = CHANNEL_META[c.channel] || { label: c.channel, color: '#6B7280' }
+                      const dV = pctChange(c.current.ventas, c.previous.ventas)
+                      const dU = pctChange(c.current.unidades, c.previous.unidades)
+                      return (
+                        <tr key={c.channel} className="border-b border-[#F3F4F6]">
+                          <td className="py-3 px-3">
+                            <span className="inline-flex items-center gap-2">
+                              <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: meta.color }} />
+                              <span className="text-[#1A2238]">{meta.label}</span>
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right text-[#6B7280]">
+                            <div>{formatCurrency(c.previous.ventas)}</div>
+                            <div className="text-xs">{c.previous.unidades.toLocaleString()}u</div>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <div className="text-[#1A2238]">{formatCurrency(c.current.ventas)}</div>
+                            <div className="text-xs text-[#6B7280]">{c.current.unidades.toLocaleString()}u</div>
+                          </td>
+                          <td className={`py-3 px-3 text-right ${pctColor(dV)}`}>{fmtPct(dV)}</td>
+                          <td className={`py-3 px-3 text-right ${pctColor(dU)}`}>{fmtPct(dU)}</td>
+                        </tr>
+                      )
+                    })}
+                    {(() => {
+                      const dV = pctChange(data.total.current.ventas, data.total.previous.ventas)
+                      const dU = pctChange(data.total.current.unidades, data.total.previous.unidades)
+                      return (
+                        <tr className="font-semibold bg-[#F9FAFB] border-t-2 border-[#E5E7EB]">
+                          <td className="py-3 px-3 text-[#1A2238]">Total</td>
+                          <td className="py-3 px-3 text-right text-[#6B7280]">
+                            <div>{formatCurrency(data.total.previous.ventas)}</div>
+                            <div className="text-xs">{data.total.previous.unidades.toLocaleString()}u</div>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <div className="text-[#1A2238]">{formatCurrency(data.total.current.ventas)}</div>
+                            <div className="text-xs text-[#6B7280]">{data.total.current.unidades.toLocaleString()}u</div>
+                          </td>
+                          <td className={`py-3 px-3 text-right ${pctColor(dV)}`}>{fmtPct(dV)}</td>
+                          <td className={`py-3 px-3 text-right ${pctColor(dU)}`}>{fmtPct(dU)}</td>
+                        </tr>
+                      )
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Por familia */}
+          <Card className="mb-6">
+            <CardHeader><CardTitle className="text-lg">Por familia</CardTitle></CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm tabular-nums">
+                  <thead>
+                    <tr className="border-b border-[#E5E7EB]">
+                      <th className="text-left py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Familia</th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">{monthLabel(data.previousMonth)}</th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">{monthLabel(data.currentMonth)}</th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Δ Ventas</th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Δ Unidades</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.families.map(f => {
+                      const dV = pctChange(f.current.ventas, f.previous.ventas)
+                      const dU = pctChange(f.current.unidades, f.previous.unidades)
+                      return (
+                        <tr key={f.family} className="border-b border-[#F3F4F6]">
+                          <td className="py-3 px-3 font-medium text-[#1A2238]">{f.family}</td>
+                          <td className="py-3 px-3 text-right text-[#6B7280]">
+                            <div>{formatCurrency(f.previous.ventas)}</div>
+                            <div className="text-xs">{f.previous.unidades.toLocaleString()}u</div>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <div className="text-[#1A2238]">{formatCurrency(f.current.ventas)}</div>
+                            <div className="text-xs text-[#6B7280]">{f.current.unidades.toLocaleString()}u</div>
+                          </td>
+                          <td className={`py-3 px-3 text-right ${pctColor(dV)}`}>{fmtPct(dV)}</td>
+                          <td className={`py-3 px-3 text-right ${pctColor(dU)}`}>{fmtPct(dU)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Por diseño */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Por diseño</CardTitle>
+              <p className="text-xs text-[#545454]">Ordenado por ventas de {monthLabel(data.currentMonth)}.</p>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm tabular-nums">
+                  <thead>
+                    <tr className="border-b border-[#E5E7EB]">
+                      <th className="text-left py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Diseño</th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">{monthLabel(data.previousMonth)}</th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">{monthLabel(data.currentMonth)}</th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Δ Ventas</th>
+                      <th className="text-right py-3 px-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Δ Unidades</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.designs.filter(d => d.current.ventas > 0 || d.previous.ventas > 0).map(d => {
+                      const dV = pctChange(d.current.ventas, d.previous.ventas)
+                      const dU = pctChange(d.current.unidades, d.previous.unidades)
+                      return (
+                        <tr key={d.design} className="border-b border-[#F3F4F6]">
+                          <td className="py-2.5 px-3 font-medium text-[#1A2238]">{d.design}</td>
+                          <td className="py-2.5 px-3 text-right text-[#6B7280]">
+                            <div>{formatCurrency(d.previous.ventas)}</div>
+                            <div className="text-xs">{d.previous.unidades.toLocaleString()}u</div>
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <div className="text-[#1A2238]">{formatCurrency(d.current.ventas)}</div>
+                            <div className="text-xs text-[#6B7280]">{d.current.unidades.toLocaleString()}u</div>
+                          </td>
+                          <td className={`py-2.5 px-3 text-right ${pctColor(dV)}`}>{fmtPct(dV)}</td>
+                          <td className={`py-2.5 px-3 text-right ${pctColor(dU)}`}>{fmtPct(dU)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </div>
+  )
+}
+
 function YtdFamiliasView() {
   const [data, setData] = useState<YtdResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -416,7 +674,7 @@ export default function AnaliticaPage() {
     setDateRange({ from: subMonths(new Date(), 6), to: new Date() })
   }, [])
 
-  const [activeTab, setActiveTab] = useState<'canal' | 'ytd'>('canal')
+  const [activeTab, setActiveTab] = useState<'canal' | 'ytd' | 'mes'>('canal')
   const [data, setData] = useState<AnalyticsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -608,10 +866,21 @@ export default function AnaliticaPage() {
             >
               YTD por familia y diseño
             </button>
+            <button
+              onClick={() => setActiveTab('mes')}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'mes'
+                  ? 'border-[#1DA9EF] text-[#1A2238]'
+                  : 'border-transparent text-[#6B7280] hover:text-[#1A2238] hover:border-[#1DA9EF]/30'
+              }`}
+            >
+              Mes vs año anterior
+            </button>
           </div>
         </div>
 
         {activeTab === 'ytd' && <YtdFamiliasView />}
+        {activeTab === 'mes' && <MesComparacionView />}
 
         {activeTab === 'canal' && <>
 
