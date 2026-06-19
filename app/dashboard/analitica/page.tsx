@@ -153,6 +153,7 @@ function monthLabel(ym: string): string {
 const CHANNEL_META: Record<string, { label: string; color: string }> = {
   shopify: { label: 'Shopify', color: '#1A2238' },
   whatsapp: { label: 'WhatsApp', color: '#14B8A6' },
+  online: { label: 'Online', color: '#1A2238' },
   tiendas: { label: 'Tiendas', color: '#1DA9EF' },
   ferias: { label: 'Ferias', color: '#F59E0B' },
 }
@@ -248,11 +249,30 @@ function MesComparacionView() {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.byChannel.map(c => {
-                      const meta = CHANNEL_META[c.channel] || { label: c.channel, color: '#6B7280' }
-                      const dV = pctChange(c.current.ventas, c.previous.ventas)
-                      const dU = pctChange(c.current.unidades, c.previous.unidades)
-                      return (
+                    {(() => {
+                      // Merge Shopify + WhatsApp into a single "Online" row
+                      const sumB = (a: MesBucket, b: MesBucket): MesBucket => ({
+                        ventas: a.ventas + b.ventas,
+                        unidades: a.unidades + b.unidades,
+                        ordenes: a.ordenes + b.ordenes,
+                      })
+                      const find = (ch: string) => data.byChannel.find(c => c.channel === ch)
+                      const sh = find('shopify')
+                      const wa = find('whatsapp')
+                      const onlineRow = {
+                        channel: 'online',
+                        current: sumB(sh?.current || { ventas: 0, unidades: 0, ordenes: 0 }, wa?.current || { ventas: 0, unidades: 0, ordenes: 0 }),
+                        previous: sumB(sh?.previous || { ventas: 0, unidades: 0, ordenes: 0 }, wa?.previous || { ventas: 0, unidades: 0, ordenes: 0 }),
+                      }
+                      const rows = [
+                        onlineRow,
+                        ...data.byChannel.filter(c => c.channel !== 'shopify' && c.channel !== 'whatsapp'),
+                      ]
+                      return rows.map(c => {
+                        const meta = CHANNEL_META[c.channel] || { label: c.channel, color: '#6B7280' }
+                        const dV = pctChange(c.current.ventas, c.previous.ventas)
+                        const dU = pctChange(c.current.unidades, c.previous.unidades)
+                        return (
                         <tr key={c.channel} className="border-b border-[#F3F4F6]">
                           <td className="py-3 px-3">
                             <span className="inline-flex items-center gap-2">
@@ -271,8 +291,9 @@ function MesComparacionView() {
                           <td className={`py-3 px-3 text-right ${pctColor(dV)}`}>{fmtPct(dV)}</td>
                           <td className={`py-3 px-3 text-right ${pctColor(dU)}`}>{fmtPct(dU)}</td>
                         </tr>
-                      )
-                    })}
+                        )
+                      })
+                    })()}
                     {(() => {
                       const dV = pctChange(data.total.current.ventas, data.total.previous.ventas)
                       const dU = pctChange(data.total.current.unidades, data.total.previous.unidades)
