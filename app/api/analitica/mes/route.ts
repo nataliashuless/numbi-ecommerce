@@ -112,11 +112,12 @@ interface AggResult {
   byChannel: Record<Channel, Bucket>
   byFamily: Record<string, Bucket>
   byDesign: Map<string, Bucket & { byFamily: Record<string, Bucket> }>
+  byTienda: Map<string, Bucket>
 }
 
 function aggregate(
   invoices: CachedInvoice[],
-  tiendaNits: Set<string>,
+  tiendaByNit: Map<string, string>, // NIT -> display name
   shopifyOrderNumbers: Set<number>,
   feriaWindows: Array<{ inicio: string; fin: string }>,
 ): AggResult {
@@ -126,6 +127,7 @@ function aggregate(
   }
   const byFamily: Record<string, Bucket> = {}
   const byDesign = new Map<string, Bucket & { byFamily: Record<string, Bucket> }>()
+  const byTienda = new Map<string, Bucket>()
 
   const isFeriaDate = (date: string) => {
     const d = date.slice(0, 10)
@@ -135,9 +137,12 @@ function aggregate(
   for (const inv of invoices) {
     // Channel classification (priority matches the dashboard)
     let channel: Channel
+    let tiendaName: string | null = null
     if (inv.assigned_feria_id) channel = 'ferias'
-    else if (inv.customer_identification && tiendaNits.has(inv.customer_identification)) channel = 'tiendas'
-    else {
+    else if (inv.customer_identification && tiendaByNit.has(inv.customer_identification)) {
+      channel = 'tiendas'
+      tiendaName = tiendaByNit.get(inv.customer_identification) || 'Tienda'
+    } else {
       const on = extractOrderNum(inv.observations)
       if (on && shopifyOrderNumbers.has(on)) channel = 'shopify'
       else if (isFeriaDate(inv.date)) channel = 'ferias'
@@ -146,6 +151,11 @@ function aggregate(
 
     byChannel[channel].ordenes += 1
     total.ordenes += 1
+    if (tiendaName) {
+      let tb = byTienda.get(tiendaName)
+      if (!tb) { tb = emptyBucket(); byTienda.set(tiendaName, tb) }
+      tb.ordenes += 1
+    }
 
     for (const it of inv.items || []) {
       if (!it.code || it.code === 'ENVIO') continue
@@ -159,6 +169,12 @@ function aggregate(
       total.unidades += qty
       byChannel[channel].ventas += amount
       byChannel[channel].unidades += qty
+
+      if (tiendaName) {
+        const tb = byTienda.get(tiendaName)!
+        tb.ventas += amount
+        tb.unidades += qty
+      }
 
       if (!byFamily[family]) byFamily[family] = emptyBucket()
       byFamily[family].ventas += amount
@@ -176,7 +192,7 @@ function aggregate(
       db.byFamily[family].ordenes += 1
     }
   }
-  return { total, byChannel, byFamily, byDesign }
+  return { total, byChannel, byFamily, byDesign, byTienda }
 }
 
 export async function GET(request: Request) {
@@ -200,14 +216,15 @@ export async function GET(request: Request) {
   try {
     const supabase = getAdminClient()
 
-    // Tienda NITs
+    // Tienda NIT -> display name map
     const { data: tiendas } = await supabase
       .from('tiendas_terceros')
-      .select('siigo_customer_identification')
+      .select('nombre, nombre_corto, siigo_customer_identification')
       .not('siigo_customer_identification', 'is', null)
-    const tiendaNits = new Set<string>(
-      (tiendas || []).map((t: { siigo_customer_identification: string }) => t.siigo_customer_identification)
-    )
+    const tiendaByNit = new Map<string, string>()
+    for (const t of (tiendas || []) as Array<{ nombre: string; nombre_corto: string | null; siigo_customer_identification: string }>) {
+      tiendaByNit.set(t.siigo_customer_identification, t.nombre_corto || t.nombre)
+    }
 
     // Feria windows (active)
     const { data: ferias } = await supabase
@@ -237,8 +254,8 @@ export async function GET(request: Request) {
       loadInvoicesInRange(prev.start, prev.end),
     ])
 
-    const a = aggregate(curInv, tiendaNits, shopifyOrderNumbers, feriaWindows)
-    const b = aggregate(prevInv, tiendaNits, shopifyOrderNumbers, feriaWindows)
+    const a = aggregate(curInv, tiendaByNit, shopifyOrderNumbers, feriaWindows)
+    const b = aggregate(prevInv, tiendaByNit, shopifyOrderNumbers, feriaWindows)
 
     // Merge families
     const familyKeys = new Set<string>([...Object.keys(a.byFamily), ...Object.keys(b.byFamily)])
@@ -268,6 +285,14 @@ export async function GET(request: Request) {
 
     const channels: Channel[] = ['shopify', 'whatsapp', 'tiendas', 'ferias']
 
+    // Per-tienda breakdown (merge current + previous)
+    const tiendaKeys = new Set<string>([...a.byTienda.keys(), ...b.byTienda.keys()])
+    const tiendas_breakdown = Array.from(tiendaKeys).map(name => ({
+      tienda: name,
+      current: a.byTienda.get(name) || emptyBucket(),
+      previous: b.byTienda.get(name) || emptyBucket(),
+    })).sort((x, y) => y.current.ventas - x.current.ventas)
+
     return NextResponse.json({
       currentMonth: `${year}-${String(month0 + 1).padStart(2, '0')}`,
       previousMonth: `${year - 1}-${String(month0 + 1).padStart(2, '0')}`,
@@ -279,6 +304,7 @@ export async function GET(request: Request) {
         current: a.byChannel[ch],
         previous: b.byChannel[ch],
       })),
+      byTienda: tiendas_breakdown,
       families,
       designs,
     })

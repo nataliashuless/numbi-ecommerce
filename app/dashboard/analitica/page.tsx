@@ -140,6 +140,7 @@ interface MesResponse {
   previousRange: { start: string; end: string }
   total: { current: MesBucket; previous: MesBucket }
   byChannel: Array<{ channel: string; current: MesBucket; previous: MesBucket }>
+  byTienda: Array<{ tienda: string; current: MesBucket; previous: MesBucket }>
   families: Array<{ family: string; current: MesBucket; previous: MesBucket }>
   designs: Array<{ design: string; current: MesDesignBucket; previous: MesDesignBucket }>
 }
@@ -173,6 +174,7 @@ function MesComparacionView() {
   const [month, setMonth] = useState<string>(monthOptions[0])
   const [data, setData] = useState<MesResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [tiendasExpanded, setTiendasExpanded] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -272,12 +274,23 @@ function MesComparacionView() {
                         const meta = CHANNEL_META[c.channel] || { label: c.channel, color: '#6B7280' }
                         const dV = pctChange(c.current.ventas, c.previous.ventas)
                         const dU = pctChange(c.current.unidades, c.previous.unidades)
+                        const isTiendas = c.channel === 'tiendas'
+                        const canExpand = isTiendas && data.byTienda.length > 0
                         return (
-                        <tr key={c.channel} className="border-b border-[#F3F4F6]">
+                        <Fragment key={c.channel}>
+                        <tr
+                          className={`border-b border-[#F3F4F6] ${canExpand ? 'cursor-pointer hover:bg-[#F9FAFB]' : ''}`}
+                          onClick={canExpand ? () => setTiendasExpanded(v => !v) : undefined}
+                        >
                           <td className="py-3 px-3">
                             <span className="inline-flex items-center gap-2">
-                              <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: meta.color }} />
+                              {canExpand ? (
+                                tiendasExpanded ? <ChevronDown className="h-4 w-4 text-[#9CA3AF]" /> : <ChevronRight className="h-4 w-4 text-[#9CA3AF]" />
+                              ) : (
+                                <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: meta.color }} />
+                              )}
                               <span className="text-[#1A2238]">{meta.label}</span>
+                              {canExpand && <span className="text-xs text-[#9CA3AF]">({data.byTienda.length})</span>}
                             </span>
                           </td>
                           <td className="py-3 px-3 text-right text-[#6B7280]">
@@ -291,6 +304,28 @@ function MesComparacionView() {
                           <td className={`py-3 px-3 text-right ${pctColor(dV)}`}>{fmtPct(dV)}</td>
                           <td className={`py-3 px-3 text-right ${pctColor(dU)}`}>{fmtPct(dU)}</td>
                         </tr>
+                        {isTiendas && tiendasExpanded && data.byTienda.map(t => {
+                          const tV = pctChange(t.current.ventas, t.previous.ventas)
+                          const tU = pctChange(t.current.unidades, t.previous.unidades)
+                          return (
+                            <tr key={`tienda-${t.tienda}`} className="border-b border-[#F3F4F6] bg-[#F9FAFB]/50">
+                              <td className="py-2.5 px-3 pl-9 text-sm text-[#1A2238]">
+                                <span className="text-[#6B7280] mr-1">↳</span>{t.tienda}
+                              </td>
+                              <td className="py-2.5 px-3 text-right text-[#6B7280] text-sm">
+                                <div>{formatCurrency(t.previous.ventas)}</div>
+                                <div className="text-xs">{t.previous.unidades.toLocaleString()}u</div>
+                              </td>
+                              <td className="py-2.5 px-3 text-right text-sm">
+                                <div className="text-[#1A2238]">{formatCurrency(t.current.ventas)}</div>
+                                <div className="text-xs text-[#6B7280]">{t.current.unidades.toLocaleString()}u</div>
+                              </td>
+                              <td className={`py-2.5 px-3 text-right text-sm ${pctColor(tV)}`}>{fmtPct(tV)}</td>
+                              <td className={`py-2.5 px-3 text-right text-sm ${pctColor(tU)}`}>{fmtPct(tU)}</td>
+                            </tr>
+                          )
+                        })}
+                        </Fragment>
                         )
                       })
                     })()}
