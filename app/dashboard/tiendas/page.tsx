@@ -456,6 +456,13 @@ export default function TiendasPage() {
             <h1 className="text-3xl font-bold text-[#1A2238] mb-2">Tiendas de Terceros</h1>
             <p className="text-[#545454]">Gestiona consignaciones y ventas en tiendas aliadas</p>
           </div>
+          <div className="flex items-center gap-2 mt-4 md:mt-0">
+          <Link href="/dashboard/tiendas/gmroi">
+            <Button variant="outline" className="border-[#1DA9EF] text-[#0073D1] hover:bg-[#1DA9EF]/10">
+              <TrendingUp className="h-4 w-4 mr-2" />
+              GMROI / Rentabilidad
+            </Button>
+          </Link>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238] mt-4 md:mt-0">
@@ -633,6 +640,7 @@ export default function TiendasPage() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         {loading ? (
