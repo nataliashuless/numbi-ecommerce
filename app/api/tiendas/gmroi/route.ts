@@ -32,14 +32,31 @@ type CachedInvoice = {
   credited_amount: number | null
 }
 
-function recommend(gmroi: number | null, invUnits: number, soldUnits: number): { label: string; tone: 'good' | 'ok' | 'warn' | 'bad' } {
+// Convert a period return into an effective annual rate (EA / tasa efectiva anual).
+//   EA = (1 + r_periodo)^(365/días) − 1
+// Returns null if not computable. Floors r at -1 (can't lose more than 100%).
+function toEA(periodReturn: number | null, days: number): number | null {
+  if (periodReturn === null || days <= 0) return null
+  const r = Math.max(periodReturn, -0.999999)
+  return Math.pow(1 + r, 365 / days) - 1
+}
+
+// Recommendation based on the EFFECTIVE ANNUAL return (EA).
+// Colombian opportunity cost of capital is ~15-20% EA, so thresholds sit above that.
+function recommend(ea: number | null, invUnits: number, soldUnits: number): { label: string; tone: 'good' | 'ok' | 'warn' | 'bad' } {
   if (invUnits === 0 && soldUnits === 0) return { label: 'Sin actividad — recoger', tone: 'bad' }
-  if (gmroi === null) return { label: 'Sin inventario en tienda', tone: 'warn' }
+  if (ea === null) return { label: 'Sin inventario en tienda', tone: 'warn' }
   if (soldUnits === 0) return { label: 'No vende — mandar a recoger', tone: 'bad' }
-  if (gmroi >= 0.40) return { label: 'Excelente — aumentar inventario', tone: 'good' }
-  if (gmroi >= 0.20) return { label: 'OK', tone: 'good' }
-  if (gmroi >= 0.10) return { label: 'Reducir referencias', tone: 'warn' }
+  if (ea >= 0.60) return { label: 'Excelente — aumentar inventario', tone: 'good' }
+  if (ea >= 0.30) return { label: 'OK', tone: 'good' }
+  if (ea >= 0.15) return { label: 'Aceptable — monitorear', tone: 'warn' }
   return { label: 'Bajo — evaluar / recoger', tone: 'bad' }
+}
+
+function daysBetween(start: string, end: string): number {
+  const s = new Date(start + 'T00:00:00')
+  const e = new Date(end + 'T00:00:00')
+  return Math.max(1, Math.round((e.getTime() - s.getTime()) / 86400000) + 1)
 }
 
 export async function GET(request: Request) {
@@ -112,6 +129,8 @@ export async function GET(request: Request) {
       if (page.length < pageSize) break
     }
 
+    const periodDays = daysBetween(startDate, endDate)
+
     // 4. Build per-tienda rows
     const rows = tiendas
       .filter(t => t.siigo_customer_identification) // only tiendas linked to Siigo
@@ -121,9 +140,13 @@ export async function GET(request: Request) {
         const cogs = s.unidades * unitCost
         const margen = s.ventas - cogs
         const invCost = invUnits * unitCost
-        const gmroi = invCost > 0 ? margen / invCost : null
+        // Rentabilidad del período = margen ganado / capital inmovilizado en inventario
+        const rentPeriodo = invCost > 0 ? margen / invCost : null
+        // Convertida a efectiva anual (EA)
+        const rentEA = toEA(rentPeriodo, periodDays)
+        const gmroi = invCost > 0 ? margen / invCost : null // ratio crudo del período
         const rotacion = invUnits > 0 ? s.unidades / invUnits : null
-        const rec = recommend(gmroi, invUnits, s.unidades)
+        const rec = recommend(rentEA, invUnits, s.unidades)
         return {
           id: t.id,
           tienda: t.nombre_corto || t.nombre,
@@ -137,12 +160,14 @@ export async function GET(request: Request) {
           invUnits,
           invCost,
           gmroi,
+          rentPeriodo,
+          rentEA,
           rotacion,
           recomendacion: rec.label,
           tone: rec.tone,
         }
       })
-      .sort((a, b) => (b.gmroi ?? -1) - (a.gmroi ?? -1))
+      .sort((a, b) => (b.rentEA ?? -Infinity) - (a.rentEA ?? -Infinity))
 
     const totals = rows.reduce((acc, r) => ({
       ventas: acc.ventas + r.ventas,
@@ -153,13 +178,18 @@ export async function GET(request: Request) {
       invCost: acc.invCost + r.invCost,
     }), { ventas: 0, unidades: 0, cogs: 0, margen: 0, invUnits: 0, invCost: 0 })
 
+    const totalRentPeriodo = totals.invCost > 0 ? totals.margen / totals.invCost : null
+
     return NextResponse.json({
       range: { start: startDate, end: endDate },
+      periodDays,
       unitCost,
       rows,
       totals: {
         ...totals,
         gmroi: totals.invCost > 0 ? totals.margen / totals.invCost : null,
+        rentPeriodo: totalRentPeriodo,
+        rentEA: toEA(totalRentPeriodo, periodDays),
         margenPct: totals.ventas > 0 ? totals.margen / totals.ventas : null,
         rotacion: totals.invUnits > 0 ? totals.unidades / totals.invUnits : null,
       },

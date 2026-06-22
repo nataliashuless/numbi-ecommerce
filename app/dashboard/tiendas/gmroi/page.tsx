@@ -31,17 +31,21 @@ interface GmroiRow {
   invUnits: number
   invCost: number
   gmroi: number | null
+  rentPeriodo: number | null
+  rentEA: number | null
   rotacion: number | null
   recomendacion: string
   tone: 'good' | 'ok' | 'warn' | 'bad'
 }
 interface GmroiData {
   range: { start: string; end: string }
+  periodDays: number
   unitCost: number
   rows: GmroiRow[]
   totals: {
     ventas: number; unidades: number; cogs: number; margen: number
     invUnits: number; invCost: number; gmroi: number | null
+    rentPeriodo: number | null; rentEA: number | null
     margenPct: number | null; rotacion: number | null
   }
 }
@@ -49,13 +53,16 @@ interface GmroiData {
 function fmtMoney(v: number): string {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v)
 }
-function fmtGmroi(v: number | null): string {
-  if (v === null) return '—'
-  return v.toFixed(2)
-}
 function fmtPct(v: number | null): string {
   if (v === null) return '—'
   return `${(v * 100).toFixed(0)}%`
+}
+// EA can be large; show 1 decimal under 1000%, else round.
+function fmtEA(v: number | null): string {
+  if (v === null) return '—'
+  const pct = v * 100
+  if (Math.abs(pct) >= 1000) return `${Math.round(pct).toLocaleString('es-CO')}%`
+  return `${pct.toFixed(1)}%`
 }
 const TONE_BADGE: Record<string, string> = {
   good: 'bg-green-100 text-green-700',
@@ -63,10 +70,11 @@ const TONE_BADGE: Record<string, string> = {
   warn: 'bg-yellow-100 text-yellow-700',
   bad: 'bg-red-100 text-red-700',
 }
-function gmroiColor(v: number | null): string {
+// Color by EA: ≥30% green, ≥15% yellow, else red
+function eaColor(v: number | null): string {
   if (v === null) return 'text-[#9CA3AF]'
-  if (v >= 0.20) return 'text-green-600'
-  if (v >= 0.10) return 'text-yellow-600'
+  if (v >= 0.30) return 'text-green-600'
+  if (v >= 0.15) return 'text-yellow-600'
   return 'text-red-600'
 }
 
@@ -136,9 +144,9 @@ export default function GmroiPage() {
 
         <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-6 gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-[#1A2238] mb-2">GMROI por tienda</h1>
+            <h1 className="text-3xl font-bold text-[#1A2238] mb-2">Rentabilidad por tienda (EA)</h1>
             <p className="text-[#545454] max-w-2xl">
-              Cuánto margen genera cada peso invertido en inventario consignado. GMROI = Margen bruto ÷ Inventario a costo.
+              Cuánto rinde cada peso invertido en inventario consignado, anualizado. Rentabilidad del período = Margen ÷ Inventario a costo; se convierte a efectiva anual (EA).
             </p>
           </div>
           <div className="flex items-end gap-2">
@@ -189,10 +197,10 @@ export default function GmroiPage() {
                 </CardContent>
               </Card>
               <Card className="ring-1 ring-[#1DA9EF]/20">
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-[#545454]">GMROI global</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm text-[#545454]">Rentabilidad EA</CardTitle></CardHeader>
                 <CardContent>
-                  <div className={`text-2xl font-bold ${gmroiColor(data.totals.gmroi)}`}>{fmtGmroi(data.totals.gmroi)}</div>
-                  <p className="text-xs text-[#545454]">por cada $1 en inventario</p>
+                  <div className={`text-2xl font-bold ${eaColor(data.totals.rentEA)}`}>{fmtEA(data.totals.rentEA)}</div>
+                  <p className="text-xs text-[#545454]">{fmtPct(data.totals.rentPeriodo)} en {data.periodDays} días</p>
                 </CardContent>
               </Card>
             </div>
@@ -204,8 +212,8 @@ export default function GmroiPage() {
                   Detalle por tienda
                 </CardTitle>
                 <p className="text-xs text-[#545454]">
-                  Costo unitario asumido: {fmtMoney(data.unitCost)}/par · Período {data.range.start} → {data.range.end}.
-                  Ordenado por GMROI descendente.
+                  Costo unitario asumido: {fmtMoney(data.unitCost)}/par · Período {data.range.start} → {data.range.end} ({data.periodDays} días).
+                  Ordenado por rentabilidad EA descendente.
                 </p>
               </CardHeader>
               <CardContent>
@@ -220,7 +228,8 @@ export default function GmroiPage() {
                         <TableHead className="text-right">Inv. (pares)</TableHead>
                         <TableHead className="text-right">Inv. a costo</TableHead>
                         <TableHead className="text-right">Rotación</TableHead>
-                        <TableHead className="text-right">GMROI</TableHead>
+                        <TableHead className="text-right">Rent. período</TableHead>
+                        <TableHead className="text-right">Rent. EA</TableHead>
                         <TableHead>Recomendación</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -242,7 +251,8 @@ export default function GmroiPage() {
                           <TableCell className="text-right tabular-nums">{r.invUnits.toLocaleString()}</TableCell>
                           <TableCell className="text-right tabular-nums">{fmtMoney(r.invCost)}</TableCell>
                           <TableCell className="text-right tabular-nums">{r.rotacion === null ? '—' : `${r.rotacion.toFixed(1)}x`}</TableCell>
-                          <TableCell className={`text-right tabular-nums font-bold ${gmroiColor(r.gmroi)}`}>{fmtGmroi(r.gmroi)}</TableCell>
+                          <TableCell className="text-right tabular-nums text-[#545454]">{fmtPct(r.rentPeriodo)}</TableCell>
+                          <TableCell className={`text-right tabular-nums font-bold ${eaColor(r.rentEA)}`}>{fmtEA(r.rentEA)}</TableCell>
                           <TableCell><Badge className={`${TONE_BADGE[r.tone]} font-medium`}>{r.recomendacion}</Badge></TableCell>
                         </TableRow>
                       ))}
@@ -250,7 +260,9 @@ export default function GmroiPage() {
                   </Table>
                 </div>
                 <p className="text-xs text-[#9CA3AF] mt-4">
-                  GMROI ≥ 0.20 saludable · 0.10–0.20 monitorear · &lt; 0.10 bajo. La rotación es pares vendidos en el período ÷ pares en tienda.
+                  Rent. período = Margen ÷ Inventario a costo. Rent. EA = (1 + rent. período)^(365÷días) − 1.
+                  Umbrales EA: ≥30% saludable · 15–30% aceptable · &lt;15% bajo (costo de capital ~15-20% EA en Colombia).
+                  La rotación es pares vendidos en el período ÷ pares en tienda.
                 </p>
               </CardContent>
             </Card>
