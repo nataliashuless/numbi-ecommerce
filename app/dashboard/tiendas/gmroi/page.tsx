@@ -82,7 +82,7 @@ export default function GmroiPage() {
   const [data, setData] = useState<GmroiData | null>(null)
   const [loading, setLoading] = useState(true)
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
-  const [unitCost, setUnitCost] = useState('45000')
+  const [unitCost, setUnitCost] = useState('57000')
 
   useEffect(() => {
     setDateRange({ from: subMonths(new Date(), 12), to: new Date() })
@@ -94,7 +94,7 @@ export default function GmroiPage() {
     try {
       const s = format(dateRange.from, 'yyyy-MM-dd')
       const e = format(dateRange.to, 'yyyy-MM-dd')
-      const res = await fetch(`/api/tiendas/gmroi?start_date=${s}&end_date=${e}&unit_cost=${unitCost || 45000}`)
+      const res = await fetch(`/api/tiendas/gmroi?start_date=${s}&end_date=${e}&unit_cost=${unitCost || 57000}`)
       if (res.ok) setData(await res.json())
     } finally {
       setLoading(false)

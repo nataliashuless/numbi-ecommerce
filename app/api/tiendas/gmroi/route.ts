@@ -10,7 +10,7 @@ export const maxDuration = 60
 // Inputs per tienda (over the chosen period):
 //   - Ventas a la tienda  = invoiced amount to that tienda's NIT (siigo_invoices)
 //   - Unidades vendidas   = units in those invoices
-//   - COGS                = unidades × costo unitario (param, default 45000)
+//   - COGS                = unidades × costo unitario (param, default 57000)
 //   - Margen bruto        = ventas − COGS
 //   - Inventario (uds)    = current stock in the tienda's Siigo warehouse
 //   - Inventario a costo  = inventario × costo unitario
@@ -20,7 +20,7 @@ export const maxDuration = 60
 // Siigo doesn't expose unit cost in our cache, so it's a parameter.
 
 const PRODUCT_ACCOUNT_GROUP_ID = 339 // productos terminados (excl. materias primas)
-const DEFAULT_UNIT_COST = 45000
+const DEFAULT_UNIT_COST = 57000
 
 type Item = { code: string; quantity: number; price: number; total?: number }
 type CachedInvoice = {
