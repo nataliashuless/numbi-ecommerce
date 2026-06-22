@@ -85,8 +85,10 @@ export async function GET(request: Request) {
       if (t.siigo_customer_identification) tiendaByNit.set(t.siigo_customer_identification, t)
     }
 
-    // 2. Sales per tienda (by NIT) in range
-    const salesByTienda = new Map<string, { ventas: number; unidades: number; facturas: number }>()
+    // 2. Sales per tienda (by NIT) in range. Track the FIRST invoice date so we
+    //    can annualize each store over its own active window (a store that's only
+    //    been selling for 1 month shouldn't be annualized over a full year).
+    const salesByTienda = new Map<string, { ventas: number; unidades: number; facturas: number; firstDate: string | null }>()
     const pageSize = 1000
     for (let off = 0; off < 100000; off += pageSize) {
       const { data: page } = await supabase
@@ -103,10 +105,12 @@ export async function GET(request: Request) {
         if (!t) continue
         const units = (inv.items || []).filter(it => it.code && it.code !== 'ENVIO').reduce((s, it) => s + (Number(it.quantity) || 0), 0)
         const amount = (inv.items || []).filter(it => it.code && it.code !== 'ENVIO').reduce((s, it) => s + (Number(it.total ?? it.quantity * it.price) || 0), 0)
-        const cur = salesByTienda.get(t.id) || { ventas: 0, unidades: 0, facturas: 0 }
+        const cur = salesByTienda.get(t.id) || { ventas: 0, unidades: 0, facturas: 0, firstDate: null }
         cur.ventas += amount
         cur.unidades += units
         cur.facturas += 1
+        const d = (inv.date || '').slice(0, 10)
+        if (d && (cur.firstDate === null || d < cur.firstDate)) cur.firstDate = d
         salesByTienda.set(t.id, cur)
       }
       if (page.length < pageSize) break
@@ -130,20 +134,30 @@ export async function GET(request: Request) {
     }
 
     const periodDays = daysBetween(startDate, endDate)
+    // A store's annualization window can't be shorter than this (annualizing a
+    // handful of days produces absurd numbers).
+    const MIN_DAYS = 30
 
     // 4. Build per-tienda rows
     const rows = tiendas
       .filter(t => t.siigo_customer_identification) // only tiendas linked to Siigo
       .map(t => {
-        const s = salesByTienda.get(t.id) || { ventas: 0, unidades: 0, facturas: 0 }
+        const s = salesByTienda.get(t.id) || { ventas: 0, unidades: 0, facturas: 0, firstDate: null }
         const invUnits = t.siigo_warehouse_id != null ? (invByWarehouse.get(t.siigo_warehouse_id) || 0) : 0
         const cogs = s.unidades * unitCost
         const margen = s.ventas - cogs
         const invCost = invUnits * unitCost
+        // Annualize over each store's OWN active window: from its first invoice
+        // in range to the end of the range (floored at MIN_DAYS). This way a
+        // store that's only been selling 1 month isn't penalized when the
+        // selected range is a full year.
+        const activeDays = s.firstDate
+          ? Math.max(MIN_DAYS, daysBetween(s.firstDate, endDate))
+          : periodDays
         // Rentabilidad del período = margen ganado / capital inmovilizado en inventario
         const rentPeriodo = invCost > 0 ? margen / invCost : null
-        // Convertida a efectiva anual (EA)
-        const rentEA = toEA(rentPeriodo, periodDays)
+        // Convertida a efectiva anual (EA), usando la ventana activa de la tienda
+        const rentEA = toEA(rentPeriodo, activeDays)
         const gmroi = invCost > 0 ? margen / invCost : null // ratio crudo del período
         const rotacion = invUnits > 0 ? s.unidades / invUnits : null
         const rec = recommend(rentEA, invUnits, s.unidades)
@@ -154,6 +168,8 @@ export async function GET(request: Request) {
           ventas: s.ventas,
           unidades: s.unidades,
           facturas: s.facturas,
+          primeraFactura: s.firstDate,
+          diasActivos: s.firstDate ? activeDays : null,
           cogs,
           margen,
           margenPct: s.ventas > 0 ? margen / s.ventas : null,

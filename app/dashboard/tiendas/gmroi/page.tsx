@@ -25,6 +25,8 @@ interface GmroiRow {
   ventas: number
   unidades: number
   facturas: number
+  primeraFactura: string | null
+  diasActivos: number | null
   cogs: number
   margen: number
   margenPct: number | null
@@ -228,7 +230,7 @@ export default function GmroiPage() {
                         <TableHead className="text-right">Inv. (pares)</TableHead>
                         <TableHead className="text-right">Inv. a costo</TableHead>
                         <TableHead className="text-right">Rotación</TableHead>
-                        <TableHead className="text-right">Rent. período</TableHead>
+                        <TableHead className="text-right">Días activa</TableHead>
                         <TableHead className="text-right">Rent. EA</TableHead>
                         <TableHead>Recomendación</TableHead>
                       </TableRow>
@@ -251,8 +253,14 @@ export default function GmroiPage() {
                           <TableCell className="text-right tabular-nums">{r.invUnits.toLocaleString()}</TableCell>
                           <TableCell className="text-right tabular-nums">{fmtMoney(r.invCost)}</TableCell>
                           <TableCell className="text-right tabular-nums">{r.rotacion === null ? '—' : `${r.rotacion.toFixed(1)}x`}</TableCell>
-                          <TableCell className="text-right tabular-nums text-[#545454]">{fmtPct(r.rentPeriodo)}</TableCell>
-                          <TableCell className={`text-right tabular-nums font-bold ${eaColor(r.rentEA)}`}>{fmtEA(r.rentEA)}</TableCell>
+                          <TableCell className="text-right tabular-nums text-[#545454]">
+                            {r.diasActivos === null ? '—' : `${r.diasActivos}d`}
+                            {r.primeraFactura && <div className="text-[10px] text-[#9CA3AF]">desde {r.primeraFactura}</div>}
+                          </TableCell>
+                          <TableCell className={`text-right tabular-nums font-bold ${eaColor(r.rentEA)}`}>
+                            {fmtEA(r.rentEA)}
+                            <div className="text-[10px] text-[#9CA3AF] font-normal">{fmtPct(r.rentPeriodo)} período</div>
+                          </TableCell>
                           <TableCell><Badge className={`${TONE_BADGE[r.tone]} font-medium`}>{r.recomendacion}</Badge></TableCell>
                         </TableRow>
                       ))}
@@ -260,9 +268,10 @@ export default function GmroiPage() {
                   </Table>
                 </div>
                 <p className="text-xs text-[#9CA3AF] mt-4">
-                  Rent. período = Margen ÷ Inventario a costo. Rent. EA = (1 + rent. período)^(365÷días) − 1.
+                  Rent. período = Margen ÷ Inventario a costo. Rent. EA = (1 + rent. período)^(365÷días activos) − 1,
+                  donde &quot;días activos&quot; cuenta <b>desde la primera factura de cada tienda</b> (no desde el inicio del rango),
+                  así una tienda nueva no se castiga al elegir un rango largo. Mínimo 30 días.
                   Umbrales EA: ≥30% saludable · 15–30% aceptable · &lt;15% bajo (costo de capital ~15-20% EA en Colombia).
-                  La rotación es pares vendidos en el período ÷ pares en tienda.
                 </p>
               </CardContent>
             </Card>
