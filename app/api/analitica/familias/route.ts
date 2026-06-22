@@ -102,6 +102,26 @@ type CachedInvoice = {
   observations: string | null
   items: Item[]
   credited_amount: number | null
+  assigned_feria_id: string | null
+}
+
+// Classify an invoice into one of the 3 display channels.
+// shopify + whatsapp are merged into 'online' (the convention used elsewhere).
+type DisplayChannel = 'online' | 'tiendas' | 'ferias'
+function classifyChannel(
+  inv: CachedInvoice,
+  tiendaNits: Set<string>,
+  shopifyOrderNumbers: Set<number>,
+  feriaWindows: Array<{ inicio: string; fin: string }>,
+): DisplayChannel {
+  if (inv.assigned_feria_id) return 'ferias'
+  if (inv.customer_identification && tiendaNits.has(inv.customer_identification)) return 'tiendas'
+  const m = (inv.observations || '').match(/#(\d+)/)
+  const on = m ? parseInt(m[1], 10) : null
+  if (on && shopifyOrderNumbers.has(on)) return 'online'
+  const d = inv.date.slice(0, 10)
+  if (feriaWindows.some(f => d >= f.inicio && d <= f.fin)) return 'ferias'
+  return 'online' // whatsapp / direct → online
 }
 
 function norm(s: string): string {
@@ -155,7 +175,7 @@ async function loadInvoicesInRange(start: string, end: string): Promise<CachedIn
   for (let off = 0; off < 100000; off += pageSize) {
     const { data: page } = await supabase
       .from('siigo_invoices')
-      .select('id, date, total, customer_identification, observations, items, credited_amount')
+      .select('id, date, total, customer_identification, observations, items, credited_amount, assigned_feria_id')
       .gte('date', start)
       .lte('date', end)
       .range(off, off + pageSize - 1)
@@ -241,6 +261,12 @@ export async function GET(request: Request) {
   const asOfParam = searchParams.get('as_of')
   const asOf = asOfParam ? new Date(asOfParam + 'T12:00:00') : new Date()
 
+  // Channel filter: ?channels=online,tiendas,ferias (defaults to all)
+  const channelsParam = searchParams.get('channels')
+  const selectedChannels: Set<DisplayChannel> = channelsParam
+    ? new Set(channelsParam.split(',').filter(c => ['online', 'tiendas', 'ferias'].includes(c)) as DisplayChannel[])
+    : new Set<DisplayChannel>(['online', 'tiendas', 'ferias'])
+
   const year = asOf.getFullYear()
   const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   const thisStart = `${year}-01-01`
@@ -249,14 +275,40 @@ export async function GET(request: Request) {
   const lastEnd = `${year - 1}-${String(asOf.getMonth() + 1).padStart(2, '0')}-${String(asOf.getDate()).padStart(2, '0')}`
 
   try {
+    const supabase = getAdminClient()
+
+    // Channel-classification inputs
+    const [tiendasRes, feriasRes] = await Promise.all([
+      supabase.from('tiendas_terceros').select('siigo_customer_identification').not('siigo_customer_identification', 'is', null),
+      supabase.from('ferias').select('fecha_inicio, fecha_fin, activa'),
+    ])
+    const tiendaNits = new Set<string>(
+      (tiendasRes.data || []).map((t: { siigo_customer_identification: string }) => t.siigo_customer_identification)
+    )
+    const feriaWindows = ((feriasRes.data || []) as Array<{ fecha_inicio: string; fecha_fin: string; activa: boolean }>)
+      .filter(f => f.activa)
+      .map(f => ({ inicio: f.fecha_inicio, fin: f.fecha_fin }))
+    const shopifyOrderNumbers = new Set<number>()
+    for (let off = 0; off < 200000; off += 1000) {
+      const { data: page } = await supabase.from('shopify_orders').select('order_number').range(off, off + 999)
+      if (!page || page.length === 0) break
+      for (const r of (page as Array<{ order_number: number }>)) if (r.order_number != null) shopifyOrderNumbers.add(r.order_number)
+      if (page.length < 1000) break
+    }
+
     const [thisYear, lastYear, shopifyMap] = await Promise.all([
       loadInvoicesInRange(thisStart, thisEnd),
       loadInvoicesInRange(lastStart, lastEnd),
       loadShopifyMap(),
     ])
     const skuMap = shopifyMap?.skuToType || null
-    const a = aggregate(thisYear, skuMap)
-    const b = aggregate(lastYear, skuMap)
+
+    // Filter invoices by selected channels before aggregating
+    const allChannels = selectedChannels.size === 3
+    const channelFilter = (inv: CachedInvoice) =>
+      allChannels || selectedChannels.has(classifyChannel(inv, tiendaNits, shopifyOrderNumbers, feriaWindows))
+    const a = aggregate(thisYear.filter(channelFilter), skuMap)
+    const b = aggregate(lastYear.filter(channelFilter), skuMap)
 
     // Merge family keys
     const familyKeys = new Set<string>([...a.byFamily.keys(), ...b.byFamily.keys()])
@@ -307,6 +359,7 @@ export async function GET(request: Request) {
       asOf: fmt(asOf),
       currentRange: { start: thisStart, end: thisEnd },
       previousRange: { start: lastStart, end: lastEnd },
+      channels: Array.from(selectedChannels),
       families,
       designs,
       sizeRules: FAMILY_BY_SIZE,

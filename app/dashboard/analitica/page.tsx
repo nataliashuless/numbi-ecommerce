@@ -444,24 +444,75 @@ function MesComparacionView() {
   )
 }
 
+const YTD_CHANNELS: Array<{ key: string; label: string; color: string }> = [
+  { key: 'online', label: 'Online', color: '#1A2238' },
+  { key: 'tiendas', label: 'Tiendas', color: '#1DA9EF' },
+  { key: 'ferias', label: 'Ferias', color: '#F59E0B' },
+]
+
 function YtdFamiliasView() {
   const [data, setData] = useState<YtdResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [expandedFamily, setExpandedFamily] = useState<Set<string>>(new Set())
+  const [channels, setChannels] = useState<Set<string>>(new Set(['online', 'tiendas', 'ferias']))
 
   useEffect(() => {
     setLoading(true)
-    fetch('/api/analitica/familias')
+    const sel = Array.from(channels)
+    const qs = sel.length > 0 && sel.length < 3 ? `?channels=${sel.join(',')}` : ''
+    fetch(`/api/analitica/familias${qs}`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setData(d) })
       .finally(() => setLoading(false))
-  }, [])
+  }, [channels])
+
+  function toggleChannel(key: string) {
+    setChannels(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        if (next.size > 1) next.delete(key) // keep at least one selected
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }
+
+  const channelFilter = (
+    <div className="flex flex-wrap items-center gap-2 mb-4">
+      <span className="text-sm text-[#6B7280]">Canales:</span>
+      {YTD_CHANNELS.map(ch => {
+        const on = channels.has(ch.key)
+        return (
+          <button
+            key={ch.key}
+            onClick={() => toggleChannel(ch.key)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border transition-colors ${
+              on
+                ? 'border-transparent text-white'
+                : 'border-[#E5E7EB] text-[#6B7280] bg-white hover:border-[#1DA9EF]/40'
+            }`}
+            style={on ? { background: ch.color } : undefined}
+          >
+            <span
+              className="inline-block w-2 h-2 rounded-sm"
+              style={{ background: on ? 'white' : ch.color }}
+            />
+            {ch.label}
+          </button>
+        )
+      })}
+    </div>
+  )
 
   if (loading || !data) {
     return (
-      <div className="flex items-center justify-center py-12 text-[#545454]">
-        <Loader2 className="h-5 w-5 animate-spin mr-2" />
-        Cargando YTD…
+      <div>
+        {channelFilter}
+        <div className="flex items-center justify-center py-12 text-[#545454]">
+          <Loader2 className="h-5 w-5 animate-spin mr-2" />
+          Cargando YTD…
+        </div>
       </div>
     )
   }
@@ -509,6 +560,7 @@ function YtdFamiliasView() {
 
   return (
     <div>
+      {channelFilter}
       <div className="text-xs text-[#6B7280] mb-4">
         YTD: {data.currentRange.start} → {data.currentRange.end} vs {data.previousRange.start} → {data.previousRange.end}.
         {data.sizeRules && (
