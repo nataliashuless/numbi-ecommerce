@@ -28,8 +28,10 @@ export async function POST(request: Request) {
   if (error) return error
 
   const body = await request.json().catch(() => ({}))
-  const startDate: string = body.start_date || '2020-01-01'
-  const endDate: string = body.end_date || new Date().toISOString().slice(0, 10)
+  // Auto mode: fire-and-forget freshness refresh (skip if <1h old, else last 45 days)
+  const isAuto = body.auto === true
+  let startDate: string = body.start_date || '2020-01-01'
+  let endDate: string = body.end_date || new Date().toISOString().slice(0, 10)
 
   const credentials = await getShopifyCredentials()
   const shop = credentials?.shopify_shop
@@ -40,6 +42,23 @@ export async function POST(request: Request) {
 
   try {
     const supabase = getAdminClient()
+
+    if (isAuto) {
+      const { data: st } = await supabase
+        .from('shopify_orders_sync_state')
+        .select('last_full_sync_at')
+        .eq('id', 1)
+        .maybeSingle()
+      const ageMs = st?.last_full_sync_at ? Date.now() - new Date(st.last_full_sync_at).getTime() : Infinity
+      if (ageMs < 60 * 60 * 1000) {
+        return NextResponse.json({ skipped: true, reason: 'fresh', last_sync: st?.last_full_sync_at })
+      }
+      const from = new Date()
+      from.setDate(from.getDate() - 45)
+      startDate = from.toISOString().slice(0, 10)
+      endDate = new Date().toISOString().slice(0, 10)
+    }
+
     const params = new URLSearchParams()
     params.set('status', 'any')
     params.set('limit', '100')

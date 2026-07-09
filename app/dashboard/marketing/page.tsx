@@ -163,8 +163,17 @@ export default function MarketingPage() {
   const [loading, setLoading] = useState(true)
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
 
+  const [syncTick, setSyncTick] = useState(0)
+
   useEffect(() => {
     setDateRange({ from: subMonths(new Date(), 6), to: new Date() })
+    // Keep the Shopify orders cache fresh (skips if <1h old, else last 45 days).
+    fetch('/api/shopify/sync-orders', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: true }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && !d.skipped && (d.upserted || 0) > 0) setSyncTick(t => t + 1) })
+      .catch(() => {})
   }, [])
 
   const fetchData = useCallback(async () => {
@@ -186,7 +195,7 @@ export default function MarketingPage() {
 
   useEffect(() => {
     fetchData()
-  }, [fetchData])
+  }, [fetchData, syncTick])
 
   // Time series aggregated by month for the chart
   const monthlySeries = (() => {

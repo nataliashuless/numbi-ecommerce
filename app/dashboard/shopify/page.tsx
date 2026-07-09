@@ -139,7 +139,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setDateRange({ from: subDays(new Date(), 30), to: new Date() })
-  }, [])
+    // Keep the orders cache fresh (skips if <1h old, else last 45 days).
+    fetch('/api/shopify/sync-orders', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: true }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && !d.skipped && (d.upserted || 0) > 0) fetchData() })
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function fetchData() {
     setLoading(true)

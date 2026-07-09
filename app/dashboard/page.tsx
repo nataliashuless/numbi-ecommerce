@@ -143,9 +143,15 @@ export default function DashboardPage() {
         if (matched > 0) setAutoMatchTick(t => t + 1)
       })
       .catch(() => {})
-    // Fire-and-forget Siigo invoice freshness sync (skips if <1h old, else
-    // pulls last 45 days). Refresh the view when it actually brings new data.
+    // Fire-and-forget freshness sync for both caches (skip if <1h old, else
+    // last 45 days). Refresh the view when either brings new data.
     fetch('/api/siigo/sync-invoices', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: true }),
+    })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => { if (data && !data.skipped && (data.upserted || 0) > 0) setAutoMatchTick(t => t + 1) })
+      .catch(() => {})
+    fetch('/api/shopify/sync-orders', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: true }),
     })
       .then(res => res.ok ? res.json() : null)
