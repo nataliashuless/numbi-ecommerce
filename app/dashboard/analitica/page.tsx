@@ -138,6 +138,7 @@ interface MesResponse {
   previousMonth: string
   currentRange: { start: string; end: string }
   previousRange: { start: string; end: string }
+  isPartial?: boolean
   total: { current: MesBucket; previous: MesBucket }
   byChannel: Array<{ channel: string; current: MesBucket; previous: MesBucket }>
   byTienda: Array<{ tienda: string; current: MesBucket; previous: MesBucket }>
@@ -228,6 +229,13 @@ function MesComparacionView() {
         </div>
       ) : (
         <>
+          {data.isPartial && (
+            <div className="mb-6 bg-[#FEF3C7] border border-[#F59E0B]/30 rounded-md p-3 text-sm text-[#92400E]">
+              <b>Mes en curso.</b> {monthLabel(data.currentMonth)} todavía no termina, así que la comparación es
+              día-a-día justa: {data.currentRange.start} → {data.currentRange.end} vs {data.previousRange.start} → {data.previousRange.end}.
+              Si {monthLabel(data.currentMonth)} sigue en $0, probablemente faltan sincronizar las facturas Siigo del mes.
+            </div>
+          )}
           {/* KPIs */}
           <div className="grid gap-4 md:grid-cols-3 mb-6">
             {kpi('Ventas', data.total.current.ventas, data.total.previous.ventas, true)}

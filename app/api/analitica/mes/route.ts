@@ -210,8 +210,24 @@ export async function GET(request: Request) {
     month0 = m - 1
   }
 
-  const cur = monthBounds(year, month0)
-  const prev = monthBounds(year - 1, month0)
+  // If the selected month is the CURRENT (in-progress) month, it's only partial.
+  // Comparing it against a FULL prior-year month is unfair (always shows a big
+  // drop). So cap both ranges at today's day-of-month → e.g. Jul 1-9 vs Jul 1-9.
+  const isCurrentMonth = year === now.getFullYear() && month0 === now.getMonth()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  let cur = monthBounds(year, month0)
+  let prev = monthBounds(year - 1, month0)
+  let isPartial = false
+  if (isCurrentMonth) {
+    isPartial = true
+    const dom = now.getDate()
+    const curEnd = `${year}-${pad(month0 + 1)}-${pad(dom)}`
+    // clamp prev-year to the same day-of-month (or its last day if shorter)
+    const prevLastDay = new Date(year - 1, month0 + 1, 0).getDate()
+    const prevEnd = `${year - 1}-${pad(month0 + 1)}-${pad(Math.min(dom, prevLastDay))}`
+    cur = { start: cur.start, end: curEnd }
+    prev = { start: prev.start, end: prevEnd }
+  }
 
   try {
     const supabase = getAdminClient()
@@ -298,6 +314,7 @@ export async function GET(request: Request) {
       previousMonth: `${year - 1}-${String(month0 + 1).padStart(2, '0')}`,
       currentRange: cur,
       previousRange: prev,
+      isPartial,
       total: { current: a.total, previous: b.total },
       byChannel: channels.map(ch => ({
         channel: ch,
