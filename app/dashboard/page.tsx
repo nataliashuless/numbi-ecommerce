@@ -143,6 +143,14 @@ export default function DashboardPage() {
         if (matched > 0) setAutoMatchTick(t => t + 1)
       })
       .catch(() => {})
+    // Fire-and-forget Siigo invoice freshness sync (skips if <1h old, else
+    // pulls last 45 days). Refresh the view when it actually brings new data.
+    fetch('/api/siigo/sync-invoices', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: true }),
+    })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => { if (data && !data.skipped && (data.upserted || 0) > 0) setAutoMatchTick(t => t + 1) })
+      .catch(() => {})
   }, [])
 
   // YTD comparison: this year (Jan 1 → today) vs same range last year

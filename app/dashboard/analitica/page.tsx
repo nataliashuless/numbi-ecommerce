@@ -176,6 +176,17 @@ function MesComparacionView() {
   const [data, setData] = useState<MesResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [tiendasExpanded, setTiendasExpanded] = useState(false)
+  const [syncTick, setSyncTick] = useState(0)
+
+  // Ensure recent Siigo invoices are in the cache (skips if <1h old).
+  useEffect(() => {
+    fetch('/api/siigo/sync-invoices', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: true }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && !d.skipped && (d.upserted || 0) > 0) setSyncTick(t => t + 1) })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     setLoading(true)
@@ -183,7 +194,7 @@ function MesComparacionView() {
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d && !d.error) setData(d) })
       .finally(() => setLoading(false))
-  }, [month])
+  }, [month, syncTick])
 
   const kpi = (label: string, cur: number, prev: number, isMoney: boolean) => {
     const delta = pctChange(cur, prev)

@@ -9,14 +9,45 @@ export async function POST(request: Request) {
   if (error) return error
 
   const body = await request.json().catch(() => ({}))
-  const startDate: string = body.start_date || '2023-01-01'
-  const endDate: string = body.end_date || new Date().toISOString().slice(0, 10)
+
+  // Auto mode: fire-and-forget freshness refresh for recent invoices.
+  // - Skips if the cache was synced within the last hour.
+  // - Otherwise pulls the last 45 days (covers current + previous month) —
+  //   fast, incremental (upsert by id), and enough to keep dashboards current.
+  const isAuto = body.auto === true
+  let startDate: string = body.start_date || '2023-01-01'
+  let endDate: string = body.end_date || new Date().toISOString().slice(0, 10)
 
   try {
     const supabase = getAdminClient()
+
+    if (isAuto) {
+      const { data: st } = await supabase
+        .from('siigo_invoices_sync_state')
+        .select('last_full_sync_at')
+        .eq('id', 1)
+        .maybeSingle()
+      const ageMs = st?.last_full_sync_at ? Date.now() - new Date(st.last_full_sync_at).getTime() : Infinity
+      if (ageMs < 60 * 60 * 1000) {
+        return NextResponse.json({ skipped: true, reason: 'fresh', last_sync: st?.last_full_sync_at })
+      }
+      const from = new Date()
+      from.setDate(from.getDate() - 45)
+      startDate = from.toISOString().slice(0, 10)
+      endDate = new Date().toISOString().slice(0, 10)
+    }
+
     const invoices = await listInvoices(startDate, endDate)
 
     if (invoices.length === 0) {
+      // In auto mode, still stamp the sync time so we honor the 1h TTL and
+      // don't re-hit Siigo on every page load when there simply are no
+      // recent invoices.
+      if (isAuto) {
+        await supabase
+          .from('siigo_invoices_sync_state')
+          .upsert({ id: 1, last_full_sync_at: new Date().toISOString() }, { onConflict: 'id' })
+      }
       return NextResponse.json({ inserted: 0, total: 0, startDate, endDate })
     }
 
