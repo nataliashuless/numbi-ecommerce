@@ -50,6 +50,7 @@ import {
   Megaphone,
   Download,
   RefreshCw,
+  Truck,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { Input } from '@/components/ui/input'
@@ -102,6 +103,7 @@ interface ForecastItem {
   stockBodega: number
   stockConsignado: number
   stockTotal: number
+  enCamino: number
   ventasShopify: number
   ventasWhatsApp: number
   ventasTiendas: number
@@ -119,6 +121,7 @@ interface ForecastReference {
   stockBodega: number
   stockConsignado: number
   stockTotal: number
+  enCamino: number
   ventasTotal: number
   velocidadDiaria: number
   sugerenciaProduccion: number
@@ -301,6 +304,7 @@ export default function InventarioPage() {
       'Stock bodega': f.stockBodega,
       'Stock consignado': f.stockConsignado,
       'Stock total': f.stockTotal,
+      'En camino': f.enCamino,
       'Ventas Shopify': f.ventasShopify,
       'Ventas WhatsApp': f.ventasWhatsApp,
       'Ventas Tiendas': f.ventasTiendas,
@@ -319,6 +323,7 @@ export default function InventarioPage() {
       'Stock bodega': r.stockBodega,
       'Stock consignado': r.stockConsignado,
       'Stock total': r.stockTotal,
+      'En camino': r.enCamino,
       'Ventas totales': r.ventasTotal,
       'Velocidad diaria': Number(r.velocidadDiaria.toFixed(2)),
       'Sugerencia producción': r.sugerenciaProduccion,
@@ -965,6 +970,12 @@ export default function InventarioPage() {
                         <Download className="h-4 w-4 mr-2" />
                         Bajar Excel
                       </Button>
+                      <Link href="/dashboard/inventario/ordenes">
+                        <Button variant="outline" className="border-[#F59E0B] text-[#D97706] hover:bg-[#F59E0B]/10">
+                          <Truck className="h-4 w-4 mr-2" />
+                          Órdenes en camino
+                        </Button>
+                      </Link>
                     </div>
                     <div className="mt-4 pt-4 border-t flex items-center gap-3 flex-wrap">
                       <Label className="text-sm">Stock para descontar:</Label>
@@ -1052,14 +1063,15 @@ export default function InventarioPage() {
                       const leadDays = parseInt(leadTime) || 14
                       const safetyDays = parseInt(stockSeguridad) || 7
 
-                      // Recalc per variant based on the toggle: stock for production decision
+                      // Recalc per variant based on the toggle: stock for production decision.
+                      // Also discount units already on order (en camino).
                       const recalcVariant = (v: ForecastItem): ForecastItem => {
                         const stockBase = incluirConsignado
                           ? v.stockBodega + v.stockConsignado
                           : v.stockBodega
                         const stockNecesario = Math.ceil(v.velocidadDiaria * (leadDays + safetyDays))
                         const sugerencia = v.velocidadDiaria > 0
-                          ? Math.max(0, stockNecesario - stockBase)
+                          ? Math.max(0, stockNecesario - stockBase - (v.enCamino || 0))
                           : 0
                         let dias: number | null = null
                         if (v.velocidadDiaria > 0 && stockBase > 0) {
@@ -1108,6 +1120,7 @@ export default function InventarioPage() {
                             stockBodega: variants.reduce((s, v) => s + v.stockBodega, 0),
                             stockConsignado: variants.reduce((s, v) => s + v.stockConsignado, 0),
                             stockTotal: variants.reduce((s, v) => s + v.stockTotal, 0),
+                            enCamino: variants.reduce((s, v) => s + (v.enCamino || 0), 0),
                             ventasTotal: variants.reduce((s, v) => s + v.ventasTotal, 0),
                             velocidadDiaria: Math.round(variants.reduce((s, v) => s + v.velocidadDiaria, 0) * 100) / 100,
                             sugerenciaProduccion: variants.reduce((s, v) => s + v.sugerenciaProduccion, 0),
@@ -1129,6 +1142,7 @@ export default function InventarioPage() {
                                   <TableHead className="text-center">Bodega</TableHead>
                                   <TableHead className="text-center">Consignado</TableHead>
                                   <TableHead className="text-center">Total Stock</TableHead>
+                                  <TableHead className="text-center bg-amber-50">En camino</TableHead>
                                   <TableHead className="text-center">Ventas ({diasAnalisis}d)</TableHead>
                                   <TableHead className="text-center">Vel. Semanal</TableHead>
                                   <TableHead className="text-center">Días Restantes</TableHead>
@@ -1139,7 +1153,7 @@ export default function InventarioPage() {
                               <TableBody>
                                 {filteredRefs.length === 0 ? (
                                   <TableRow>
-                                    <TableCell colSpan={10} className="text-center py-8 text-[#545454]">
+                                    <TableCell colSpan={11} className="text-center py-8 text-[#545454]">
                                       No hay productos que mostrar
                                     </TableCell>
                                   </TableRow>
@@ -1177,6 +1191,13 @@ export default function InventarioPage() {
                                             )}
                                           </TableCell>
                                           <TableCell className="text-center font-medium">{r.stockTotal}</TableCell>
+                                          <TableCell className="text-center bg-amber-50/40">
+                                            {r.enCamino > 0 ? (
+                                              <Badge className="bg-amber-100 text-amber-700">{r.enCamino}</Badge>
+                                            ) : (
+                                              <span className="text-[#D1D5DB]">—</span>
+                                            )}
+                                          </TableCell>
                                           <TableCell className="text-center font-medium">{r.ventasTotal}</TableCell>
                                           <TableCell className="text-center">
                                             <span className="font-medium">{(r.velocidadDiaria * 7).toFixed(1)}</span>
@@ -1225,6 +1246,13 @@ export default function InventarioPage() {
                                                 )}
                                               </TableCell>
                                               <TableCell className="text-center text-sm">{v.stockTotal}</TableCell>
+                                              <TableCell className="text-center bg-amber-50/30">
+                                                {v.enCamino > 0 ? (
+                                                  <Badge className="bg-amber-100 text-amber-700 text-xs">{v.enCamino}</Badge>
+                                                ) : (
+                                                  <span className="text-[#D1D5DB]">—</span>
+                                                )}
+                                              </TableCell>
                                               <TableCell className="text-center">
                                                 <div className="text-sm">
                                                   <span className="font-medium">{v.ventasTotal}</span>
@@ -1272,7 +1300,7 @@ export default function InventarioPage() {
                             <div className="mt-4 pt-4 border-t">
                               <div className="flex justify-between items-center text-sm">
                                 <div className="text-[#545454]">
-                                  Producir = (Lead Time + Stock Seguridad) × Vel. Diaria − (Bodega + Consignado)
+                                  Producir = (Lead Time + Stock Seguridad) × Vel. Diaria − Stock − En camino
                                 </div>
                                 <div>
                                   <span className="text-[#545454]">Total a producir: </span>

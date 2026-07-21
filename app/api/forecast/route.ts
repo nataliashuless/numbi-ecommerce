@@ -13,6 +13,7 @@ interface VariantForecast {
   stockBodega: number
   stockConsignado: number
   stockTotal: number
+  enCamino: number   // units already ordered (pending production orders)
   ventasShopify: number
   ventasWhatsApp: number
   ventasTiendas: number
@@ -30,11 +31,24 @@ interface ReferenceForecast {
   stockBodega: number
   stockConsignado: number
   stockTotal: number
+  enCamino: number
   ventasTotal: number
   velocidadDiaria: number
   sugerenciaProduccion: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
   variants: VariantForecast[]
+}
+
+// Normalize a design/reference name for matching order items to forecast variants.
+function normName(s: string): string {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+function enCaminoKey(diseno: string, talla: string | null): string {
+  return `${normName(diseno)}|${talla != null ? String(talla).trim() : ''}`
 }
 
 const PRINCIPAL_WAREHOUSE_ID = 27
@@ -195,6 +209,28 @@ export async function GET(request: Request) {
       }
     }
 
+    // 4b. Pending production orders (zapatos en camino) → units by (diseño, talla)
+    const enCaminoByKey = new Map<string, number>()
+    {
+      const { data: pendingOrders } = await supabase
+        .from('production_orders')
+        .select('id')
+        .eq('estado', 'pendiente')
+        .range(0, 999)
+      const orderIds = (pendingOrders || []).map((o: { id: string }) => o.id)
+      if (orderIds.length > 0) {
+        const { data: items } = await supabase
+          .from('production_order_items')
+          .select('diseno, talla, cantidad')
+          .in('order_id', orderIds)
+          .range(0, 9999)
+        for (const it of (items || []) as Array<{ diseno: string; talla: string | null; cantidad: number }>) {
+          const key = enCaminoKey(it.diseno, it.talla)
+          enCaminoByKey.set(key, (enCaminoByKey.get(key) || 0) + (Number(it.cantidad) || 0))
+        }
+      }
+    }
+
     // 5. Build variant forecasts
     const allSkus = new Set<string>([...stockBySku.keys(), ...ventasPorSku.keys()])
     const variantsForecast: VariantForecast[] = []
@@ -220,11 +256,17 @@ export async function GET(request: Request) {
         diasHastaAgotamiento = 0
       }
 
-      // Suggestion: cover lead time + safety stock based on total available (bodega + consigned)
+      const { reference, size } = parseProductName(stockInfo.product_name)
+
+      // Units already on order (in transit) for this design + size
+      const enCamino = enCaminoByKey.get(enCaminoKey(reference, size)) || 0
+
+      // Suggestion: cover lead time + safety stock based on total available,
+      // discounting stock AND units already in transit (zapatos en camino).
       let sugerenciaProduccion = 0
       if (velocidadDiaria > 0) {
         const stockNecesario = Math.ceil(velocidadDiaria * (leadTimeDias + stockSeguridad))
-        sugerenciaProduccion = Math.max(0, stockNecesario - stockTotal)
+        sugerenciaProduccion = Math.max(0, stockNecesario - stockTotal - enCamino)
       }
 
       let prioridad: VariantForecast['prioridad'] = 'baja'
@@ -233,8 +275,6 @@ export async function GET(request: Request) {
         else if (diasHastaAgotamiento <= 14) prioridad = 'alta'
         else if (diasHastaAgotamiento <= 30) prioridad = 'media'
       }
-
-      const { reference, size } = parseProductName(stockInfo.product_name)
 
       variantsForecast.push({
         sku,
@@ -246,6 +286,7 @@ export async function GET(request: Request) {
         stockBodega: stockInfo.stockBodega,
         stockConsignado: stockInfo.stockConsignado,
         stockTotal,
+        enCamino,
         ventasShopify: ventas.shopify,
         ventasWhatsApp: ventas.whatsapp,
         ventasTiendas: ventas.tiendas,
@@ -270,6 +311,7 @@ export async function GET(request: Request) {
           stockBodega: 0,
           stockConsignado: 0,
           stockTotal: 0,
+          enCamino: 0,
           ventasTotal: 0,
           velocidadDiaria: 0,
           sugerenciaProduccion: 0,
@@ -283,6 +325,7 @@ export async function GET(request: Request) {
       r.stockBodega += v.stockBodega
       r.stockConsignado += v.stockConsignado
       r.stockTotal += v.stockTotal
+      r.enCamino += v.enCamino
       r.ventasTotal += v.ventasTotal
       r.velocidadDiaria += v.velocidadDiaria
       r.sugerenciaProduccion += v.sugerenciaProduccion
