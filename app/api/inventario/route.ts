@@ -58,7 +58,24 @@ export async function GET() {
       if (t.siigo_warehouse_id) warehouseToTienda.set(t.siigo_warehouse_id, t.id)
     }
 
-    const relevantWarehouseIds = [PRINCIPAL_WAREHOUSE_ID, ...Array.from(warehouseToTienda.keys())]
+    // Own warehouses (bodega propia) = principal + any Siigo warehouse whose
+    // name matches an own pattern (e.g. "Ekho", where new production lands).
+    const OWN_WAREHOUSE_NAME_PATTERN = /ekho|eko\b/i
+    const ownWarehouseIds = new Set<number>([PRINCIPAL_WAREHOUSE_ID])
+    {
+      const { data: whs } = await supabase
+        .from('siigo_warehouses')
+        .select('id, name')
+        .range(0, 999)
+      for (const w of (whs || []) as Array<{ id: number; name: string | null }>) {
+        if (w.name && OWN_WAREHOUSE_NAME_PATTERN.test(w.name)) ownWarehouseIds.add(w.id)
+      }
+    }
+
+    const relevantWarehouseIds = [
+      ...Array.from(ownWarehouseIds),
+      ...Array.from(warehouseToTienda.keys()),
+    ]
 
     const allStock: Array<{
       product_id: string
@@ -121,8 +138,9 @@ export async function GET() {
         bySku.set(sku, v)
       }
       const qty = Number(row.quantity) || 0
-      if (row.warehouse_id === PRINCIPAL_WAREHOUSE_ID) {
-        v.bodega = qty
+      if (ownWarehouseIds.has(row.warehouse_id)) {
+        // Own warehouses (principal + Ekho + …) accumulate into bodega
+        v.bodega += qty
       } else {
         const tiendaId = warehouseToTienda.get(row.warehouse_id)
         if (tiendaId) v.tiendas[tiendaId] = qty
