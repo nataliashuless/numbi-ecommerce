@@ -51,6 +51,22 @@ function enCaminoKey(diseno: string, talla: string | null): string {
   return `${normName(diseno)}|${talla != null ? String(talla).trim() : ''}`
 }
 
+// Tolerant design matching (already-normalized strings). Matches when all the
+// words of one name appear in the other — so an order "Niño" matches a Siigo
+// "Básico Niño", but "Niña" does NOT match "Básico Niño".
+function designMatchesNorm(a: string, b: string): boolean {
+  if (!a || !b) return false
+  if (a === b) return true
+  const aw = a.split(' ').filter(Boolean)
+  const bw = b.split(' ').filter(Boolean)
+  if (aw.length === 0 || bw.length === 0) return false
+  const bset = new Set(bw)
+  if (aw.every(w => bset.has(w))) return true
+  const aset = new Set(aw)
+  if (bw.every(w => aset.has(w))) return true
+  return false
+}
+
 const PRINCIPAL_WAREHOUSE_ID = 27
 const PRODUCT_ACCOUNT_GROUP_ID = 339 // solo productos terminados
 
@@ -269,10 +285,30 @@ export async function GET(request: Request) {
 
       const { reference, size } = parseProductName(stockInfo.product_name)
 
-      // Units already on order (in transit) for this design + size
-      const enCaminoK = enCaminoKey(reference, size)
-      const enCamino = enCaminoByKey.get(enCaminoK) || 0
-      if (enCamino > 0) enCaminoMatchedKeys.add(enCaminoK)
+      // Units already on order (in transit) for this design + size.
+      // Try exact key first, then a tolerant word-level design match (same size),
+      // consuming each order key once so it can't discount two variants.
+      const refNorm = normName(reference)
+      const sizePart = size != null ? String(size).trim() : ''
+      let enCamino = 0
+      const exactK = `${refNorm}|${sizePart}`
+      if (enCaminoByKey.has(exactK) && !enCaminoMatchedKeys.has(exactK)) {
+        enCamino = enCaminoByKey.get(exactK) || 0
+        enCaminoMatchedKeys.add(exactK)
+      } else {
+        for (const [k, qty] of enCaminoByKey) {
+          if (enCaminoMatchedKeys.has(k)) continue
+          const sep = k.lastIndexOf('|')
+          const kDesign = k.slice(0, sep)
+          const kSize = k.slice(sep + 1)
+          if (kSize !== sizePart) continue
+          if (designMatchesNorm(kDesign, refNorm)) {
+            enCamino += qty
+            enCaminoMatchedKeys.add(k)
+            break
+          }
+        }
+      }
 
       // Suggestion: cover lead time + safety stock based on total available,
       // discounting stock AND units already in transit (zapatos en camino).
