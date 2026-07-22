@@ -214,24 +214,35 @@ export default function InventarioPage() {
   const [lastStockSync, setLastStockSync] = useState<string | null>(null)
   const [syncingStock, setSyncingStock] = useState(false)
 
-  // Grand total to produce, recomputed with the SAME logic the forecast table
-  // uses (respects the consignado toggle + units en camino), so the KPI card
-  // always matches the table footer. Covers ALL products (ignores search/filter).
-  const totalProducirToggle = useMemo(() => {
-    if (!forecastData) return 0
+  // KPI values recomputed with the SAME logic the forecast table uses
+  // (respects the consignado toggle + units en camino), so the cards always
+  // match the table. Covers ALL products (ignores search/filter). Priority is
+  // derived from days-of-stock over the chosen stock base — exactly like the
+  // per-row recalc — so counts stay consistent with the visible priorities.
+  const forecastKpis = useMemo(() => {
+    const empty = { totalProducir: 0, criticos: 0, altos: 0, medios: 0 }
+    if (!forecastData) return empty
     const leadDays = parseInt(leadTime) || 14
     const safetyDays = parseInt(stockSeguridad) || 7
-    let sum = 0
+    const out = { ...empty }
     for (const r of forecastData.referencias) {
       for (const v of r.variants) {
         if (v.velocidadDiaria <= 0) continue
         const stockBase = incluirConsignado ? v.stockBodega + v.stockConsignado : v.stockBodega
         const stockNecesario = Math.ceil(v.velocidadDiaria * (leadDays + safetyDays))
-        sum += Math.max(0, stockNecesario - stockBase - (v.enCamino || 0))
+        out.totalProducir += Math.max(0, stockNecesario - stockBase - (v.enCamino || 0))
+        // Days of stock → priority (same thresholds as recalcVariant)
+        let dias: number | null = null
+        if (stockBase > 0) dias = Math.round(stockBase / v.velocidadDiaria)
+        else dias = 0
+        if (dias <= 7) out.criticos += 1
+        else if (dias <= 14) out.altos += 1
+        else if (dias <= 30) out.medios += 1
       }
     }
-    return sum
+    return out
   }, [forecastData, incluirConsignado, leadTime, stockSeguridad])
+  const totalProducirToggle = forecastKpis.totalProducir
 
   async function fetchInventario() {
     try {
@@ -367,9 +378,9 @@ export default function InventarioPage() {
       { Parámetro: 'Stock a descontar', Valor: incluirConsignado ? 'Bodega + Consignado' : 'Solo bodega' },
       { Parámetro: 'Total a producir sugerido', Valor: detalle.reduce((s, d) => s + (d['Sugerencia producción'] || 0), 0) },
       { Parámetro: 'Ventas en el período', Valor: forecastData.resumen.totalVentasPeriodo },
-      { Parámetro: 'Urgentes (≤7 días)', Valor: forecastData.resumen.criticos },
-      { Parámetro: 'Alta prioridad (≤14 días)', Valor: forecastData.resumen.altos },
-      { Parámetro: 'Media prioridad (≤30 días)', Valor: forecastData.resumen.medios },
+      { Parámetro: 'Urgentes (≤7 días)', Valor: forecastKpis.criticos },
+      { Parámetro: 'Alta prioridad (≤14 días)', Valor: forecastKpis.altos },
+      { Parámetro: 'Media prioridad (≤30 días)', Valor: forecastKpis.medios },
       { Parámetro: 'Generado', Valor: new Date().toLocaleString('es-CO') },
     ]
 
@@ -900,7 +911,7 @@ export default function InventarioPage() {
                       <AlertTriangle className="h-4 w-4 text-red-600" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold text-red-700">{forecastData.resumen.criticos}</div>
+                      <div className="text-2xl font-bold text-red-700">{forecastKpis.criticos}</div>
                       <p className="text-xs text-red-600">se agotan en 7 dias</p>
                     </CardContent>
                   </Card>
@@ -910,7 +921,7 @@ export default function InventarioPage() {
                       <Clock className="h-4 w-4 text-orange-600" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold text-orange-700">{forecastData.resumen.altos}</div>
+                      <div className="text-2xl font-bold text-orange-700">{forecastKpis.altos}</div>
                       <p className="text-xs text-orange-600">se agotan en 14 dias</p>
                     </CardContent>
                   </Card>
@@ -920,7 +931,7 @@ export default function InventarioPage() {
                       <TrendingUp className="h-4 w-4 text-yellow-500" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold text-[#1A2238]">{forecastData.resumen.medios}</div>
+                      <div className="text-2xl font-bold text-[#1A2238]">{forecastKpis.medios}</div>
                       <p className="text-xs text-[#545454]">se agotan en 30 dias</p>
                     </CardContent>
                   </Card>
@@ -1059,21 +1070,21 @@ export default function InventarioPage() {
                           onClick={() => setForecastFilter('critica')}
                           className={forecastFilter === 'critica' ? 'bg-red-500 hover:bg-red-500/90 text-white' : ''}
                         >
-                          Urgentes ({forecastData.resumen.criticos})
+                          Urgentes ({forecastKpis.criticos})
                         </Button>
                         <Button
                           variant={forecastFilter === 'alta' ? 'default' : 'outline'}
                           onClick={() => setForecastFilter('alta')}
                           className={forecastFilter === 'alta' ? 'bg-orange-500 hover:bg-orange-500/90 text-white' : ''}
                         >
-                          Alta ({forecastData.resumen.altos})
+                          Alta ({forecastKpis.altos})
                         </Button>
                         <Button
                           variant={forecastFilter === 'media' ? 'default' : 'outline'}
                           onClick={() => setForecastFilter('media')}
                           className={forecastFilter === 'media' ? 'bg-yellow-500 hover:bg-yellow-500/90 text-white' : ''}
                         >
-                          Media ({forecastData.resumen.medios})
+                          Media ({forecastKpis.medios})
                         </Button>
                       </div>
                     </div>
