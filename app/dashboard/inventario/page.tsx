@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, Fragment } from 'react'
+import { useEffect, useState, useMemo, Fragment } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -214,6 +214,25 @@ export default function InventarioPage() {
   const [lastStockSync, setLastStockSync] = useState<string | null>(null)
   const [syncingStock, setSyncingStock] = useState(false)
 
+  // Grand total to produce, recomputed with the SAME logic the forecast table
+  // uses (respects the consignado toggle + units en camino), so the KPI card
+  // always matches the table footer. Covers ALL products (ignores search/filter).
+  const totalProducirToggle = useMemo(() => {
+    if (!forecastData) return 0
+    const leadDays = parseInt(leadTime) || 14
+    const safetyDays = parseInt(stockSeguridad) || 7
+    let sum = 0
+    for (const r of forecastData.referencias) {
+      for (const v of r.variants) {
+        if (v.velocidadDiaria <= 0) continue
+        const stockBase = incluirConsignado ? v.stockBodega + v.stockConsignado : v.stockBodega
+        const stockNecesario = Math.ceil(v.velocidadDiaria * (leadDays + safetyDays))
+        sum += Math.max(0, stockNecesario - stockBase - (v.enCamino || 0))
+      }
+    }
+    return sum
+  }, [forecastData, incluirConsignado, leadTime, stockSeguridad])
+
   async function fetchInventario() {
     try {
       const res = await fetch('/api/inventario')
@@ -294,6 +313,16 @@ export default function InventarioPage() {
       media: 'Media (≤30 días)',
       baja: 'Baja',
     }
+    // Recompute suggestion with the same logic as the on-screen table
+    // (respects the consignado toggle + units en camino) so the file matches.
+    const leadDays = parseInt(leadTime) || 14
+    const safetyDays = parseInt(stockSeguridad) || 7
+    const suggestFor = (f: ForecastItem): number => {
+      if (f.velocidadDiaria <= 0) return 0
+      const stockBase = incluirConsignado ? f.stockBodega + f.stockConsignado : f.stockBodega
+      const stockNecesario = Math.ceil(f.velocidadDiaria * (leadDays + safetyDays))
+      return Math.max(0, stockNecesario - stockBase - (f.enCamino || 0))
+    }
 
     // Sheet 1: Detalle por variante (SKU)
     const detalle = forecastData.forecast.map(f => ({
@@ -312,7 +341,7 @@ export default function InventarioPage() {
       'Velocidad diaria': Number(f.velocidadDiaria.toFixed(2)),
       'Velocidad semanal': Number(f.velocidadSemanal.toFixed(2)),
       'Días hasta agotamiento': f.diasHastaAgotamiento ?? '∞',
-      'Sugerencia producción': f.sugerenciaProduccion,
+      'Sugerencia producción': suggestFor(f),
       'Prioridad': PRIORIDAD_LABEL[f.prioridad] || f.prioridad,
     }))
 
@@ -326,7 +355,7 @@ export default function InventarioPage() {
       'En camino': r.enCamino,
       'Ventas totales': r.ventasTotal,
       'Velocidad diaria': Number(r.velocidadDiaria.toFixed(2)),
-      'Sugerencia producción': r.sugerenciaProduccion,
+      'Sugerencia producción': r.variants.reduce((s, v) => s + suggestFor(v), 0),
       'Prioridad': PRIORIDAD_LABEL[r.prioridad] || r.prioridad,
     }))
 
@@ -336,7 +365,7 @@ export default function InventarioPage() {
       { Parámetro: 'Lead time producción (días)', Valor: leadTime },
       { Parámetro: 'Stock de seguridad (días)', Valor: stockSeguridad },
       { Parámetro: 'Stock a descontar', Valor: incluirConsignado ? 'Bodega + Consignado' : 'Solo bodega' },
-      { Parámetro: 'Total a producir sugerido', Valor: forecastData.resumen.totalProducirSugerido },
+      { Parámetro: 'Total a producir sugerido', Valor: detalle.reduce((s, d) => s + (d['Sugerencia producción'] || 0), 0) },
       { Parámetro: 'Ventas en el período', Valor: forecastData.resumen.totalVentasPeriodo },
       { Parámetro: 'Urgentes (≤7 días)', Valor: forecastData.resumen.criticos },
       { Parámetro: 'Alta prioridad (≤14 días)', Valor: forecastData.resumen.altos },
@@ -901,8 +930,8 @@ export default function InventarioPage() {
                       <Factory className="h-4 w-4 text-[#1A2238]" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold text-[#1A2238]">{forecastData.resumen.totalProducirSugerido.toLocaleString()}</div>
-                      <p className="text-xs text-[#545454]">unidades totales</p>
+                      <div className="text-2xl font-bold text-[#1A2238]">{totalProducirToggle.toLocaleString()}</div>
+                      <p className="text-xs text-[#545454]">{incluirConsignado ? 'descuenta bodega + consignado' : 'solo bodega'}</p>
                     </CardContent>
                   </Card>
                   <Card>
