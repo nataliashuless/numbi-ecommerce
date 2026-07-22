@@ -191,6 +191,16 @@ export default function InventarioPage() {
   const [expandedRefs, setExpandedRefs] = useState<Set<string>>(new Set())
   const [tiendasExpanded, setTiendasExpanded] = useState(false)
   const [expandedForecastRefs, setExpandedForecastRefs] = useState<Set<string>>(new Set())
+  // Per-variant "which tiendas have this" breakdown (keyed by SKU)
+  const [expandedVariantSkus, setExpandedVariantSkus] = useState<Set<string>>(new Set())
+  function toggleVariantSku(sku: string) {
+    setExpandedVariantSkus(prev => {
+      const next = new Set(prev)
+      if (next.has(sku)) next.delete(sku)
+      else next.add(sku)
+      return next
+    })
+  }
   function toggleRef(reference: string) {
     setExpandedRefs(prev => {
       const next = new Set(prev)
@@ -830,8 +840,15 @@ export default function InventarioPage() {
                                 </TableCell>
                               </TableRow>
 
-                              {isExpanded && r.variants.map(v => (
-                                <TableRow key={`${r.reference}-${v.sku}`} className="bg-gray-50/40">
+                              {isExpanded && r.variants.map(v => {
+                                const variantOpen = expandedVariantSkus.has(v.sku)
+                                const tiendasConStock = tiendas
+                                  .map(t => ({ nombre: t.nombre, qty: v.tiendas[t.id] || 0 }))
+                                  .filter(t => t.qty > 0)
+                                  .sort((a, b) => b.qty - a.qty)
+                                return (
+                                <Fragment key={`${r.reference}-${v.sku}`}>
+                                <TableRow className="bg-gray-50/40">
                                   <TableCell></TableCell>
                                   <TableCell className="pl-8">
                                     <div className="flex items-center gap-2">
@@ -860,7 +877,17 @@ export default function InventarioPage() {
                                   ) : (
                                     <TableCell className="text-center bg-purple-50/30">
                                       {v.totalConsignado > 0 ? (
-                                        <Badge variant="secondary" className="text-xs">{v.totalConsignado}</Badge>
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleVariantSku(v.sku)}
+                                          className="inline-flex items-center gap-1 hover:opacity-80"
+                                          title="Ver en qué tiendas está"
+                                        >
+                                          <Badge variant="secondary" className="text-xs cursor-pointer">{v.totalConsignado}</Badge>
+                                          {variantOpen
+                                            ? <ChevronDown className="h-3 w-3 text-purple-500" />
+                                            : <ChevronRight className="h-3 w-3 text-purple-400" />}
+                                        </button>
                                       ) : (
                                         <span className="text-[#D1D5DB]">—</span>
                                       )}
@@ -870,7 +897,31 @@ export default function InventarioPage() {
                                     {getInventoryBadge(v.total)}
                                   </TableCell>
                                 </TableRow>
-                              ))}
+                                {!tiendasExpanded && variantOpen && (
+                                  <TableRow className="bg-purple-50/20">
+                                    <TableCell></TableCell>
+                                    <TableCell colSpan={4} className="py-2 pl-12">
+                                      {tiendasConStock.length > 0 ? (
+                                        <div className="flex flex-wrap gap-1.5">
+                                          <span className="text-xs text-[#545454] mr-1">
+                                            {v.size ? `Talla ${v.size}` : ''} está en:
+                                          </span>
+                                          {tiendasConStock.map((t, i) => (
+                                            <span key={i} className="inline-flex items-center gap-1 bg-white border border-purple-200 rounded-full px-2.5 py-0.5 text-xs">
+                                              <span className="text-[#1A2238]">{t.nombre}</span>
+                                              <span className="font-bold text-purple-700">{t.qty}</span>
+                                            </span>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <span className="text-xs text-[#9CA3AF]">Sin stock en tiendas</span>
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                                </Fragment>
+                                )
+                              })}
                             </Fragment>
                           )
                         })
