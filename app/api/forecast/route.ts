@@ -111,6 +111,7 @@ export async function GET(request: Request) {
       product_code: string
       product_name: string
       warehouse_id: number
+      warehouse_name: string | null
       quantity: number
     }
     const stockRows: StockRow[] = []
@@ -120,7 +121,7 @@ export async function GET(request: Request) {
       for (let i = 0; i < 50; i++) {
         const { data: page, error: sErr } = await supabase
           .from('siigo_product_stock')
-          .select('product_id, product_code, product_name, warehouse_id, quantity')
+          .select('product_id, product_code, product_name, warehouse_id, warehouse_name, quantity')
           .eq('account_group_id', PRODUCT_ACCOUNT_GROUP_ID)
           .range(pageStart, pageStart + pageSize - 1)
         if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 })
@@ -131,6 +132,13 @@ export async function GET(request: Request) {
       }
     }
 
+    // Own warehouses (bodega propia) = principal + any whose name matches a
+    // known own-warehouse pattern (e.g. "Ekho", where new production lands).
+    // Everything else with stock counts as consigned in tiendas.
+    const OWN_WAREHOUSE_NAME_PATTERN = /ekho|eko\b/i
+    const isOwnWarehouse = (id: number, name: string | null) =>
+      id === PRINCIPAL_WAREHOUSE_ID || (name != null && OWN_WAREHOUSE_NAME_PATTERN.test(name))
+
     // 2. Build stock map per SKU
     type StockBucket = {
       product_name: string
@@ -138,6 +146,8 @@ export async function GET(request: Request) {
       stockConsignado: number
     }
     const stockBySku = new Map<string, StockBucket>()
+    // Diagnostic: units + bucket per warehouse so the UI can show where stock sits.
+    const warehouseDiag = new Map<number, { name: string; bucket: 'bodega' | 'consignado'; units: number }>()
     for (const row of stockRows) {
       const sku = row.product_code
       if (!sku) continue
@@ -148,12 +158,17 @@ export async function GET(request: Request) {
       }
       if (!b.product_name && row.product_name) b.product_name = row.product_name
       const qty = Number(row.quantity) || 0
-      if (row.warehouse_id === PRINCIPAL_WAREHOUSE_ID) {
-        b.stockBodega = qty
-      } else {
-        // Anything outside main warehouse counts as consigned (positive only)
-        if (qty > 0) b.stockConsignado += qty
+      const own = isOwnWarehouse(row.warehouse_id, row.warehouse_name)
+      if (own) {
+        // Own warehouses accumulate (principal + Ekho + any other own)
+        b.stockBodega += qty
+      } else if (qty > 0) {
+        b.stockConsignado += qty
       }
+      // diagnostic
+      const wd = warehouseDiag.get(row.warehouse_id) || { name: row.warehouse_name || `#${row.warehouse_id}`, bucket: own ? 'bodega' : 'consignado', units: 0 }
+      if (qty > 0 || own) wd.units += qty
+      warehouseDiag.set(row.warehouse_id, wd)
     }
 
     // 3. Sales in last N days: from Siigo invoice cache, items × quantity, classifying by channel
@@ -444,6 +459,9 @@ export async function GET(request: Request) {
         matchUnidades: enCaminoMatchedUnits,
         sinMatch: enCaminoSinMatch,
       },
+      bodegas: Array.from(warehouseDiag.entries())
+        .map(([id, w]) => ({ id, name: w.name, bucket: w.bucket, units: w.units }))
+        .sort((a, b) => (a.bucket === b.bucket ? b.units - a.units : a.bucket === 'bodega' ? -1 : 1)),
       parametros: {
         diasAnalisis,
         leadTimeDias,

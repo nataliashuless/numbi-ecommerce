@@ -137,6 +137,8 @@ interface ForecastData {
     matchUnidades: number
     sinMatch: Array<{ label: string; unidades: number }>
   }
+  bodegas?: Array<{ id: number; name: string; bucket: 'bodega' | 'consignado'; units: number }>
+
   resumen: {
     totalSkus: number
     totalReferencias: number
@@ -961,6 +963,34 @@ export default function InventarioPage() {
                     </CardContent>
                   </Card>
                 </div>
+
+                {/* Warehouse classification diagnostic */}
+                {forecastData.bodegas && forecastData.bodegas.length > 0 && (
+                  <Card className="mb-6">
+                    <CardContent className="pt-6">
+                      <p className="text-sm text-[#1A2238] mb-2 font-medium">Clasificación de bodegas Siigo</p>
+                      <div className="flex flex-wrap gap-2">
+                        {forecastData.bodegas.map(w => (
+                          <span
+                            key={w.id}
+                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs border ${
+                              w.bucket === 'bodega'
+                                ? 'bg-blue-50 border-blue-200 text-blue-800'
+                                : 'bg-purple-50 border-purple-200 text-purple-800'
+                            }`}
+                          >
+                            <span className={`inline-block w-2 h-2 rounded-full ${w.bucket === 'bodega' ? 'bg-blue-500' : 'bg-purple-500'}`} />
+                            {w.name} · {w.bucket === 'bodega' ? 'Bodega propia' : 'Consignado'} · {w.units.toLocaleString()} uds
+                          </span>
+                        ))}
+                      </div>
+                      <p className="text-xs text-[#545454] mt-2">
+                        Las <b>Bodega propia</b> (principal + Ekho) suman al stock disponible; las <b>Consignado</b> están en tiendas.
+                        Si alguna bodega tuya quedó como &quot;Consignado&quot;, avisame y la agrego.
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* En camino diagnostic */}
                 {forecastData.enCamino && forecastData.enCamino.totalUnidades > 0 && (
