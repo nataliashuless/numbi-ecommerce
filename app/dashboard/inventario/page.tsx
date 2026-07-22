@@ -132,6 +132,11 @@ interface ForecastReference {
 interface ForecastData {
   forecast: ForecastItem[]
   referencias: ForecastReference[]
+  enCamino?: {
+    totalUnidades: number
+    matchUnidades: number
+    sinMatch: Array<{ label: string; unidades: number }>
+  }
   resumen: {
     totalSkus: number
     totalReferencias: number
@@ -956,6 +961,44 @@ export default function InventarioPage() {
                     </CardContent>
                   </Card>
                 </div>
+
+                {/* En camino diagnostic */}
+                {forecastData.enCamino && forecastData.enCamino.totalUnidades > 0 && (
+                  <Card className="mb-6 border-l-4 border-l-[#F59E0B]">
+                    <CardContent className="pt-6">
+                      <div className="flex items-start gap-3">
+                        <Truck className="h-5 w-5 text-[#F59E0B] mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm text-[#1A2238]">
+                            <b>{forecastData.enCamino.matchUnidades}</b> de <b>{forecastData.enCamino.totalUnidades}</b> pares
+                            en camino se están descontando del forecast.
+                          </p>
+                          {forecastData.enCamino.sinMatch.length > 0 ? (
+                            <div className="mt-2 bg-[#FEF3C7] border border-[#F59E0B]/30 rounded-md p-3">
+                              <p className="text-sm text-[#92400E] mb-1">
+                                ⚠ {forecastData.enCamino.sinMatch.reduce((s, x) => s + x.unidades, 0)} pares NO machearon
+                                (el diseño/talla no coincide con ningún producto en Siigo, no se descuentan):
+                              </p>
+                              <div className="flex flex-wrap gap-1">
+                                {forecastData.enCamino.sinMatch.map((x, i) => (
+                                  <span key={i} className="inline-flex items-center gap-1 bg-white border border-amber-200 rounded px-2 py-0.5 text-xs">
+                                    {x.label} · <b>{x.unidades}</b>
+                                  </span>
+                                ))}
+                              </div>
+                              <p className="text-xs text-[#92400E] mt-2">
+                                Corregí el nombre del diseño en <Link href="/dashboard/inventario/ordenes" className="underline font-medium">Órdenes en camino</Link> para
+                                que coincida con cómo Siigo nombra el producto, o revisá la talla.
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-green-700 mt-1">✓ Todos los pares en camino machearon con productos del forecast.</p>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Forecast Parameters */}
                 <Card className="mb-6">

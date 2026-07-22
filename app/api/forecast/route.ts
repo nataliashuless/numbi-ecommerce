@@ -211,6 +211,10 @@ export async function GET(request: Request) {
 
     // 4b. Pending production orders (zapatos en camino) → units by (diseño, talla)
     const enCaminoByKey = new Map<string, number>()
+    // Keep the original label per key so diagnostics can show "Oso 23", not the
+    // normalized key.
+    const enCaminoLabelByKey = new Map<string, string>()
+    let enCaminoTotalUnits = 0
     {
       const { data: pendingOrders } = await supabase
         .from('production_orders')
@@ -226,10 +230,17 @@ export async function GET(request: Request) {
           .range(0, 9999)
         for (const it of (items || []) as Array<{ diseno: string; talla: string | null; cantidad: number }>) {
           const key = enCaminoKey(it.diseno, it.talla)
-          enCaminoByKey.set(key, (enCaminoByKey.get(key) || 0) + (Number(it.cantidad) || 0))
+          const qty = Number(it.cantidad) || 0
+          enCaminoByKey.set(key, (enCaminoByKey.get(key) || 0) + qty)
+          enCaminoTotalUnits += qty
+          if (!enCaminoLabelByKey.has(key)) {
+            enCaminoLabelByKey.set(key, `${it.diseno}${it.talla ? ` ${it.talla}` : ''}`)
+          }
         }
       }
     }
+    // Track which keys actually matched a forecast variant.
+    const enCaminoMatchedKeys = new Set<string>()
 
     // 5. Build variant forecasts
     const allSkus = new Set<string>([...stockBySku.keys(), ...ventasPorSku.keys()])
@@ -259,7 +270,9 @@ export async function GET(request: Request) {
       const { reference, size } = parseProductName(stockInfo.product_name)
 
       // Units already on order (in transit) for this design + size
-      const enCamino = enCaminoByKey.get(enCaminoKey(reference, size)) || 0
+      const enCaminoK = enCaminoKey(reference, size)
+      const enCamino = enCaminoByKey.get(enCaminoK) || 0
+      if (enCamino > 0) enCaminoMatchedKeys.add(enCaminoK)
 
       // Suggestion: cover lead time + safety stock based on total available,
       // discounting stock AND units already in transit (zapatos en camino).
@@ -375,10 +388,26 @@ export async function GET(request: Request) {
       totalStockConsignado: forecast.reduce((sum, f) => sum + f.stockConsignado, 0),
     }
 
+    // Diagnostic: which "en camino" items did NOT match any forecast variant
+    // (design/size naming differs between the order and Siigo). These units are
+    // NOT being discounted from the suggestion.
+    const enCaminoSinMatch: Array<{ label: string; unidades: number }> = []
+    let enCaminoMatchedUnits = 0
+    for (const [key, qty] of enCaminoByKey) {
+      if (enCaminoMatchedKeys.has(key)) enCaminoMatchedUnits += qty
+      else enCaminoSinMatch.push({ label: enCaminoLabelByKey.get(key) || key, unidades: qty })
+    }
+    enCaminoSinMatch.sort((a, b) => b.unidades - a.unidades)
+
     return NextResponse.json({
       forecast,
       referencias,
       resumen,
+      enCamino: {
+        totalUnidades: enCaminoTotalUnits,
+        matchUnidades: enCaminoMatchedUnits,
+        sinMatch: enCaminoSinMatch,
+      },
       parametros: {
         diasAnalisis,
         leadTimeDias,
