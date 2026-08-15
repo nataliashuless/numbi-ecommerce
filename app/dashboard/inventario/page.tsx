@@ -66,6 +66,8 @@ interface VariantItem {
   size: string | null
   description: string
   bodega: number
+  bodegaCalera: number
+  bodegaEkho: number
   tiendas: { [tiendaId: string]: number }
   totalConsignado: number
   total: number
@@ -75,6 +77,8 @@ interface ReferenceItem {
   reference: string
   variantCount: number
   bodega: number
+  bodegaCalera: number
+  bodegaEkho: number
   tiendas: { [tiendaId: string]: number }
   totalConsignado: number
   total: number
@@ -464,6 +468,8 @@ export default function InventarioPage() {
       const variants = r.variants.filter(v => refMatchesSearch ? (filter === 'all' ? true : (filter === 'low' ? (v.total > 0 && v.total <= 5) : v.total === 0)) : passesFilter(v))
       if (variants.length === 0) return null
       const bodega = variants.reduce((s, v) => s + v.bodega, 0)
+      const bodegaCalera = variants.reduce((s, v) => s + v.bodegaCalera, 0)
+      const bodegaEkho = variants.reduce((s, v) => s + v.bodegaEkho, 0)
       const totalConsignado = variants.reduce((s, v) => s + v.totalConsignado, 0)
       const tiendasAgg: { [k: string]: number } = {}
       for (const v of variants) {
@@ -474,6 +480,8 @@ export default function InventarioPage() {
         variants,
         variantCount: variants.length,
         bodega,
+        bodegaCalera,
+        bodegaEkho,
         tiendas: tiendasAgg,
         totalConsignado,
         total: bodega + totalConsignado,
@@ -744,7 +752,8 @@ export default function InventarioPage() {
                       <TableRow>
                         <TableHead className="w-8"></TableHead>
                         <TableHead className="min-w-[200px]">Referencia / SKU</TableHead>
-                        <TableHead className="text-center bg-blue-50">Bodega</TableHead>
+                        <TableHead className="text-center bg-blue-50">Bodega Calera</TableHead>
+                        <TableHead className="text-center bg-cyan-50">Bodega Ekho</TableHead>
                         {tiendasExpanded ? (
                           <>
                             {tiendas.map(tienda => (
@@ -784,7 +793,7 @@ export default function InventarioPage() {
                     <TableBody>
                       {filteredRefs.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={4 + tiendas.length} className="text-center py-8 text-[#545454]">
+                          <TableCell colSpan={tiendasExpanded ? 6 + tiendas.length : 6} className="text-center py-8 text-[#545454]">
                             {searchTerm ? 'No se encontraron productos' : 'No hay productos en inventario'}
                           </TableCell>
                         </TableRow>
@@ -811,7 +820,10 @@ export default function InventarioPage() {
                                   )}
                                 </TableCell>
                                 <TableCell className="text-center bg-blue-50/50">
-                                  {getInventoryBadge(r.bodega)}
+                                  {getInventoryBadge(r.bodegaCalera)}
+                                </TableCell>
+                                <TableCell className="text-center bg-cyan-50/50">
+                                  {getInventoryBadge(r.bodegaEkho)}
                                 </TableCell>
                                 {tiendasExpanded ? (
                                   <>
@@ -859,7 +871,10 @@ export default function InventarioPage() {
                                     </div>
                                   </TableCell>
                                   <TableCell className="text-center bg-blue-50/30">
-                                    {getInventoryBadge(v.bodega)}
+                                    {getInventoryBadge(v.bodegaCalera)}
+                                  </TableCell>
+                                  <TableCell className="text-center bg-cyan-50/30">
+                                    {getInventoryBadge(v.bodegaEkho)}
                                   </TableCell>
                                   {tiendasExpanded ? (
                                     <>
@@ -900,7 +915,7 @@ export default function InventarioPage() {
                                 {!tiendasExpanded && variantOpen && (
                                   <TableRow className="bg-purple-50/20">
                                     <TableCell></TableCell>
-                                    <TableCell colSpan={4} className="py-2 pl-12">
+                                    <TableCell colSpan={5} className="py-2 pl-12">
                                       {tiendasConStock.length > 0 ? (
                                         <div className="flex flex-wrap gap-1.5">
                                           <span className="text-xs text-[#545454] mr-1">

@@ -6,6 +6,8 @@ interface VariantRow {
   size: string | null
   description: string
   bodega: number
+  bodegaCalera: number
+  bodegaEkho: number
   tiendas: { [tiendaId: string]: number }
   totalConsignado: number
   total: number
@@ -15,6 +17,8 @@ interface ReferenceRow {
   reference: string
   variantCount: number
   bodega: number
+  bodegaCalera: number
+  bodegaEkho: number
   tiendas: { [tiendaId: string]: number }
   totalConsignado: number
   total: number
@@ -117,6 +121,8 @@ export async function GET() {
       description: string
       reference: string
       bodega: number
+      bodegaCalera: number
+      bodegaEkho: number
       tiendas: { [tiendaId: string]: number }
     }
     const bySku = new Map<string, VariantBucket>()
@@ -133,6 +139,8 @@ export async function GET() {
           description: row.product_name || '',
           reference,
           bodega: 0,
+          bodegaCalera: 0,
+          bodegaEkho: 0,
           tiendas: {},
         }
         bySku.set(sku, v)
@@ -141,6 +149,11 @@ export async function GET() {
       if (ownWarehouseIds.has(row.warehouse_id)) {
         // Own warehouses (principal + Ekho + …) accumulate into bodega
         v.bodega += qty
+        if (row.warehouse_id === PRINCIPAL_WAREHOUSE_ID) {
+          v.bodegaCalera += qty
+        } else {
+          v.bodegaEkho += qty
+        }
       } else {
         const tiendaId = warehouseToTienda.get(row.warehouse_id)
         if (tiendaId) v.tiendas[tiendaId] = qty
@@ -156,6 +169,8 @@ export async function GET() {
         size: v.size,
         description: v.description,
         bodega: v.bodega,
+        bodegaCalera: v.bodegaCalera,
+        bodegaEkho: v.bodegaEkho,
         tiendas: v.tiendas,
         totalConsignado: tiendaSum,
         total: v.bodega + tiendaSum,
@@ -166,6 +181,8 @@ export async function GET() {
           reference: v.reference,
           variantCount: 0,
           bodega: 0,
+          bodegaCalera: 0,
+          bodegaEkho: 0,
           tiendas: {},
           totalConsignado: 0,
           total: 0,
@@ -175,6 +192,8 @@ export async function GET() {
       }
       r.variants.push(variantRow)
       r.bodega += variantRow.bodega
+      r.bodegaCalera += variantRow.bodegaCalera
+      r.bodegaEkho += variantRow.bodegaEkho
       for (const tid in v.tiendas) {
         r.tiendas[tid] = (r.tiendas[tid] || 0) + v.tiendas[tid]
       }
