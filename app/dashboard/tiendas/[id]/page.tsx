@@ -138,9 +138,40 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
     }
   }
 
+  async function syncStockIfStale(force = false) {
+    try {
+      if (!force) {
+        const stateRes = await fetch('/api/siigo/sync-stock')
+        if (stateRes.ok) {
+          const state = await stateRes.json()
+          const ageMs = state.last_sync
+            ? Date.now() - new Date(state.last_sync).getTime()
+            : Infinity
+          if (ageMs <= 60 * 60 * 1000) return false
+        }
+      }
+
+      const syncRes = await fetch('/api/siigo/sync-stock', { method: 'POST' })
+      return syncRes.ok
+    } catch {
+      return false
+    }
+  }
+
+  async function refreshAllFromSiigo() {
+    setLoading(true)
+    await syncStockIfStale(true)
+    await Promise.all([fetchTienda(), fetchInvoices()])
+    setLoading(false)
+  }
+
   useEffect(() => {
     setLoading(true)
-    Promise.all([fetchTienda(), fetchInvoices()]).finally(() => setLoading(false))
+    Promise.all([fetchTienda(), fetchInvoices()])
+      .finally(() => setLoading(false))
+      .then(async () => {
+        if (await syncStockIfStale()) await fetchTienda()
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, dateRange])
 
@@ -298,7 +329,7 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
               </div>
               <div className="flex items-center gap-2">
                 <DateRangePicker date={dateRange} onDateChange={setDateRange} />
-                <Button variant="outline" size="icon" onClick={fetchInvoices} disabled={loading}>
+                <Button variant="outline" size="icon" onClick={refreshAllFromSiigo} disabled={loading}>
                   <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
                 <Button variant="outline" onClick={openEdit}>

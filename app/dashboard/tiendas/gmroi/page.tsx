@@ -94,6 +94,16 @@ export default function GmroiPage() {
     if (!dateRange?.from || !dateRange?.to) return
     setLoading(true)
     try {
+      const stockStateRes = await fetch('/api/siigo/sync-stock')
+      if (stockStateRes.ok) {
+        const stockState = await stockStateRes.json()
+        const stockAgeMs = stockState.last_sync
+          ? Date.now() - new Date(stockState.last_sync).getTime()
+          : Infinity
+        if (stockAgeMs > 60 * 60 * 1000) {
+          await fetch('/api/siigo/sync-stock', { method: 'POST' })
+        }
+      }
       const s = format(dateRange.from, 'yyyy-MM-dd')
       const e = format(dateRange.to, 'yyyy-MM-dd')
       const res = await fetch(`/api/tiendas/gmroi?start_date=${s}&end_date=${e}&unit_cost=${unitCost || 57000}`)
