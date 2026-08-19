@@ -20,7 +20,6 @@ export const maxDuration = 60
 //
 // Siigo doesn't expose unit cost in our cache, so it's a parameter.
 
-const PRODUCT_ACCOUNT_GROUP_ID = 339 // productos terminados (excl. materias primas)
 const DEFAULT_UNIT_COST = 57000
 
 type Item = { code: string; quantity: number; price: number; total?: number }
@@ -118,18 +117,19 @@ export async function GET(request: Request) {
       if (page.length < pageSize) break
     }
 
-    // 3. Inventory units per warehouse (finished goods, qty > 0)
+    // 3. Inventory units per store warehouse. Store warehouses are dedicated
+    // to consigned footwear, so use their complete Siigo balance. Filtering by
+    // account_group_id here caused valid pairs with a missing/different cached
+    // group to disappear from GMROI even though Siigo included them.
     const invByWarehouse = new Map<number, number>()
     for (let off = 0; off < 200000; off += pageSize) {
       const { data: page } = await supabase
         .from('siigo_product_stock')
-        .select('warehouse_id, quantity, account_group_id')
-        .eq('account_group_id', PRODUCT_ACCOUNT_GROUP_ID)
+        .select('warehouse_id, quantity')
         .range(off, off + pageSize - 1)
       if (!page || page.length === 0) break
       for (const r of (page as Array<{ warehouse_id: number; quantity: number }>)) {
         const q = Number(r.quantity) || 0
-        if (q <= 0) continue
         invByWarehouse.set(r.warehouse_id, (invByWarehouse.get(r.warehouse_id) || 0) + q)
       }
       if (page.length < pageSize) break
