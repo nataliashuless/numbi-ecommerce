@@ -100,7 +100,7 @@ export default function GmroiPage() {
         const stockAgeMs = stockState.last_sync
           ? Date.now() - new Date(stockState.last_sync).getTime()
           : Infinity
-        if (stockAgeMs > 60 * 60 * 1000) {
+        if (stockAgeMs > 60 * 60 * 1000 || stockState.missing_account_group_rows > 0) {
           await fetch('/api/siigo/sync-stock', { method: 'POST' })
         }
       }

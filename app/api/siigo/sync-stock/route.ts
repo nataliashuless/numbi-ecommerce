@@ -19,6 +19,7 @@ interface SiigoProduct {
   id: string
   code: string
   name: string
+  account_group?: { id: number; name: string }
   available_quantity?: number
   warehouses?: SiigoProductStock[]
 }
@@ -102,6 +103,8 @@ export async function POST() {
             warehouse_id: w.id,
             product_code: p.code,
             product_name: p.name,
+            account_group_id: p.account_group?.id || null,
+            account_group_name: p.account_group?.name || null,
             warehouse_name: w.name,
             quantity: w.quantity,
             available_total: p.available_quantity || 0,
@@ -159,10 +162,16 @@ export async function GET() {
   const { count } = await supabase
     .from('siigo_product_stock')
     .select('*', { count: 'exact', head: true })
+  const { count: missingAccountGroupRows } = await supabase
+    .from('siigo_product_stock')
+    .select('*', { count: 'exact', head: true })
+    .is('account_group_id', null)
+    .gt('quantity', 0)
 
   return NextResponse.json({
     rows: count || 0,
     products_synced: state?.products_synced || 0,
     last_sync: state?.last_full_sync_at || null,
+    missing_account_group_rows: missingAccountGroupRows || 0,
   })
 }

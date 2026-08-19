@@ -147,7 +147,7 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
           const ageMs = state.last_sync
             ? Date.now() - new Date(state.last_sync).getTime()
             : Infinity
-          if (ageMs <= 60 * 60 * 1000) return false
+          if (ageMs <= 60 * 60 * 1000 && !state.missing_account_group_rows) return false
         }
       }
 
