@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
+import { withoutIva } from '@/lib/siigo-values'
 
 export const maxDuration = 60
 
@@ -21,7 +22,6 @@ export const maxDuration = 60
 
 const PRODUCT_ACCOUNT_GROUP_ID = 339 // productos terminados (excl. materias primas)
 const DEFAULT_UNIT_COST = 57000
-const IVA_RATE = 1.19
 
 type Item = { code: string; quantity: number; price: number; total?: number }
 type CachedInvoice = {
@@ -106,7 +106,7 @@ export async function GET(request: Request) {
         if (!t) continue
         const units = (inv.items || []).filter(it => it.code && it.code !== 'ENVIO').reduce((s, it) => s + (Number(it.quantity) || 0), 0)
         const amountWithIva = (inv.items || []).filter(it => it.code && it.code !== 'ENVIO').reduce((s, it) => s + (Number(it.total ?? it.quantity * it.price) || 0), 0)
-        const amountWithoutIva = amountWithIva / IVA_RATE
+        const amountWithoutIva = withoutIva(amountWithIva)
         const cur = salesByTienda.get(t.id) || { ventas: 0, unidades: 0, facturas: 0, firstDate: null }
         cur.ventas += amountWithoutIva
         cur.unidades += units

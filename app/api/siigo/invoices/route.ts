@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 import { getCustomersByIds } from '@/lib/siigo-client'
+import { withoutIva } from '@/lib/siigo-values'
 
 export async function GET(request: Request) {
   const { error } = await requireAuth()
@@ -120,6 +121,7 @@ export async function GET(request: Request) {
         name: inv.name,
         date: inv.date,
         total: effectiveTotal,
+        total_sin_iva: withoutIva(effectiveTotal),
         original_total: inv.total,
         credited_amount: inv.credited_amount || 0,
         balance: inv.balance,

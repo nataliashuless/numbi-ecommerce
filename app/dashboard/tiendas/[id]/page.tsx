@@ -39,6 +39,7 @@ import {
   Megaphone,
 } from 'lucide-react'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
+import { withoutIva } from '@/lib/siigo-values'
 
 interface Tienda {
   id: string
@@ -66,6 +67,7 @@ interface SiigoInvoice {
   name: string
   date: string
   total: number
+  total_sin_iva: number
   observations: string
   customer: { id: string; identification: string }
   customer_name: string | null
@@ -172,7 +174,7 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
   }
 
   const stats = useMemo(() => {
-    const totalVentas = invoices.reduce((s, i) => s + i.total, 0)
+    const totalVentas = invoices.reduce((s, i) => s + i.total_sin_iva, 0)
     const totalUnidades = invoices.reduce(
       (s, i) =>
         s +
@@ -200,7 +202,7 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
       for (const it of inv.items || []) {
         if (it.code === 'ENVIO') continue
         const existing = map.get(it.code)
-        const itemTotal = it.total ?? it.quantity * it.price
+        const itemTotal = withoutIva(it.total ?? it.quantity * it.price)
         if (existing) {
           existing.quantity += it.quantity
           existing.total += itemTotal
@@ -309,12 +311,12 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
               <Card className="border-t-4 border-t-[#1DA9EF]">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-[#545454] flex items-center gap-1">
-                    <DollarSign className="h-4 w-4" /> Ventas
+                    <DollarSign className="h-4 w-4" /> Ventas sin IVA
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-[#1A2238]">{formatCurrency(stats.totalVentas)}</div>
-                  <p className="text-xs text-[#545454]">total facturado</p>
+                  <p className="text-xs text-[#545454]">total facturado sin IVA</p>
                 </CardContent>
               </Card>
               <Card>
@@ -421,7 +423,7 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
                             <TableHead>SKU</TableHead>
                             <TableHead>Producto</TableHead>
                             <TableHead className="text-right">Cant.</TableHead>
-                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead className="text-right">Total sin IVA</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -457,7 +459,7 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
                             <TableHead>Fecha</TableHead>
                             <TableHead>Factura</TableHead>
                             <TableHead className="text-right">Items</TableHead>
-                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead className="text-right">Total sin IVA</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -471,7 +473,7 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
                                   <TableCell className="text-sm text-[#545454]">{inv.date}</TableCell>
                                   <TableCell className="font-mono text-xs">{inv.name}</TableCell>
                                   <TableCell className="text-right text-sm">{itemCount}</TableCell>
-                                  <TableCell className="text-right font-mono text-sm">{formatCurrency(inv.total)}</TableCell>
+                                  <TableCell className="text-right font-mono text-sm">{formatCurrency(inv.total_sin_iva)}</TableCell>
                                 </TableRow>
                               )
                             })}

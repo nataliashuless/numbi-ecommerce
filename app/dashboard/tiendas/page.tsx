@@ -244,6 +244,7 @@ export default function TiendasPage() {
         id: string
         date: string
         total: number
+        total_sin_iva: number
         tienda_id: string | null
         items: Item[]
       }
@@ -276,14 +277,14 @@ export default function TiendasPage() {
           .filter(it => it.code !== 'ENVIO')
           .reduce((s, it) => s + (it.quantity || 0), 0)
         if (!buckets[key]) buckets[key] = { ventas: 0, unidades: 0 }
-        buckets[key].ventas += inv.total
+        buckets[key].ventas += inv.total_sin_iva
         buckets[key].unidades += units
-        totalVentas += inv.total
+        totalVentas += inv.total_sin_iva
         totalUnidades += units
 
         if (inv.tienda_id) {
           if (!byTienda[inv.tienda_id]) byTienda[inv.tienda_id] = { total: 0, unidades: 0, facturas: 0 }
-          byTienda[inv.tienda_id].total += inv.total
+          byTienda[inv.tienda_id].total += inv.total_sin_iva
           byTienda[inv.tienda_id].unidades += units
           byTienda[inv.tienda_id].facturas += 1
         }
@@ -692,7 +693,7 @@ export default function TiendasPage() {
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#545454]">Ventas (Periodo)</CardTitle>
+                  <CardTitle className="text-sm font-medium text-[#545454]">Ventas sin IVA (Periodo)</CardTitle>
                   <TrendingUp className="h-4 w-4 text-[#545454]" />
                 </CardHeader>
                 <CardContent>
@@ -710,7 +711,7 @@ export default function TiendasPage() {
             <Card className="mb-8">
               <CardHeader>
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  <CardTitle className="text-lg">Ventas por Periodo</CardTitle>
+                  <CardTitle className="text-lg">Ventas sin IVA por Periodo</CardTitle>
                   <div className="flex items-center gap-2">
                     <DateRangePicker date={dateRange} onDateChange={setDateRange} />
                     <div className="flex gap-1 border rounded-md p-1 bg-white">
@@ -759,7 +760,7 @@ export default function TiendasPage() {
                           contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
                         />
                         <Legend />
-                        <Bar dataKey="ventas" name="Ventas" fill="#1DA9EF" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="ventas" name="Ventas sin IVA" fill="#1DA9EF" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
@@ -771,7 +772,7 @@ export default function TiendasPage() {
                 {ventasStats && ventasStats.totalTransacciones > 0 && (
                   <div className="mt-4 pt-4 border-t flex justify-end gap-8 text-sm">
                     <div>
-                      <span className="text-[#545454]">Ventas: </span>
+                      <span className="text-[#545454]">Ventas sin IVA: </span>
                       <span className="font-bold text-[#1A2238]">{formatCurrency(ventasStats.totalVentas)}</span>
                     </div>
                     <div>
@@ -843,7 +844,7 @@ export default function TiendasPage() {
                                 <div className="font-semibold">{siigoStat?.unidades ?? 0}</div>
                               </div>
                               <div className="text-right">
-                                <div className="text-sm text-[#545454]">Ventas</div>
+                                <div className="text-sm text-[#545454]">Ventas sin IVA</div>
                                 <div className="font-semibold text-[#1A2238]">
                                   {formatCurrency(siigoStat?.total ?? 0)}
                                 </div>
