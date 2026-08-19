@@ -178,7 +178,7 @@ export default function GmroiPage() {
             {/* KPIs */}
             <div className="grid gap-4 md:grid-cols-4 mb-6">
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-[#545454]">Ventas a tiendas</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm text-[#545454]">Ventas a tiendas (sin IVA)</CardTitle></CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-[#1A2238]">{fmtMoney(data.totals.ventas)}</div>
                   <p className="text-xs text-[#545454]">{data.totals.unidades.toLocaleString()} pares</p>
@@ -224,7 +224,7 @@ export default function GmroiPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Tienda</TableHead>
-                        <TableHead className="text-right">Ventas</TableHead>
+                        <TableHead className="text-right">Ventas sin IVA</TableHead>
                         <TableHead className="text-right">Pares vend.</TableHead>
                         <TableHead className="text-right">Margen</TableHead>
                         <TableHead className="text-right">Inv. (pares)</TableHead>

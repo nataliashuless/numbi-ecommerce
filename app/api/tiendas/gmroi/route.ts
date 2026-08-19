@@ -8,7 +8,7 @@ export const maxDuration = 60
 // Reconstructed from the manual "GMROI por tienda" Excel.
 //
 // Inputs per tienda (over the chosen period):
-//   - Ventas a la tienda  = invoiced amount to that tienda's NIT (siigo_invoices)
+//   - Ventas a la tienda  = invoiced amount without IVA to that tienda's NIT
 //   - Unidades vendidas   = units in those invoices
 //   - COGS                = unidades × costo unitario (param, default 57000)
 //   - Margen bruto        = ventas − COGS
@@ -21,6 +21,7 @@ export const maxDuration = 60
 
 const PRODUCT_ACCOUNT_GROUP_ID = 339 // productos terminados (excl. materias primas)
 const DEFAULT_UNIT_COST = 57000
+const IVA_RATE = 1.19
 
 type Item = { code: string; quantity: number; price: number; total?: number }
 type CachedInvoice = {
@@ -104,9 +105,10 @@ export async function GET(request: Request) {
         const t = tiendaByNit.get(inv.customer_identification)
         if (!t) continue
         const units = (inv.items || []).filter(it => it.code && it.code !== 'ENVIO').reduce((s, it) => s + (Number(it.quantity) || 0), 0)
-        const amount = (inv.items || []).filter(it => it.code && it.code !== 'ENVIO').reduce((s, it) => s + (Number(it.total ?? it.quantity * it.price) || 0), 0)
+        const amountWithIva = (inv.items || []).filter(it => it.code && it.code !== 'ENVIO').reduce((s, it) => s + (Number(it.total ?? it.quantity * it.price) || 0), 0)
+        const amountWithoutIva = amountWithIva / IVA_RATE
         const cur = salesByTienda.get(t.id) || { ventas: 0, unidades: 0, facturas: 0, firstDate: null }
-        cur.ventas += amount
+        cur.ventas += amountWithoutIva
         cur.unidades += units
         cur.facturas += 1
         const d = (inv.date || '').slice(0, 10)
