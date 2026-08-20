@@ -222,22 +222,11 @@ export function buildPeriods(
   now = new Date(),
 ): MarketingExecutiveReport['periods'] {
   if (customStart && customEnd) {
-    if (view === 'ytd') {
-      return {
-        current: { start: customStart, end: customEnd, label: `Acumulado ${customStart.slice(0, 4)}`, complete: customEnd < isoDateInTimeZone(now) },
-        previous: { start: shiftDateMonths(customStart, -12), end: shiftDateMonths(customEnd, -12), label: `Mismo rango ${String(Number(customStart.slice(0, 4)) - 1)}`, complete: true },
-        yearAgo: null,
-      }
-    }
-    const length = daysInclusive(customStart, customEnd)
-    const previousEnd = addDays(customStart, -1)
-    const previousStart = addDays(previousEnd, -(length - 1))
+    const previousYear = String(Number(customStart.slice(0, 4)) - 1)
     return {
-      current: { start: customStart, end: customEnd, label: 'Periodo seleccionado', complete: customEnd < isoDateInTimeZone(now) },
-      previous: { start: previousStart, end: previousEnd, label: 'Periodo anterior', complete: true },
-      yearAgo: view === 'monthly'
-        ? { start: shiftDateMonths(customStart, -12), end: shiftDateMonths(customEnd, -12), label: 'Mismo periodo año anterior', complete: true }
-        : null,
+      current: { start: customStart, end: customEnd, label: view === 'ytd' ? `Acumulado ${customStart.slice(0, 4)}` : 'Periodo seleccionado', complete: customEnd < isoDateInTimeZone(now) },
+      previous: { start: shiftDateMonths(customStart, -12), end: shiftDateMonths(customEnd, -12), label: `Mismas fechas ${previousYear}`, complete: true },
+      yearAgo: null,
     }
   }
 
@@ -255,10 +244,9 @@ export function buildPeriods(
   if (view === 'weekly') {
     const currentEnd = addDays(today, -1)
     const currentStart = addDays(currentEnd, -6)
-    const previousEnd = addDays(currentStart, -1)
     return {
       current: { start: currentStart, end: currentEnd, label: 'Últimos 7 días completos', complete: true },
-      previous: { start: addDays(previousEnd, -6), end: previousEnd, label: '7 días anteriores', complete: true },
+      previous: { start: shiftDateMonths(currentStart, -12), end: shiftDateMonths(currentEnd, -12), label: 'Mismos 7 días del año anterior', complete: true },
       yearAgo: null,
     }
   }
@@ -267,8 +255,8 @@ export function buildPeriods(
   const lastClosedMonthStart = addMonths(currentMonthStart, -1)
   return {
     current: monthPeriod(lastClosedMonthStart, 'Último mes cerrado'),
-    previous: monthPeriod(addMonths(lastClosedMonthStart, -1), 'Mes anterior'),
-    yearAgo: monthPeriod(addMonths(lastClosedMonthStart, -12), 'Mismo mes año anterior'),
+    previous: monthPeriod(addMonths(lastClosedMonthStart, -12), 'Mismo mes del año anterior'),
+    yearAgo: null,
   }
 }
 

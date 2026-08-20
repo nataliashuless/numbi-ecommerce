@@ -309,7 +309,7 @@ export default function MarketingPage() {
   const growthGapAlert = objectives.growthGapAlertPct !== undefined && salesGrowth !== null && spendGrowth !== null
     ? spendGrowth - salesGrowth >= objectives.growthGapAlertPct / 100
     : false
-  const comparisonReliable = report?.view !== 'ytd' || Boolean(
+  const comparisonReliable = !report || Boolean(
     report.dataCoverage.shopifyFrom && report.dataCoverage.shopifyFrom.slice(0, 10) <= report.periods.previous.start,
   )
 
@@ -424,14 +424,10 @@ function SimpleExecutiveSummary({
     ? 'Así va el negocio en el periodo seleccionado'
     : `Las ventas ${salesChange >= 0 ? 'subieron' : 'bajaron'} ${Math.abs(salesChange * 100).toFixed(1)}%`
   const explanation = !comparisonReliable
-    ? `Shopify tiene datos desde ${report.dataCoverage.shopifyFrom ? readableDate(report.dataCoverage.shopifyFrom.slice(0, 10)) : 'una fecha no identificada'}; no es correcto concluir crecimiento para todo el acumulado de 2025.`
+    ? `Shopify tiene datos desde ${report.dataCoverage.shopifyFrom ? readableDate(report.dataCoverage.shopifyFrom.slice(0, 10)) : 'una fecha no identificada'}; no es correcto concluir crecimiento para el periodo de ${report.periods.previous.start.slice(0, 4)}.`
     : salesChange === null
     ? 'No hay un periodo anterior comparable para indicar si crecimos.'
-    : report.view === 'ytd'
-    ? `Comparamos el acumulado de ${report.periods.current.start.slice(0, 4)} con las mismas fechas de ${report.periods.previous.start.slice(0, 4)}.`
-    : report.periods.current.label === 'Periodo seleccionado'
-    ? 'Comparamos el periodo elegido con un periodo anterior de la misma cantidad de días.'
-    : 'Comparamos con el periodo inmediatamente anterior.'
+    : `Comparamos con las mismas fechas de ${report.periods.previous.start.slice(0, 4)}.`
 
   return <section className="space-y-5" aria-labelledby="simple-summary-title">
     <Card className="overflow-hidden border-0 bg-gradient-to-br from-[#e8f7f3] via-white to-[#eaf4fb] shadow-sm">
@@ -523,13 +519,15 @@ function FilterBar(props: {
   const periodLabel = (start: string, end: string) => props.report?.view === 'ytd'
     ? readableMonthRange(start, end)
     : readableRange(start, end)
+  const currentYear = props.report?.periods.current.start.slice(0, 4) || '2026'
+  const previousYear = props.report?.periods.previous.start.slice(0, 4) || '2025'
 
   return <section className="rounded-2xl border bg-white p-4 shadow-sm">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex flex-wrap rounded-lg bg-slate-100 p-1">
-        <button onClick={() => selectView('ytd')} className={`rounded-md px-4 py-2 text-sm font-semibold ${props.view === 'ytd' ? 'bg-white text-[#172239] shadow-sm' : 'text-slate-500'}`}>{props.report?.view === 'ytd' ? `${props.report.periods.current.start.slice(0, 4)} vs ${props.report.periods.previous.start.slice(0, 4)}` : '2026 vs 2025'}</button>
-        <button onClick={() => selectView('weekly')} className={`rounded-md px-4 py-2 text-sm font-semibold ${props.view === 'weekly' ? 'bg-white text-[#172239] shadow-sm' : 'text-slate-500'}`}>Semana vs semana</button>
-        <button onClick={() => selectView('monthly')} className={`rounded-md px-4 py-2 text-sm font-semibold ${props.view === 'monthly' ? 'bg-white text-[#172239] shadow-sm' : 'text-slate-500'}`}>Mes vs mes</button>
+        <button onClick={() => selectView('ytd')} className={`rounded-md px-4 py-2 text-sm font-semibold ${props.view === 'ytd' ? 'bg-white text-[#172239] shadow-sm' : 'text-slate-500'}`}>Acumulado {currentYear} vs {previousYear}</button>
+        <button onClick={() => selectView('weekly')} className={`rounded-md px-4 py-2 text-sm font-semibold ${props.view === 'weekly' ? 'bg-white text-[#172239] shadow-sm' : 'text-slate-500'}`}>Semana {currentYear} vs {previousYear}</button>
+        <button onClick={() => selectView('monthly')} className={`rounded-md px-4 py-2 text-sm font-semibold ${props.view === 'monthly' ? 'bg-white text-[#172239] shadow-sm' : 'text-slate-500'}`}>Mes {currentYear} vs {previousYear}</button>
       </div>
       <Button variant="ghost" onClick={() => props.setExpanded(!props.expanded)}>{props.expanded ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}Cambiar fechas o filtrar</Button>
     </div>
@@ -613,12 +611,10 @@ function ReviewAndConcentration({ report, spendToReview }: { report: MarketingEx
 }
 
 function MonthlySection({ report, annotations }: { report: MarketingExecutiveReport; annotations: Annotation[] }) {
-  const yearAgo = report.yearAgo
-  const yoySales = yearAgo && yearAgo.netSales > 0 ? (report.current.netSales - yearAgo.netSales) / yearAgo.netSales : null
-  const yoyOrders = yearAgo && yearAgo.orders > 0 ? (report.current.orders - yearAgo.orders) / yearAgo.orders : null
+  const previousYear = report.periods.previous.start.slice(0, 4)
   const monthlyAnnotations = Array.from(new Map(annotations.map(item => [item.annotation_date.slice(0, 7), item])).values())
   return <section className="space-y-4"><SectionTitle eyebrow="Tendencia" title="Últimos 12 meses" /><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{[
-    ['Ventas MoM', report.comparisons.netSales.change], ['Ventas YoY', yoySales], ['Pedidos MoM', report.comparisons.orders.change], ['Pedidos YoY', yoyOrders],
+    [`Ventas vs mismo mes ${previousYear}`, report.comparisons.netSales.change], [`Pedidos vs mismo mes ${previousYear}`, report.comparisons.orders.change], [`Unidades vs mismo mes ${previousYear}`, report.comparisons.units.change], [`Ticket promedio vs ${previousYear}`, report.comparisons.aov.change],
   ].map(([label, value]) => <Card key={String(label)}><CardContent className="p-4"><p className="text-xs uppercase tracking-wide text-slate-500">{String(label)}</p><p className="mt-2 text-xl font-bold text-[#172239]">{value === null ? 'Dato no disponible' : `${Number(value) >= 0 ? '+' : ''}${(Number(value) * 100).toFixed(1)}%`}</p></CardContent></Card>)}</div><Card className="min-w-0"><CardContent className="pt-6"><div className="h-80 min-w-0"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={report.trend}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="month" tick={{ fontSize: 11 }} /><YAxis yAxisId="sales" tickFormatter={compactCurrency} tick={{ fontSize: 11 }} /><YAxis yAxisId="customers" orientation="right" tick={{ fontSize: 11 }} /><Tooltip formatter={(value, name) => name === 'Ventas Shopify' ? currency(Number(value)) : number(Number(value))} /><Bar yAxisId="customers" dataKey="newCustomers" name="Clientes nuevos" fill="#93c5fd" /><Line yAxisId="sales" type="monotone" dataKey="sales" name="Ventas Shopify" stroke="#172239" strokeWidth={3} />{monthlyAnnotations.filter(item => report.trend.some(point => point.month === item.annotation_date.slice(0, 7))).map(item => <ReferenceLine key={item.id} x={item.annotation_date.slice(0, 7)} yAxisId="sales" stroke="#64748b" strokeDasharray="3 3" label={{ value: item.title, position: 'insideTopRight', fontSize: 10 }} />)}</ComposedChart></ResponsiveContainer></div><p className="mt-2 text-xs text-slate-500">Gasto, MER, CAC y conversión históricos: Dato no disponible hasta configurar Meta y GA4.</p></CardContent></Card><Unavailable label="Cohortes, retención 30/60/90, LTV y LTV:CAC" reason="El cache Shopify comienza en junio de 2025 y no existe todavía un modelo de cohortes validado ni CAC atribuible." /></section>
 }
 
