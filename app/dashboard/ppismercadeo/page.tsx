@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  BarChart3, Boxes, ChevronRight, CircleDollarSign, FileText, Gauge, Loader2,
+  BarChart3, Boxes, ChevronDown, ChevronRight, ChevronUp, CircleDollarSign, FileText, Gauge, Loader2,
   LogOut, Megaphone, MessageCircle, Package, Plus, RefreshCw, ShoppingCart,
-  Store, Target, Tent, TrendingUp, X,
+  ShieldCheck, Store, Target, Tent, TrendingUp, Users, WalletCards, X,
 } from 'lucide-react'
 import {
   Bar, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -184,6 +184,8 @@ export default function MarketingPage() {
   const [objectives, setObjectives] = useState<Objectives>({})
   const [settingsAvailable, setSettingsAvailable] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showDetails, setShowDetails] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
   const [annotations, setAnnotations] = useState<Annotation[]>([])
   const [annotationsAvailable, setAnnotationsAvailable] = useState(false)
   const [showAnnotation, setShowAnnotation] = useState(false)
@@ -291,6 +293,23 @@ export default function MarketingPage() {
     ? spendGrowth - salesGrowth >= objectives.growthGapAlertPct / 100
     : false
 
+  const topProduct = report ? [...report.current.products].sort((a, b) => b.sales - a.sales)[0] ?? null : null
+  const soldOutSizes = report?.current.sizes.filter(item => item.units > 0 && item.stock !== null && item.stock <= 0) ?? []
+  const reviewableAds = (metaAds?.items || []).filter(item => ['REVISAR', 'PAUSAR'].includes(classification(item, objectives, sufficient).action))
+  const simpleActions: Array<{ title: string; detail: string; href?: string }> = []
+  if (soldOutSizes.length > 0) {
+    simpleActions.push({ title: 'Revisar inventario', detail: `${soldOutSizes.length} combinaciones de producto y talla vendieron, pero hoy aparecen agotadas.`, href: '#productos' })
+  }
+  if (reviewableAds.length > 0) {
+    simpleActions.push({ title: 'Revisar publicidad', detail: `${reviewableAds.length} anuncios no cumplen los objetivos que configuraste.`, href: '#meta' })
+  }
+  if (topProduct) {
+    simpleActions.push({ title: 'Cuidar el producto líder', detail: `${topProduct.reference} fue la referencia con más ventas: ${currency(topProduct.sales)}.`, href: `#product-${slug(topProduct.reference)}` })
+  }
+  if (Object.keys(objectives).length === 0) {
+    simpleActions.unshift({ title: 'Definir qué significa “ir bien”', detail: 'Configura los objetivos de la empresa para activar los semáforos y recomendaciones.' })
+  }
+
   const insights: string[] = []
   if (report) {
     const salesChange = report.comparisons.netSales.change
@@ -309,10 +328,20 @@ export default function MarketingPage() {
   return <div className="min-h-screen bg-[#f4f6f8] text-slate-900">
     <DashboardHeader />
     <main className="container mx-auto space-y-6 px-4 py-7">
-      <section className="overflow-hidden rounded-2xl bg-[#172239] text-white shadow-sm"><div className="grid gap-6 px-6 py-7 lg:grid-cols-[1fr_auto] lg:items-end"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#54c3f1]">Panel ejecutivo</p><h1 className="mt-2 text-3xl font-bold tracking-tight">Marketing</h1><p className="mt-2 max-w-2xl text-sm text-slate-300">Resultado, eficiencia, clientes, producto e inventario. Shopify siempre se presenta como venta real; Meta como atribución publicitaria.</p></div><div className="flex flex-wrap gap-2"><Button onClick={() => setShowAnnotation(true)} variant="outline" className="border-white/20 bg-white/5 text-white hover:bg-white/10"><Plus className="mr-2 h-4 w-4" />Anotación</Button><Button onClick={() => setShowSettings(true)} className="bg-[#26a9e8] text-white hover:bg-[#1598d7]"><Target className="mr-2 h-4 w-4" />Objetivos</Button></div></div></section>
-      <FilterBar view={view} setView={setView} startDate={startDate} setStartDate={setStartDate} endDate={endDate} setEndDate={setEndDate} channel={channel} setChannel={setChannel} product={product} setProduct={setProduct} size={size} setSize={setSize} customerType={customerType} setCustomerType={setCustomerType} report={report} loading={loading} refresh={fetchReport} />
+      <section className="overflow-hidden rounded-2xl bg-[#172239] text-white shadow-sm"><div className="grid gap-6 px-6 py-7 lg:grid-cols-[1fr_auto] lg:items-end"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#54c3f1]">Resumen para socias</p><h1 className="mt-2 text-3xl font-bold tracking-tight">Cómo va el negocio</h1><p className="mt-2 max-w-2xl text-sm text-slate-300">Lo esencial para saber cuánto vendimos, cuánto invertimos y qué debemos revisar. Los números técnicos están disponibles, pero no estorban la lectura.</p></div><div className="flex flex-wrap gap-2"><Button onClick={() => setShowAnnotation(true)} variant="outline" className="border-white/20 bg-white/5 text-white hover:bg-white/10"><Plus className="mr-2 h-4 w-4" />Registrar evento</Button><Button onClick={() => setShowSettings(true)} className="bg-[#26a9e8] text-white hover:bg-[#1598d7]"><Target className="mr-2 h-4 w-4" />Definir metas</Button></div></div></section>
+      <FilterBar view={view} setView={setView} startDate={startDate} setStartDate={setStartDate} endDate={endDate} setEndDate={setEndDate} channel={channel} setChannel={setChannel} product={product} setProduct={setProduct} size={size} setSize={setSize} customerType={customerType} setCustomerType={setCustomerType} report={report} loading={loading} refresh={fetchReport} expanded={showFilters} setExpanded={setShowFilters} />
 
       {loading ? <div className="flex items-center justify-center py-24 text-slate-500"><Loader2 className="mr-3 h-7 w-7 animate-spin" />Construyendo reporte…</div> : error ? <Card className="border-rose-200 bg-rose-50"><CardContent className="p-6 text-rose-800">{error}</CardContent></Card> : report && <>
+        <SimpleExecutiveSummary report={report} spend={spend} previousSpend={previousSpend} mer={mer} insights={insights} actions={simpleActions.slice(0, 3)} onOpenDetails={() => setShowDetails(true)} />
+
+        <div className="flex justify-center">
+          <Button variant="outline" size="lg" onClick={() => setShowDetails(!showDetails)} className="min-w-64 bg-white">
+            {showDetails ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
+            {showDetails ? 'Ocultar análisis completo' : 'Ver análisis completo'}
+          </Button>
+        </div>
+
+        {showDetails && <>
         <section id="gerencia" className="space-y-4"><SectionTitle eyebrow="01 · Resultado" title="Gerencia en 30 segundos" badge={report.periods.current.label} /><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard label="Ventas netas Shopify" source="Shopify" value={report.current.netSales} previous={report.previous.netSales} change={report.comparisons.netSales.change} format={currency} sufficient={sufficient} />
           <KpiCard label="Gasto Meta" source="Meta Ads" value={spend} previous={previousSpend} change={spend !== null && previousSpend ? (spend - previousSpend) / previousSpend : null} format={currency} sufficient={sufficient} />
@@ -339,11 +368,85 @@ export default function MarketingPage() {
         {view === 'monthly' && <MonthlySection report={report} annotations={annotations} />}
         <section id="alertas" className="space-y-4"><SectionTitle eyebrow="05 · Decisiones" title="Alertas y oportunidades" /><AlertGrid report={report} metaAds={metaAds} objectives={objectives} sufficient={sufficient} /><Decisions report={report} meta={metaCurrent} objectives={objectives} sufficient={sufficient} /></section>
         <QualitySection report={report} annotations={annotations} annotationsAvailable={annotationsAvailable} />
+        </>}
       </>}
     </main>
     {showSettings && <SettingsPanel objectives={objectives} setObjectives={setObjectives} available={settingsAvailable} onClose={() => setShowSettings(false)} onSave={saveObjectives} />}
     {showAnnotation && <AnnotationPanel form={annotationForm} setForm={setAnnotationForm} available={annotationsAvailable} onClose={() => setShowAnnotation(false)} onSave={createAnnotation} />}
   </div>
+}
+
+function SimpleExecutiveSummary({
+  report,
+  spend,
+  previousSpend,
+  mer,
+  insights,
+  actions,
+  onOpenDetails,
+}: {
+  report: MarketingExecutiveReport
+  spend: number | null
+  previousSpend: number | null
+  mer: number | null
+  insights: string[]
+  actions: Array<{ title: string; detail: string; href?: string }>
+  onOpenDetails: () => void
+}) {
+  const salesChange = report.comparisons.netSales.change
+  const spendChange = spend !== null && previousSpend !== null && previousSpend > 0 ? (spend - previousSpend) / previousSpend : null
+  const headline = salesChange === null
+    ? 'Así va el negocio en el periodo seleccionado'
+    : `Las ventas ${salesChange >= 0 ? 'subieron' : 'bajaron'} ${Math.abs(salesChange * 100).toFixed(1)}%`
+  const explanation = salesChange === null
+    ? 'No hay un periodo anterior comparable para indicar si crecimos.'
+    : `La comparación es contra ${report.periods.previous.start} a ${report.periods.previous.end}.`
+
+  return <section className="space-y-5" aria-labelledby="simple-summary-title">
+    <Card className="overflow-hidden border-0 bg-gradient-to-br from-[#e8f7f3] via-white to-[#eaf4fb] shadow-sm">
+      <CardContent className="grid gap-6 p-6 md:p-8 lg:grid-cols-[1fr_auto] lg:items-center">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800"><ShieldCheck className="h-5 w-5" />Resumen fácil de entender</div>
+          <h2 id="simple-summary-title" className="mt-3 text-3xl font-bold tracking-tight text-[#172239]">{headline}</h2>
+          <p className="mt-2 text-sm text-slate-600">{explanation}</p>
+        </div>
+        <div className="rounded-2xl bg-white/80 px-5 py-4 text-sm text-slate-600 shadow-sm">
+          <p className="font-semibold text-[#172239]">Periodo analizado</p>
+          <p className="mt-1">{report.periods.current.start} a {report.periods.current.end}</p>
+          <p className="mt-1 text-xs">Ventas de Shopify · Publicidad de Meta</p>
+        </div>
+      </CardContent>
+    </Card>
+
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <PlainMetricCard icon={CircleDollarSign} label="Vendimos" value={currency(report.current.netSales)} change={salesChange} detail={`${number(report.current.orders)} pedidos en Shopify`} />
+      <PlainMetricCard icon={WalletCards} label="Invertimos en publicidad" value={spend === null ? 'Dato no disponible' : currency(spend)} change={spendChange} detail="Gasto registrado por Meta" />
+      <PlainMetricCard icon={TrendingUp} label="Ventas por cada $1 de publicidad" value={mer === null ? 'Dato no disponible' : `${mer.toFixed(2)} veces`} change={null} detail="Ventas Shopify ÷ gasto Meta; no es utilidad" />
+      <PlainMetricCard icon={Users} label="Clientes nuevos" value={number(report.current.customers.new)} change={report.comparisons.newCustomers.change} detail="Identificados por Shopify" />
+    </div>
+
+    <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
+      <Card className="border-0 bg-[#172239] text-white shadow-sm">
+        <CardHeader><CardTitle className="text-lg">Lo más importante</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          {insights.length === 0 ? <p className="text-sm text-slate-300">Datos insuficientes para concluir.</p> : insights.slice(0, 3).map(item => <p key={item} className="border-l-2 border-[#54c3f1] pl-3 text-sm leading-6 text-slate-200">{item}</p>)}
+        </CardContent>
+      </Card>
+      <Card className="border-0 shadow-sm">
+        <CardHeader><CardTitle className="text-lg text-[#172239]">Qué hacer ahora</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          {actions.length === 0 ? <p className="text-sm text-slate-500">No hay una acción sustentada por los datos de este periodo.</p> : actions.map((action, index) => {
+            const content = <><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#eaf6fb] text-xs font-bold text-[#168fc6]">{index + 1}</span><span><span className="block text-sm font-semibold text-[#172239]">{action.title}</span><span className="mt-0.5 block text-xs leading-5 text-slate-500">{action.detail}</span></span>{action.href && <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-slate-400" />}</>
+            return action.href ? <button key={action.title} type="button" onClick={() => { onOpenDetails(); window.setTimeout(() => document.querySelector(action.href || '')?.scrollIntoView({ behavior: 'smooth' }), 0) }} className="flex w-full items-start gap-3 rounded-xl border p-3 text-left transition hover:bg-slate-50">{content}</button> : <div key={action.title} className="flex items-start gap-3 rounded-xl border p-3">{content}</div>
+          })}
+        </CardContent>
+      </Card>
+    </div>
+  </section>
+}
+
+function PlainMetricCard({ icon: Icon, label, value, change, detail }: { icon: typeof CircleDollarSign; label: string; value: string; change: number | null; detail: string }) {
+  return <Card className="border-0 shadow-sm"><CardContent className="p-5"><div className="flex items-start justify-between gap-3"><div className="rounded-xl bg-[#eaf6fb] p-2.5 text-[#168fc6]"><Icon className="h-5 w-5" /></div>{change !== null && <span className={`rounded-full px-2 py-1 text-xs font-semibold ${change >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}>{change >= 0 ? '+' : ''}{(change * 100).toFixed(1)}% vs. antes</span>}</div><p className="mt-4 text-sm font-medium text-slate-500">{label}</p><p className="mt-1 text-2xl font-bold tracking-tight text-[#172239]">{value}</p><p className="mt-2 text-xs leading-5 text-slate-500">{detail}</p></CardContent></Card>
 }
 
 function DashboardHeader() {
@@ -365,8 +468,9 @@ function FilterBar(props: {
   channel: string; setChannel: (value: string) => void; product: string; setProduct: (value: string) => void
   size: string; setSize: (value: string) => void; customerType: string; setCustomerType: (value: string) => void
   report: MarketingExecutiveReport | null; loading: boolean; refresh: () => void
+  expanded: boolean; setExpanded: (value: boolean) => void
 }) {
-  return <section className="rounded-2xl border bg-white p-4 shadow-sm"><div className="flex flex-wrap items-end gap-3"><div className="flex rounded-lg bg-slate-100 p-1"><button onClick={() => { props.setView('weekly'); props.setStartDate(''); props.setEndDate('') }} className={`rounded-md px-4 py-2 text-sm font-semibold ${props.view === 'weekly' ? 'bg-white text-[#172239] shadow-sm' : 'text-slate-500'}`}>Reporte semanal</button><button onClick={() => { props.setView('monthly'); props.setStartDate(''); props.setEndDate('') }} className={`rounded-md px-4 py-2 text-sm font-semibold ${props.view === 'monthly' ? 'bg-white text-[#172239] shadow-sm' : 'text-slate-500'}`}>Reporte mensual</button></div><label className="text-xs font-medium text-slate-500">Desde<Input type="date" value={props.startDate} onChange={event => props.setStartDate(event.target.value)} className="mt-1 w-40" /></label><label className="text-xs font-medium text-slate-500">Hasta<Input type="date" value={props.endDate} onChange={event => props.setEndDate(event.target.value)} className="mt-1 w-40" /></label><label className="text-xs font-medium text-slate-500">Canal<select value={props.channel} onChange={event => props.setChannel(event.target.value)} className="mt-1 block h-9 min-w-32 rounded-md border bg-white px-3 text-sm"><option value="">Todos</option>{props.report?.filters.channels.map(item => <option key={item}>{item}</option>)}</select></label><label className="text-xs font-medium text-slate-500">Referencia<select value={props.product} onChange={event => props.setProduct(event.target.value)} className="mt-1 block h-9 max-w-52 rounded-md border bg-white px-3 text-sm"><option value="">Todas</option>{props.report?.filters.products.map(item => <option key={item}>{item}</option>)}</select></label><label className="text-xs font-medium text-slate-500">Talla<select value={props.size} onChange={event => props.setSize(event.target.value)} className="mt-1 block h-9 min-w-24 rounded-md border bg-white px-3 text-sm"><option value="">Todas</option>{props.report?.filters.sizes.map(item => <option key={item}>{item}</option>)}</select></label><label className="text-xs font-medium text-slate-500">Cliente<select value={props.customerType} onChange={event => props.setCustomerType(event.target.value)} className="mt-1 block h-9 rounded-md border bg-white px-3 text-sm"><option value="all">Todos</option><option value="new">Nuevo</option><option value="returning">Recurrente</option></select></label><Button onClick={props.refresh} disabled={props.loading}><RefreshCw className={`mr-2 h-4 w-4 ${props.loading ? 'animate-spin' : ''}`} />Actualizar</Button></div>{props.report && <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500"><span>Actual: {props.report.periods.current.start} a {props.report.periods.current.end}</span><span>Comparación: {props.report.periods.previous.start} a {props.report.periods.previous.end}</span><span>Zona horaria: {props.report.timeZone}</span></div>}</section>
+  return <section className="rounded-2xl border bg-white p-4 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex rounded-lg bg-slate-100 p-1"><button onClick={() => { props.setView('weekly'); props.setStartDate(''); props.setEndDate('') }} className={`rounded-md px-4 py-2 text-sm font-semibold ${props.view === 'weekly' ? 'bg-white text-[#172239] shadow-sm' : 'text-slate-500'}`}>Esta semana</button><button onClick={() => { props.setView('monthly'); props.setStartDate(''); props.setEndDate('') }} className={`rounded-md px-4 py-2 text-sm font-semibold ${props.view === 'monthly' ? 'bg-white text-[#172239] shadow-sm' : 'text-slate-500'}`}>Este mes</button></div><Button variant="ghost" onClick={() => props.setExpanded(!props.expanded)}>{props.expanded ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}Cambiar fechas o filtrar</Button></div>{props.expanded && <div className="mt-4 flex flex-wrap items-end gap-3 border-t pt-4"><label className="text-xs font-medium text-slate-500">Desde<Input type="date" value={props.startDate} onChange={event => props.setStartDate(event.target.value)} className="mt-1 w-40" /></label><label className="text-xs font-medium text-slate-500">Hasta<Input type="date" value={props.endDate} onChange={event => props.setEndDate(event.target.value)} className="mt-1 w-40" /></label><label className="text-xs font-medium text-slate-500">Canal<select value={props.channel} onChange={event => props.setChannel(event.target.value)} className="mt-1 block h-9 min-w-32 rounded-md border bg-white px-3 text-sm"><option value="">Todos</option>{props.report?.filters.channels.map(item => <option key={item}>{item}</option>)}</select></label><label className="text-xs font-medium text-slate-500">Producto<select value={props.product} onChange={event => props.setProduct(event.target.value)} className="mt-1 block h-9 max-w-52 rounded-md border bg-white px-3 text-sm"><option value="">Todos</option>{props.report?.filters.products.map(item => <option key={item}>{item}</option>)}</select></label><label className="text-xs font-medium text-slate-500">Talla<select value={props.size} onChange={event => props.setSize(event.target.value)} className="mt-1 block h-9 min-w-24 rounded-md border bg-white px-3 text-sm"><option value="">Todas</option>{props.report?.filters.sizes.map(item => <option key={item}>{item}</option>)}</select></label><label className="text-xs font-medium text-slate-500">Tipo de cliente<select value={props.customerType} onChange={event => props.setCustomerType(event.target.value)} className="mt-1 block h-9 rounded-md border bg-white px-3 text-sm"><option value="all">Todos</option><option value="new">Nuevo</option><option value="returning">Recurrente</option></select></label><Button onClick={props.refresh} disabled={props.loading}><RefreshCw className={`mr-2 h-4 w-4 ${props.loading ? 'animate-spin' : ''}`} />Aplicar</Button></div>}{props.report && <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500"><span>Viendo: {props.report.periods.current.start} a {props.report.periods.current.end}</span><span>Comparado con: {props.report.periods.previous.start} a {props.report.periods.previous.end}</span></div>}</section>
 }
 
 function SalesSpendChart({ data, metaAvailable, annotations, growthGapAlert, salesGrowth, spendGrowth }: { data: Array<{ date: string; sales: number; spend: number | null }>; metaAvailable: boolean; annotations: Annotation[]; growthGapAlert: boolean; salesGrowth: number | null; spendGrowth: number | null }) {
