@@ -96,8 +96,6 @@ function formatCurrency(value: number): string {
   }).format(value)
 }
 
-const COLORS = ['#1A2238', '#14B8A6', '#1DA9EF', '#F59E0B']
-
 const FERIA_COLOR = '#F59E0B'
 
 function getGroupKey(dateStr: string, groupBy: 'day' | 'week' | 'month' | 'quarter' | 'year'): string {
@@ -123,40 +121,30 @@ function getGroupKey(dateStr: string, groupBy: 'day' | 'week' | 'month' | 'quart
 export default function DashboardPage() {
   const [data, setData] = useState<ConsolidatedData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [shop, setShop] = useState('')
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month' | 'quarter' | 'year'>('month')
   const [metric, setMetric] = useState<Metric>('ventas')
 
-  const [autoMatchTick, setAutoMatchTick] = useState(0)
+  const [refreshTick, setRefreshTick] = useState(0)
   const [ytd, setYtd] = useState<YtdComparison | null>(null)
 
   useEffect(() => {
     setDateRange({ from: subMonths(new Date(), 6), to: new Date() })
-    // Fire-and-forget historical auto-match (idempotent). When it finishes,
-    // bump the tick to trigger a data refresh so the user sees the updated
-    // ferias attribution without having to do anything.
-    fetch('/api/ferias/auto-match-excel', { method: 'POST' })
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        const matched = (data?.stats?.matched || 0) + (data?.fillToTarget?.totalUnitsAfter || 0)
-        if (matched > 0) setAutoMatchTick(t => t + 1)
-      })
-      .catch(() => {})
-    // Fire-and-forget freshness sync for both caches (skip if <1h old, else
-    // last 45 days). Refresh the view when either brings new data.
-    fetch('/api/siigo/sync-invoices', {
+    // Keep caches fresh without blanking the dashboard or triggering several
+    // consecutive refreshes. Historical feria matching belongs in Conciliacion.
+    const sync = (url: string) => fetch(url, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: true }),
+    }).then(res => res.ok ? res.json() : null).catch(() => null)
+
+    Promise.all([
+      sync('/api/siigo/sync-invoices'),
+      sync('/api/shopify/sync-orders'),
+    ]).then(results => {
+      const changed = results.some(result => result && !result.skipped && (result.upserted || 0) > 0)
+      if (changed) setRefreshTick(t => t + 1)
     })
-      .then(res => res.ok ? res.json() : null)
-      .then(data => { if (data && !data.skipped && (data.upserted || 0) > 0) setAutoMatchTick(t => t + 1) })
-      .catch(() => {})
-    fetch('/api/shopify/sync-orders', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: true }),
-    })
-      .then(res => res.ok ? res.json() : null)
-      .then(data => { if (data && !data.skipped && (data.upserted || 0) > 0) setAutoMatchTick(t => t + 1) })
-      .catch(() => {})
   }, [])
 
   // YTD comparison: this year (Jan 1 → today) vs same range last year
@@ -181,7 +169,7 @@ export default function DashboardPage() {
         setYtd({ thisYear, lastYear, asOf: endThis })
       }
     })()
-  }, [autoMatchTick])
+  }, [refreshTick])
 
   // Compute per-channel totals for an arbitrary date range. Used by the
   // YTD comparison table. Mirrors the classification rules in fetchData()
@@ -274,7 +262,9 @@ export default function DashboardPage() {
   async function fetchData() {
     if (!dateRange?.from || !dateRange?.to) return
 
-    setLoading(true)
+    const initialLoad = data === null
+    if (initialLoad) setLoading(true)
+    else setRefreshing(true)
     try {
       const startDate = format(dateRange.from, 'yyyy-MM-dd')
       const endDate = format(dateRange.to, 'yyyy-MM-dd')
@@ -448,6 +438,7 @@ export default function DashboardPage() {
       console.error('Error fetching data:', error)
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
@@ -455,7 +446,9 @@ export default function DashboardPage() {
     if (dateRange?.from && dateRange?.to) {
       fetchData()
     }
-  }, [dateRange, groupBy, autoMatchTick])
+    // fetchData intentionally uses the latest rendered filters and data state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange, groupBy, refreshTick])
 
   const pieData = data ? [
     { name: 'Shopify', value: data.shopify.ventas, color: '#1A2238' },
@@ -592,14 +585,16 @@ export default function DashboardPage() {
               variant="outline"
               size="icon"
               onClick={() => fetchData()}
-              disabled={loading}
+              disabled={loading || refreshing}
+              aria-label="Actualizar ventas"
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 ${loading || refreshing ? 'animate-spin' : ''}`} />
             </Button>
+            {refreshing && <span className="text-xs text-[#545454]" role="status">Actualizando en segundo plano…</span>}
           </div>
         </div>
 
-        {loading ? (
+        {loading && !data ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-[#1A2238]" />
             <span className="ml-2 text-[#545454]">Cargando datos...</span>
