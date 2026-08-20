@@ -240,7 +240,7 @@ export default function PpisMercadeoPage() {
             <Link href="/dashboard/whatsapp"><Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4"><MessageCircle className="h-4 w-4 mr-2" />WhatsApp</Button></Link>
             <Link href="/dashboard/tiendas"><Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4"><Store className="h-4 w-4 mr-2" />Tiendas</Button></Link>
             <Link href="/dashboard/ferias"><Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4"><Tent className="h-4 w-4 mr-2" />Ferias</Button></Link>
-            <Button variant="ghost" className="rounded-none border-b-2 border-[#1DA9EF] text-[#1A2238] py-4"><Megaphone className="h-4 w-4 mr-2" />PPIs Mercadeo</Button>
+            <Button variant="ghost" className="rounded-none border-b-2 border-[#1DA9EF] text-[#1A2238] py-4"><Megaphone className="h-4 w-4 mr-2" />Marketing</Button>
             <Link href="/dashboard/conciliacion"><Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4"><FileText className="h-4 w-4 mr-2" />Conciliación</Button></Link>
             <Link href="/dashboard/analitica"><Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4"><TrendingUp className="h-4 w-4 mr-2" />Analítica</Button></Link>
             <Link href="/dashboard/productos"><Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4"><Package className="h-4 w-4 mr-2" />Productos</Button></Link>
@@ -253,7 +253,7 @@ export default function PpisMercadeoPage() {
       <main className="container mx-auto px-4 py-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-[#1A2238] mb-2">PPIs Mercadeo</h1>
+            <h1 className="text-3xl font-bold text-[#1A2238] mb-2">Marketing</h1>
             <p className="text-[#545454]">Indicadores de mercadeo, campañas y atribución de Shopify y Meta.</p>
             <p className="text-xs text-[#9CA3AF] mt-1">
               Nota: Shopify Admin API no expone visits/sessions/CVR. Lo que ves acá es atribución a nivel orden

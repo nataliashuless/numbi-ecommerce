@@ -1054,7 +1054,7 @@ export default function WhatsAppPage() {
             <Link href="/dashboard/ppismercadeo">
               <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Megaphone className="h-4 w-4 mr-2" />
-                PPIs Mercadeo
+                Marketing
               </Button>
             </Link>
             <Link href="/dashboard/conciliacion">

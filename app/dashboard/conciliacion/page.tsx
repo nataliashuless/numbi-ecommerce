@@ -446,7 +446,7 @@ export default function ConciliacionPage() {
             <Link href="/dashboard/ppismercadeo">
               <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Megaphone className="h-4 w-4 mr-2" />
-                PPIs Mercadeo
+                Marketing
               </Button>
             </Link>
             <Button variant="ghost" className="rounded-none border-b-2 border-[#1DA9EF] text-[#1A2238] py-4">
