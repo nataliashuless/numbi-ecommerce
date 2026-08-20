@@ -192,6 +192,7 @@ export default function MarketingPage() {
   const [metaAds, setMetaAds] = useState<MetaResponse | null>(null)
   const [metaAdsPrevious, setMetaAdsPrevious] = useState<MetaResponse | null>(null)
   const [metaAdsets, setMetaAdsets] = useState<MetaResponse | null>(null)
+  const [metaError, setMetaError] = useState<string | null>(null)
   const [ga4Current, setGa4Current] = useState<GA4Response | null>(null)
   const [ga4Previous, setGa4Previous] = useState<GA4Response | null>(null)
   const [campaignFilter, setCampaignFilter] = useState('')
@@ -225,8 +226,11 @@ export default function MarketingPage() {
         fetch(metaUrl(current, 'adset')).then(response => response.json()),
         fetch(metaUrl(current, 'account', true)).then(response => response.json()),
       ])
+      const responseError = responses.find(response => response?.error)?.error || null
+      setMetaError(responseError)
       setMetaCurrent({ ...responses[0], daily: responses[5]?.daily || [] }); setMetaPrevious(responses[1]); setMetaAds(responses[2]); setMetaAdsPrevious(responses[3]); setMetaAdsets(responses[4])
     } else {
+      setMetaError(null)
       setMetaCurrent(null); setMetaPrevious(null); setMetaAds(null); setMetaAdsPrevious(null); setMetaAdsets(null)
     }
 
@@ -352,6 +356,7 @@ export default function MarketingPage() {
       <FilterBar view={view} setView={setView} startDate={startDate} setStartDate={setStartDate} endDate={endDate} setEndDate={setEndDate} channel={channel} setChannel={setChannel} product={product} setProduct={setProduct} size={size} setSize={setSize} customerType={customerType} setCustomerType={setCustomerType} report={report} loading={loading} refresh={fetchReport} expanded={showFilters} setExpanded={setShowFilters} />
 
       {loading ? <div className="flex items-center justify-center py-24 text-slate-500"><Loader2 className="mr-3 h-7 w-7 animate-spin" />Construyendo reporte…</div> : error ? <Card className="border-rose-200 bg-rose-50"><CardContent className="p-6 text-rose-800">{error}</CardContent></Card> : report && <>
+        {metaError && <Card className="border-rose-200 bg-rose-50"><CardContent className="flex flex-col gap-3 p-5 text-rose-900 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">Meta Ads necesita reconexión</p><p className="mt-1 text-sm">{metaError.includes('Session has expired') ? 'El token de acceso venció. Gasto, campañas y anuncios no se pueden consultar hasta renovarlo.' : metaError}</p></div><Link href="/dashboard/configuracion"><Button variant="outline" className="border-rose-300 bg-white text-rose-900">Ir a configuración</Button></Link></CardContent></Card>}
         <SimpleExecutiveSummary report={report} spend={spend} previousSpend={previousSpend} mer={mer} insights={insights} actions={simpleActions.slice(0, 3)} onOpenDetails={() => setShowDetails(true)} comparisonReliable={comparisonReliable} />
         {view === 'ytd' && <YtdComparison report={report} spend={spend} previousSpend={previousSpend} mer={mer} previousMer={previousMer} comparisonReliable={comparisonReliable} />}
 
