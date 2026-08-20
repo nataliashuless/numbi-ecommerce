@@ -1051,10 +1051,10 @@ export default function WhatsAppPage() {
                 Ferias
               </Button>
             </Link>
-            <Link href="/dashboard/marketing">
+            <Link href="/dashboard/ppismercadeo">
               <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Megaphone className="h-4 w-4 mr-2" />
-                Marketing
+                PPIs Mercadeo
               </Button>
             </Link>
             <Link href="/dashboard/conciliacion">

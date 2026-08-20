@@ -488,10 +488,10 @@ export default function ConfiguracionPage() {
                 Ferias
               </Button>
             </Link>
-            <Link href="/dashboard/marketing">
+            <Link href="/dashboard/ppismercadeo">
               <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-[#1DA9EF] py-4">
                 <Megaphone className="h-4 w-4 mr-2" />
-                Marketing
+                PPIs Mercadeo
               </Button>
             </Link>
             <Link href="/dashboard/conciliacion">
@@ -627,7 +627,7 @@ export default function ConfiguracionPage() {
                 </div>
                 <CardDescription>
                   Marketing API de Meta (Facebook/Instagram Ads). Usado para mostrar spend, impressions, CPA y ROAS en
-                  /dashboard/marketing.
+                  /dashboard/ppismercadeo.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
