@@ -27,6 +27,7 @@ type MetaInsightRow = {
   spend?: string
   impressions?: string
   clicks?: string
+  inline_link_clicks?: string
   ctr?: string
   cpc?: string
   cpm?: string
@@ -37,11 +38,13 @@ type MetaInsightRow = {
   action_values?: MetaAction[]
 }
 
-function sumActions(actions: MetaAction[] | undefined, types: string[]): number {
+function pickAction(actions: MetaAction[] | undefined, types: string[]): number {
   if (!actions) return 0
-  return actions
-    .filter(a => types.includes(a.action_type))
-    .reduce((s, a) => s + (Number(a.value) || 0), 0)
+  for (const type of types) {
+    const action = actions.find(item => item.action_type === type)
+    if (action) return Number(action.value) || 0
+  }
+  return 0
 }
 
 export async function GET(request: Request) {
@@ -60,6 +63,7 @@ export async function GET(request: Request) {
   const start = searchParams.get('start_date') || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
   const end = searchParams.get('end_date') || new Date().toISOString().slice(0, 10)
   const level = (searchParams.get('level') || 'campaign') as 'account' | 'campaign' | 'adset' | 'ad'
+  const daily = searchParams.get('daily') === 'true'
 
   const accountId = creds.meta_ad_account_id.startsWith('act_')
     ? creds.meta_ad_account_id
@@ -67,7 +71,7 @@ export async function GET(request: Request) {
 
   const fields = [
     'campaign_id', 'campaign_name', 'adset_id', 'adset_name', 'ad_id', 'ad_name',
-    'spend', 'impressions', 'clicks', 'ctr', 'cpc', 'cpm', 'reach',
+    'spend', 'impressions', 'clicks', 'inline_link_clicks', 'ctr', 'cpc', 'cpm', 'reach',
     'actions', 'action_values',
     'date_start', 'date_stop',
   ].join(',')
@@ -78,9 +82,10 @@ export async function GET(request: Request) {
   url.searchParams.set('time_range', JSON.stringify({ since: start, until: end }))
   url.searchParams.set('fields', fields)
   url.searchParams.set('limit', '500')
+  if (daily) url.searchParams.set('time_increment', '1')
 
   try {
-    let allRows: MetaInsightRow[] = []
+    const allRows: MetaInsightRow[] = []
     let nextUrl: string | null = url.toString()
     let pageCount = 0
     while (nextUrl && pageCount < 20) {
@@ -113,6 +118,7 @@ export async function GET(request: Request) {
       spend: number
       impressions: number
       clicks: number
+      link_clicks: number
       reach: number
       purchases: number
       purchase_value: number
@@ -137,7 +143,7 @@ export async function GET(request: Request) {
           adset_name: r.adset_name,
           ad_id: r.ad_id,
           ad_name: r.ad_name,
-          spend: 0, impressions: 0, clicks: 0, reach: 0,
+          spend: 0, impressions: 0, clicks: 0, link_clicks: 0, reach: 0,
           purchases: 0, purchase_value: 0,
           add_to_cart: 0, initiate_checkout: 0, view_content: 0, leads: 0,
         }
@@ -146,22 +152,26 @@ export async function GET(request: Request) {
       agg.spend += Number(r.spend || '0') || 0
       agg.impressions += Number(r.impressions || '0') || 0
       agg.clicks += Number(r.clicks || '0') || 0
+      agg.link_clicks += Number(r.inline_link_clicks || '0') || 0
       agg.reach += Number(r.reach || '0') || 0
-      agg.purchases += sumActions(r.actions, ['purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase'])
-      agg.purchase_value += sumActions(r.action_values, ['purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase'])
-      agg.add_to_cart += sumActions(r.actions, ['add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'])
-      agg.initiate_checkout += sumActions(r.actions, ['initiate_checkout', 'offsite_conversion.fb_pixel_initiate_checkout'])
-      agg.view_content += sumActions(r.actions, ['view_content', 'offsite_conversion.fb_pixel_view_content'])
-      agg.leads += sumActions(r.actions, ['lead', 'offsite_conversion.fb_pixel_lead'])
+      agg.purchases += pickAction(r.actions, ['omni_purchase', 'offsite_conversion.fb_pixel_purchase', 'purchase'])
+      agg.purchase_value += pickAction(r.action_values, ['omni_purchase', 'offsite_conversion.fb_pixel_purchase', 'purchase'])
+      agg.add_to_cart += pickAction(r.actions, ['offsite_conversion.fb_pixel_add_to_cart', 'add_to_cart'])
+      agg.initiate_checkout += pickAction(r.actions, ['offsite_conversion.fb_pixel_initiate_checkout', 'initiate_checkout'])
+      agg.view_content += pickAction(r.actions, ['offsite_conversion.fb_pixel_view_content', 'view_content'])
+      agg.leads += pickAction(r.actions, ['offsite_conversion.fb_pixel_lead', 'lead'])
     }
 
     const items = Array.from(byKey.values()).map(a => ({
       ...a,
       ctr: a.impressions > 0 ? a.clicks / a.impressions : 0,
+      ctr_link: a.impressions > 0 ? a.link_clicks / a.impressions : 0,
       cpc: a.clicks > 0 ? a.spend / a.clicks : 0,
+      cpc_link: a.link_clicks > 0 ? a.spend / a.link_clicks : null,
       cpm: a.impressions > 0 ? (a.spend / a.impressions) * 1000 : 0,
-      cpa: a.purchases > 0 ? a.spend / a.purchases : 0,
-      roas: a.spend > 0 ? a.purchase_value / a.spend : 0,
+      frequency: a.reach > 0 ? a.impressions / a.reach : null,
+      cpa: a.purchases > 0 ? a.spend / a.purchases : null,
+      roas: a.spend > 0 ? a.purchase_value / a.spend : null,
     }))
     items.sort((a, b) => b.spend - a.spend)
 
@@ -170,27 +180,53 @@ export async function GET(request: Request) {
         spend: acc.spend + a.spend,
         impressions: acc.impressions + a.impressions,
         clicks: acc.clicks + a.clicks,
+        link_clicks: acc.link_clicks + a.link_clicks,
         reach: acc.reach + a.reach,
         purchases: acc.purchases + a.purchases,
         purchase_value: acc.purchase_value + a.purchase_value,
         add_to_cart: acc.add_to_cart + a.add_to_cart,
         initiate_checkout: acc.initiate_checkout + a.initiate_checkout,
       }),
-      { spend: 0, impressions: 0, clicks: 0, reach: 0, purchases: 0, purchase_value: 0, add_to_cart: 0, initiate_checkout: 0 },
+      { spend: 0, impressions: 0, clicks: 0, link_clicks: 0, reach: 0, purchases: 0, purchase_value: 0, add_to_cart: 0, initiate_checkout: 0 },
     )
+
+    const dailyMap = new Map<string, {
+      date: string
+      spend: number
+      impressions: number
+      link_clicks: number
+      purchases: number
+      purchase_value: number
+    }>()
+    if (daily) {
+      for (const row of allRows) {
+        const date = row.date_start || start
+        const point = dailyMap.get(date) || { date, spend: 0, impressions: 0, link_clicks: 0, purchases: 0, purchase_value: 0 }
+        point.spend += Number(row.spend || 0) || 0
+        point.impressions += Number(row.impressions || 0) || 0
+        point.link_clicks += Number(row.inline_link_clicks || 0) || 0
+        point.purchases += pickAction(row.actions, ['omni_purchase', 'offsite_conversion.fb_pixel_purchase', 'purchase'])
+        point.purchase_value += pickAction(row.action_values, ['omni_purchase', 'offsite_conversion.fb_pixel_purchase', 'purchase'])
+        dailyMap.set(date, point)
+      }
+    }
 
     return NextResponse.json({
       connected: true,
       range: { start, end },
       level,
       items,
+      daily: Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date)),
       totals: {
         ...totals,
         ctr: totals.impressions > 0 ? totals.clicks / totals.impressions : 0,
+        ctr_link: totals.impressions > 0 ? totals.link_clicks / totals.impressions : 0,
         cpc: totals.clicks > 0 ? totals.spend / totals.clicks : 0,
+        cpc_link: totals.link_clicks > 0 ? totals.spend / totals.link_clicks : null,
         cpm: totals.impressions > 0 ? (totals.spend / totals.impressions) * 1000 : 0,
-        cpa: totals.purchases > 0 ? totals.spend / totals.purchases : 0,
-        roas: totals.spend > 0 ? totals.purchase_value / totals.spend : 0,
+        frequency: !daily && level === 'account' && items.length === 1 ? items[0].frequency : null,
+        cpa: totals.purchases > 0 ? totals.spend / totals.purchases : null,
+        roas: totals.spend > 0 ? totals.purchase_value / totals.spend : null,
       },
     })
   } catch (e) {
