@@ -245,14 +245,14 @@ export async function GET(request: Request) {
       },
       limitations: [
         'Ventas y pedidos anteriores al 15 de junio de 2025 provienen del archivo histórico diario; no contiene detalle de productos, unidades ni clientes.',
-        'El archivo histórico usa Ventas netas + Impuestos para mantener la misma base con IVA del subtotal actual de Shopify.',
+        'Las ventas comparadas están antes de IVA: el archivo usa Ventas netas y Shopify resta el impuesto de los productos al subtotal actual.',
         'El inventario proviene de Siigo y representa una foto actual, no un historial de inventario.',
         'No existen COGS ni costos variables completos; margen bruto y margen de contribución no se calculan.',
         'CAC de cliente nuevo atribuible requiere una unión confiable entre adquisición Meta y primer pedido Shopify.',
       ],
       formulas: [
-        { metric: 'Ventas netas', formula: 'Hasta 2025-06-14: Ventas netas + Impuestos del archivo diario. Desde 2025-06-15: suma de current_subtotal_price en pedidos Shopify pagados; excluye pruebas y cancelados.', source: 'Archivo histórico + Shopify' },
-        { metric: 'AOV', formula: 'Ventas netas Shopify / pedidos con venta neta positiva.', source: 'Shopify' },
+        { metric: 'Ventas netas antes de IVA', formula: 'Hasta 2025-06-14: Ventas netas del archivo diario. Desde 2025-06-15: current_subtotal_price menos el IVA de las líneas vigentes en pedidos Shopify pagados; excluye pruebas y cancelados.', source: 'Archivo histórico + Shopify' },
+        { metric: 'AOV', formula: 'Ventas netas antes de IVA / pedidos con venta neta positiva.', source: 'Archivo histórico + Shopify' },
         { metric: 'Variación', formula: '(Periodo actual - periodo anterior) / valor absoluto del periodo anterior.', source: 'Cálculo interno' },
         { metric: 'Cliente nuevo', formula: 'Cliente cuyo created_at de Shopify cae dentro del periodo analizado.', source: 'Shopify' },
         { metric: 'Concentración Top N', formula: 'Ventas netas de las N referencias principales / ventas netas totales.', source: 'Shopify' },

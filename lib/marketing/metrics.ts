@@ -25,6 +25,7 @@ export interface ShopifyLineItemRaw {
   quantity?: number
   current_quantity?: number
   price?: string
+  tax_lines?: Array<{ price?: string }>
 }
 
 export interface ShopifyOrderRaw {
@@ -289,7 +290,17 @@ export function netSalesOf(order: CachedShopifyOrder): number {
   if (!isValidSalesOrder(order)) return 0
   const raw = order.raw || {}
   const value = Number(raw.current_subtotal_price)
-  return Number.isFinite(value) ? Math.max(0, value) : 0
+  if (!Number.isFinite(value)) return 0
+
+  const productTax = (raw.line_items || []).reduce((orderTax, item) => {
+    const originalQuantity = Math.max(0, Number(item.quantity) || 0)
+    const currentQuantity = Math.max(0, Number(item.current_quantity ?? item.quantity ?? 0))
+    if (originalQuantity === 0 || currentQuantity === 0) return orderTax
+    const originalTax = (item.tax_lines || []).reduce((sum, tax) => sum + (Number(tax.price) || 0), 0)
+    return orderTax + originalTax * Math.min(1, currentQuantity / originalQuantity)
+  }, 0)
+
+  return Math.max(0, value - productTax)
 }
 
 export function unitsOf(order: CachedShopifyOrder): number {
