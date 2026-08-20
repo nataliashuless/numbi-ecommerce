@@ -1,0 +1,839 @@
+{
+  "sourceFile": "Copia de Gasto mkt Shuless.co.xlsx",
+  "sourceSheet": "Daily",
+  "currency": "COP",
+  "timeZone": "America/Bogota",
+  "salesFormula": "Ventas netas + Impuestos",
+  "coverage": {
+    "from": "2025-01-01",
+    "to": "2025-06-14",
+    "shopifyStarts": "2025-06-15"
+  },
+  "rows": [
+    {
+      "date": "2025-01-01",
+      "netSales": 599198.32,
+      "orders": 3
+    },
+    {
+      "date": "2025-01-02",
+      "netSales": 449398.74,
+      "orders": 3
+    },
+    {
+      "date": "2025-01-03",
+      "netSales": 149799.58,
+      "orders": 1
+    },
+    {
+      "date": "2025-01-04",
+      "netSales": 299599.16,
+      "orders": 2
+    },
+    {
+      "date": "2025-01-05",
+      "netSales": 599198.32,
+      "orders": 4
+    },
+    {
+      "date": "2025-01-06",
+      "netSales": 449398.74,
+      "orders": 3
+    },
+    {
+      "date": "2025-01-07",
+      "netSales": 449398.74,
+      "orders": 2
+    },
+    {
+      "date": "2025-01-08",
+      "netSales": 599198.32,
+      "orders": 4
+    },
+    {
+      "date": "2025-01-09",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-01-10",
+      "netSales": 599198.32,
+      "orders": 4
+    },
+    {
+      "date": "2025-01-11",
+      "netSales": 449398.74,
+      "orders": 3
+    },
+    {
+      "date": "2025-01-12",
+      "netSales": 898797.48,
+      "orders": 5
+    },
+    {
+      "date": "2025-01-13",
+      "netSales": 1048597.06,
+      "orders": 7
+    },
+    {
+      "date": "2025-01-14",
+      "netSales": 1198397.83,
+      "orders": 5
+    },
+    {
+      "date": "2025-01-15",
+      "netSales": 449398.74,
+      "orders": 3
+    },
+    {
+      "date": "2025-01-16",
+      "netSales": 748997.9,
+      "orders": 5
+    },
+    {
+      "date": "2025-01-17",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-01-18",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-01-19",
+      "netSales": 149799.58,
+      "orders": 1
+    },
+    {
+      "date": "2025-01-20",
+      "netSales": 299599.16,
+      "orders": 2
+    },
+    {
+      "date": "2025-01-21",
+      "netSales": 149799.58,
+      "orders": 1
+    },
+    {
+      "date": "2025-01-22",
+      "netSales": 299599.16,
+      "orders": 2
+    },
+    {
+      "date": "2025-01-23",
+      "netSales": 748997.9,
+      "orders": 4
+    },
+    {
+      "date": "2025-01-24",
+      "netSales": 898797.48,
+      "orders": 6
+    },
+    {
+      "date": "2025-01-25",
+      "netSales": 449399.93,
+      "orders": 2
+    },
+    {
+      "date": "2025-01-26",
+      "netSales": 449398.74,
+      "orders": 2
+    },
+    {
+      "date": "2025-01-27",
+      "netSales": 299599.16,
+      "orders": 2
+    },
+    {
+      "date": "2025-01-28",
+      "netSales": 898797.48,
+      "orders": 6
+    },
+    {
+      "date": "2025-01-29",
+      "netSales": 599198.32,
+      "orders": 4
+    },
+    {
+      "date": "2025-01-30",
+      "netSales": 449398.74,
+      "orders": 3
+    },
+    {
+      "date": "2025-01-31",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-02-01",
+      "netSales": 149799.58,
+      "orders": 1
+    },
+    {
+      "date": "2025-02-02",
+      "netSales": 1048597.06,
+      "orders": 6
+    },
+    {
+      "date": "2025-02-03",
+      "netSales": 599198.32,
+      "orders": 4
+    },
+    {
+      "date": "2025-02-04",
+      "netSales": 449398.74,
+      "orders": 3
+    },
+    {
+      "date": "2025-02-05",
+      "netSales": 599199.51,
+      "orders": 3
+    },
+    {
+      "date": "2025-02-06",
+      "netSales": 748997.9,
+      "orders": 5
+    },
+    {
+      "date": "2025-02-07",
+      "netSales": 449398.74,
+      "orders": 3
+    },
+    {
+      "date": "2025-02-08",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-02-09",
+      "netSales": 449398.74,
+      "orders": 3
+    },
+    {
+      "date": "2025-02-10",
+      "netSales": 449398.74,
+      "orders": 3
+    },
+    {
+      "date": "2025-02-11",
+      "netSales": 299599.16,
+      "orders": 2
+    },
+    {
+      "date": "2025-02-12",
+      "netSales": 299599.16,
+      "orders": 2
+    },
+    {
+      "date": "2025-02-13",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-02-14",
+      "netSales": 149799.58,
+      "orders": 1
+    },
+    {
+      "date": "2025-02-15",
+      "netSales": 299599.16,
+      "orders": 2
+    },
+    {
+      "date": "2025-02-16",
+      "netSales": 449398.74,
+      "orders": 3
+    },
+    {
+      "date": "2025-02-17",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-02-18",
+      "netSales": 299599.16,
+      "orders": 2
+    },
+    {
+      "date": "2025-02-19",
+      "netSales": 299599.16,
+      "orders": 2
+    },
+    {
+      "date": "2025-02-20",
+      "netSales": 599198.32,
+      "orders": 4
+    },
+    {
+      "date": "2025-02-21",
+      "netSales": 299599.16,
+      "orders": 2
+    },
+    {
+      "date": "2025-02-22",
+      "netSales": 748997.9,
+      "orders": 5
+    },
+    {
+      "date": "2025-02-23",
+      "netSales": 449398.74,
+      "orders": 2
+    },
+    {
+      "date": "2025-02-24",
+      "netSales": 748997.9,
+      "orders": 2
+    },
+    {
+      "date": "2025-02-25",
+      "netSales": 449398.74,
+      "orders": 3
+    },
+    {
+      "date": "2025-02-26",
+      "netSales": 599198.32,
+      "orders": 3
+    },
+    {
+      "date": "2025-02-27",
+      "netSales": 449398.74,
+      "orders": 3
+    },
+    {
+      "date": "2025-02-28",
+      "netSales": 449398.74,
+      "orders": 3
+    },
+    {
+      "date": "2025-03-01",
+      "netSales": 149799.58,
+      "orders": 1
+    },
+    {
+      "date": "2025-03-02",
+      "netSales": 449398.74,
+      "orders": 3
+    },
+    {
+      "date": "2025-03-03",
+      "netSales": 149799.58,
+      "orders": 1
+    },
+    {
+      "date": "2025-03-04",
+      "netSales": 149799.58,
+      "orders": 1
+    },
+    {
+      "date": "2025-03-05",
+      "netSales": 299599.16,
+      "orders": 2
+    },
+    {
+      "date": "2025-03-06",
+      "netSales": 479399.83,
+      "orders": 2
+    },
+    {
+      "date": "2025-03-07",
+      "netSales": 159800.34,
+      "orders": 1
+    },
+    {
+      "date": "2025-03-08",
+      "netSales": 159800.34,
+      "orders": 1
+    },
+    {
+      "date": "2025-03-09",
+      "netSales": 319600.68,
+      "orders": 2
+    },
+    {
+      "date": "2025-03-10",
+      "netSales": 479401.02,
+      "orders": 3
+    },
+    {
+      "date": "2025-03-11",
+      "netSales": 159800.34,
+      "orders": 1
+    },
+    {
+      "date": "2025-03-12",
+      "netSales": 159800.34,
+      "orders": 1
+    },
+    {
+      "date": "2025-03-13",
+      "netSales": 479401.02,
+      "orders": 3
+    },
+    {
+      "date": "2025-03-14",
+      "netSales": 159800.34,
+      "orders": 1
+    },
+    {
+      "date": "2025-03-15",
+      "netSales": 159800.34,
+      "orders": 1
+    },
+    {
+      "date": "2025-03-16",
+      "netSales": 159800.34,
+      "orders": 1
+    },
+    {
+      "date": "2025-03-17",
+      "netSales": 159800.34,
+      "orders": 1
+    },
+    {
+      "date": "2025-03-18",
+      "netSales": 319600.68,
+      "orders": 2
+    },
+    {
+      "date": "2025-03-19",
+      "netSales": 479401.02,
+      "orders": 3
+    },
+    {
+      "date": "2025-03-20",
+      "netSales": 479401.02,
+      "orders": 3
+    },
+    {
+      "date": "2025-03-21",
+      "netSales": 319600.68,
+      "orders": 2
+    },
+    {
+      "date": "2025-03-22",
+      "netSales": 479401.02,
+      "orders": 2
+    },
+    {
+      "date": "2025-03-23",
+      "netSales": 319600.68,
+      "orders": 2
+    },
+    {
+      "date": "2025-03-24",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-03-25",
+      "netSales": 159800.34,
+      "orders": 1
+    },
+    {
+      "date": "2025-03-26",
+      "netSales": 799001.7,
+      "orders": 4
+    },
+    {
+      "date": "2025-03-27",
+      "netSales": 639201.36,
+      "orders": 3
+    },
+    {
+      "date": "2025-03-28",
+      "netSales": 319600.68,
+      "orders": 2
+    },
+    {
+      "date": "2025-03-29",
+      "netSales": 479401.02,
+      "orders": 3
+    },
+    {
+      "date": "2025-03-30",
+      "netSales": 479401.02,
+      "orders": 3
+    },
+    {
+      "date": "2025-03-31",
+      "netSales": 319600.68,
+      "orders": 1
+    },
+    {
+      "date": "2025-04-01",
+      "netSales": 639201.36,
+      "orders": 4
+    },
+    {
+      "date": "2025-04-02",
+      "netSales": 159800.34,
+      "orders": 1
+    },
+    {
+      "date": "2025-04-03",
+      "netSales": 159800.34,
+      "orders": 1
+    },
+    {
+      "date": "2025-04-04",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-04-05",
+      "netSales": 319600.68,
+      "orders": 2
+    },
+    {
+      "date": "2025-04-06",
+      "netSales": 159800.34,
+      "orders": 1
+    },
+    {
+      "date": "2025-04-07",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-04-08",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-04-09",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-04-10",
+      "netSales": 479401.02,
+      "orders": 3
+    },
+    {
+      "date": "2025-04-11",
+      "netSales": 159800.34,
+      "orders": 1
+    },
+    {
+      "date": "2025-04-12",
+      "netSales": 639201.36,
+      "orders": 3
+    },
+    {
+      "date": "2025-04-13",
+      "netSales": 479401.02,
+      "orders": 3
+    },
+    {
+      "date": "2025-04-14",
+      "netSales": 479401.02,
+      "orders": 2
+    },
+    {
+      "date": "2025-04-15",
+      "netSales": 159800.34,
+      "orders": 1
+    },
+    {
+      "date": "2025-04-16",
+      "netSales": 159800.34,
+      "orders": 1
+    },
+    {
+      "date": "2025-04-17",
+      "netSales": 159800.34,
+      "orders": 1
+    },
+    {
+      "date": "2025-04-18",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-04-19",
+      "netSales": 159800.34,
+      "orders": 1
+    },
+    {
+      "date": "2025-04-20",
+      "netSales": 639201.36,
+      "orders": 4
+    },
+    {
+      "date": "2025-04-21",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-04-22",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-04-23",
+      "netSales": 159800.34,
+      "orders": 1
+    },
+    {
+      "date": "2025-04-24",
+      "netSales": 799001.7,
+      "orders": 5
+    },
+    {
+      "date": "2025-04-25",
+      "netSales": 135830.17,
+      "orders": 1
+    },
+    {
+      "date": "2025-04-26",
+      "netSales": 1086641.36,
+      "orders": 7
+    },
+    {
+      "date": "2025-04-27",
+      "netSales": 814981.02,
+      "orders": 5
+    },
+    {
+      "date": "2025-04-28",
+      "netSales": 319600.68,
+      "orders": 2
+    },
+    {
+      "date": "2025-04-29",
+      "netSales": 1598003.05,
+      "orders": 9
+    },
+    {
+      "date": "2025-04-30",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-05-01",
+      "netSales": 479400,
+      "orders": 2
+    },
+    {
+      "date": "2025-05-02",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-05-03",
+      "netSales": 319600.68,
+      "orders": 2
+    },
+    {
+      "date": "2025-05-04",
+      "netSales": 319600.33,
+      "orders": 2
+    },
+    {
+      "date": "2025-05-05",
+      "netSales": 479401.02,
+      "orders": 3
+    },
+    {
+      "date": "2025-05-06",
+      "netSales": 159799.99,
+      "orders": 1
+    },
+    {
+      "date": "2025-05-07",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-05-08",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-05-09",
+      "netSales": 159799.99,
+      "orders": 1
+    },
+    {
+      "date": "2025-05-10",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-05-11",
+      "netSales": 479399.98,
+      "orders": 3
+    },
+    {
+      "date": "2025-05-12",
+      "netSales": 479399.98,
+      "orders": 3
+    },
+    {
+      "date": "2025-05-13",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-05-14",
+      "netSales": 159799.99,
+      "orders": 1
+    },
+    {
+      "date": "2025-05-15",
+      "netSales": 479399.98,
+      "orders": 3
+    },
+    {
+      "date": "2025-05-16",
+      "netSales": 319599.99,
+      "orders": 2
+    },
+    {
+      "date": "2025-05-17",
+      "netSales": 319599.99,
+      "orders": 2
+    },
+    {
+      "date": "2025-05-18",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-05-19",
+      "netSales": 639199.98,
+      "orders": 4
+    },
+    {
+      "date": "2025-05-20",
+      "netSales": 1278399.98,
+      "orders": 6
+    },
+    {
+      "date": "2025-05-21",
+      "netSales": 479399.98,
+      "orders": 3
+    },
+    {
+      "date": "2025-05-22",
+      "netSales": 159799.99,
+      "orders": 1
+    },
+    {
+      "date": "2025-05-23",
+      "netSales": 479399.98,
+      "orders": 3
+    },
+    {
+      "date": "2025-05-24",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-05-25",
+      "netSales": 159799.99,
+      "orders": 1
+    },
+    {
+      "date": "2025-05-26",
+      "netSales": 319599.99,
+      "orders": 2
+    },
+    {
+      "date": "2025-05-27",
+      "netSales": 159799.99,
+      "orders": 1
+    },
+    {
+      "date": "2025-05-28",
+      "netSales": 319599.99,
+      "orders": 2
+    },
+    {
+      "date": "2025-05-29",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-05-30",
+      "netSales": 479399.98,
+      "orders": 3
+    },
+    {
+      "date": "2025-05-31",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-06-01",
+      "netSales": 159799.99,
+      "orders": 1
+    },
+    {
+      "date": "2025-06-02",
+      "netSales": 639199.98,
+      "orders": 4
+    },
+    {
+      "date": "2025-06-03",
+      "netSales": 319599.99,
+      "orders": 2
+    },
+    {
+      "date": "2025-06-04",
+      "netSales": 479399.98,
+      "orders": 3
+    },
+    {
+      "date": "2025-06-05",
+      "netSales": 159799.99,
+      "orders": 1
+    },
+    {
+      "date": "2025-06-06",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-06-07",
+      "netSales": 319599.99,
+      "orders": 2
+    },
+    {
+      "date": "2025-06-08",
+      "netSales": 159799.99,
+      "orders": 1
+    },
+    {
+      "date": "2025-06-09",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-06-10",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-06-11",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-06-12",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-06-13",
+      "netSales": 0,
+      "orders": 0
+    },
+    {
+      "date": "2025-06-14",
+      "netSales": 143820,
+      "orders": 1
+    }
+  ]
+}

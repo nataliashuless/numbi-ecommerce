@@ -313,9 +313,7 @@ export default function MarketingPage() {
   const growthGapAlert = objectives.growthGapAlertPct !== undefined && salesGrowth !== null && spendGrowth !== null
     ? spendGrowth - salesGrowth >= objectives.growthGapAlertPct / 100
     : false
-  const comparisonReliable = !report || Boolean(
-    report.dataCoverage.shopifyFrom && report.dataCoverage.shopifyFrom.slice(0, 10) <= report.periods.previous.start,
-  )
+  const comparisonReliable = !report || report.comparability.netSales
 
   const topProduct = report ? [...report.current.products].sort((a, b) => b.sales - a.sales)[0] ?? null : null
   const soldOutSizes = report?.current.sizes.filter(item => item.units > 0 && item.stock !== null && item.stock <= 0) ?? []
@@ -340,7 +338,7 @@ export default function MarketingPage() {
     if (comparisonReliable && salesChange !== null) insights.push(`Ventas netas ${salesChange >= 0 ? 'aumentaron' : 'cayeron'} ${Math.abs(salesChange * 100).toFixed(1)}% frente al periodo anterior.`)
     if (comparisonReliable && spend !== null && previousSpend !== null && previousSpend > 0 && salesChange !== null) {
       const spendChange = (spend - previousSpend) / previousSpend
-      insights.push(`El gasto Meta cambió ${spendChange >= 0 ? '+' : ''}${(spendChange * 100).toFixed(1)}% frente a ${salesChange >= 0 ? '+' : ''}${(salesChange * 100).toFixed(1)}% en ventas Shopify.`)
+      insights.push(`El gasto Meta cambió ${spendChange >= 0 ? '+' : ''}${(spendChange * 100).toFixed(1)}% frente a ${salesChange >= 0 ? '+' : ''}${(salesChange * 100).toFixed(1)}% en ventas reales.`)
     }
     const growingProduct = comparisonReliable ? [...report.current.products].filter(item => item.variation !== null && item.variation > 0).sort((a, b) => (b.variation || 0) - (a.variation || 0))[0] : null
     if (growingProduct) insights.push(`${growingProduct.reference} fue la referencia con mayor crecimiento comparable: +${((growingProduct.variation || 0) * 100).toFixed(1)}%, con ${currency(growingProduct.sales)} en ventas.`)
@@ -369,15 +367,15 @@ export default function MarketingPage() {
 
         {showDetails && <>
         <section id="gerencia" className="space-y-4"><SectionTitle eyebrow="01 · Resultado" title="Gerencia en 30 segundos" badge={report.periods.current.label} /><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard label="Ventas netas Shopify" source="Shopify" value={report.current.netSales} previous={report.previous.netSales} change={report.comparisons.netSales.change} format={currency} sufficient={sufficient} />
+          <KpiCard label="Ventas netas" source="Shopify + histórico 2025" value={report.current.netSales} previous={report.previous.netSales} change={report.comparisons.netSales.change} format={currency} sufficient={sufficient} />
           <KpiCard label="Gasto Meta" source="Meta Ads" value={spend} previous={previousSpend} change={spend !== null && previousSpend ? (spend - previousSpend) / previousSpend : null} format={currency} sufficient={sufficient} />
-          <KpiCard label="MER" source="Shopify ÷ Meta" value={mer} previous={previousMer} change={mer !== null && previousMer ? (mer - previousMer) / previousMer : null} target={objectives.merMin} tolerancePct={tolerance} format={ratio} sufficient={sufficient} />
+          <KpiCard label="MER" source="Ventas reales ÷ Meta" value={mer} previous={previousMer} change={mer !== null && previousMer && comparisonReliable ? (mer - previousMer) / previousMer : null} target={objectives.merMin} tolerancePct={tolerance} format={ratio} sufficient={sufficient} />
           <KpiCard label="ROAS Meta" source="Atribución Meta" value={metaCurrent?.totals?.roas ?? null} previous={metaPrevious?.totals?.roas ?? null} change={metaCurrent?.totals?.roas != null && metaPrevious?.totals?.roas ? (metaCurrent.totals.roas - metaPrevious.totals.roas) / metaPrevious.totals.roas : null} target={objectives.roasMin} tolerancePct={tolerance} format={ratio} sufficient={sufficient} />
           <KpiCard label="CAC cliente nuevo" source="Meta + primer pedido Shopify" value={null} previous={null} change={null} target={objectives.cacMax} direction="lower" tolerancePct={tolerance} format={currency} sufficient={false} />
           <KpiCard label="CPA" source="Meta Ads" value={metaCurrent?.totals?.cpa ?? null} previous={metaPrevious?.totals?.cpa ?? null} change={metaCurrent?.totals?.cpa != null && metaPrevious?.totals?.cpa ? (metaCurrent.totals.cpa - metaPrevious.totals.cpa) / metaPrevious.totals.cpa : null} target={objectives.cpaMax} direction="lower" tolerancePct={tolerance} format={currency} sufficient={sufficient} />
           <KpiCard label="Conversión Shopify" source="Pedidos Shopify ÷ sesiones GA4" value={conversion} previous={previousConversion} change={conversion !== null && previousConversion ? (conversion - previousConversion) / previousConversion : null} target={objectives.conversionMin === undefined ? undefined : objectives.conversionMin / 100} tolerancePct={tolerance} format={percent} sufficient={sufficient} />
-          <KpiCard label="AOV / ticket promedio" source="Shopify" value={report.current.aov} previous={report.previous.aov} change={report.comparisons.aov.change} target={objectives.aovMin} tolerancePct={tolerance} format={currency} sufficient={sufficient} />
-          <KpiCard label="Pedidos" source="Shopify" value={report.current.orders} previous={report.previous.orders} change={report.comparisons.orders.change} format={number} sufficient={sufficient} />
+          <KpiCard label="AOV / ticket promedio" source="Shopify + histórico 2025" value={report.current.aov} previous={report.previous.aov} change={report.comparisons.aov.change} target={objectives.aovMin} tolerancePct={tolerance} format={currency} sufficient={sufficient} />
+          <KpiCard label="Pedidos" source="Shopify + histórico 2025" value={report.current.orders} previous={report.previous.orders} change={report.comparisons.orders.change} format={number} sufficient={sufficient} />
           <KpiCard label="Unidades vendidas" source="Shopify" value={report.current.units} previous={report.previous.units} change={report.comparisons.units.change} format={number} sufficient={sufficient} />
           <KpiCard label="Clientes nuevos" source="Shopify customer.created_at" value={report.current.customers.new} previous={report.previous.customers.new} change={report.comparisons.newCustomers.change} format={number} sufficient={sufficient} />
           <KpiCard label="Gasto publicitario a revisar" source="Meta Ads" value={spendToReview} previous={previousSpendToReview} change={spendToReview !== null && previousSpendToReview ? (spendToReview - previousSpendToReview) / previousSpendToReview : null} direction="lower" format={currency} sufficient={sufficient} />
@@ -445,7 +443,7 @@ function SimpleExecutiveSummary({
         <div className="min-w-72 space-y-3 rounded-2xl bg-white/80 px-5 py-4 text-sm text-slate-600 shadow-sm">
           <div><p className="text-xs font-semibold uppercase tracking-wide text-[#168fc6]">Resultado actual</p><p className="mt-1 font-semibold text-[#172239]">{report.view === 'ytd' ? readableMonthRange(report.periods.current.start, report.periods.current.end) : readableRange(report.periods.current.start, report.periods.current.end)}</p></div>
           <div className="border-t pt-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Se compara con</p><p className="mt-1 font-semibold text-[#172239]">{report.view === 'ytd' ? readableMonthRange(report.periods.previous.start, report.periods.previous.end) : readableRange(report.periods.previous.start, report.periods.previous.end)}</p></div>
-          <p className="border-t pt-3 text-xs">Ventas de Shopify · Publicidad de Meta</p>
+          <p className="border-t pt-3 text-xs">Ventas: Shopify + histórico 2025 · Publicidad: Meta</p>
         </div>
       </CardContent>
     </Card>
@@ -453,7 +451,7 @@ function SimpleExecutiveSummary({
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <PlainMetricCard icon={CircleDollarSign} label="Vendimos" value={currency(report.current.netSales)} change={salesChange} detail={`${number(report.current.orders)} pedidos en Shopify`} />
       <PlainMetricCard icon={WalletCards} label="Invertimos en publicidad" value={spend === null ? 'Dato no disponible' : currency(spend)} change={spendChange} detail="Gasto registrado por Meta" />
-      <PlainMetricCard icon={TrendingUp} label="Ventas por cada $1 de publicidad" value={mer === null ? 'Dato no disponible' : `${mer.toFixed(2)} veces`} change={null} detail="Ventas Shopify ÷ gasto Meta; no es utilidad" />
+      <PlainMetricCard icon={TrendingUp} label="Ventas por cada $1 de publicidad" value={mer === null ? 'Dato no disponible' : `${mer.toFixed(2)} veces`} change={null} detail="Ventas reales ÷ gasto Meta; no es utilidad" />
       <PlainMetricCard icon={Users} label="Clientes nuevos" value={number(report.current.customers.new)} change={comparisonReliable ? report.comparisons.newCustomers.change : null} detail="Identificados por Shopify" />
     </div>
 
@@ -484,15 +482,20 @@ function PlainMetricCard({ icon: Icon, label, value, change, detail }: { icon: t
 function YtdComparison({ report, spend, previousSpend, mer, previousMer, comparisonReliable }: { report: MarketingExecutiveReport; spend: number | null; previousSpend: number | null; mer: number | null; previousMer: number | null; comparisonReliable: boolean }) {
   const currentYear = report.periods.current.start.slice(0, 4)
   const previousYear = report.periods.previous.start.slice(0, 4)
+  const usesHistoricalSales = Boolean(
+    report.dataCoverage.historicalSalesFrom
+      && report.dataCoverage.shopifyFrom
+      && report.periods.previous.start < report.dataCoverage.shopifyFrom,
+  )
   const rows = [
-    { label: 'Ventas reales Shopify', current: report.current.netSales, previous: report.previous.netSales, formatter: currency, reliable: comparisonReliable },
+    { label: 'Ventas reales', current: report.current.netSales, previous: report.previous.netSales, formatter: currency, reliable: comparisonReliable },
     { label: 'Gasto en publicidad Meta', current: spend, previous: previousSpend, formatter: currency, reliable: true },
-    { label: 'Pedidos Shopify', current: report.current.orders, previous: report.previous.orders, formatter: number, reliable: comparisonReliable },
-    { label: 'Unidades vendidas', current: report.current.units, previous: report.previous.units, formatter: number, reliable: comparisonReliable },
-    { label: 'Clientes nuevos', current: report.current.customers.new, previous: report.previous.customers.new, formatter: number, reliable: comparisonReliable },
+    { label: 'Pedidos', current: report.current.orders, previous: report.previous.orders, formatter: number, reliable: report.comparability.orders },
+    { label: 'Unidades vendidas', current: report.current.units, previous: report.previous.units, formatter: number, reliable: report.comparability.units },
+    { label: 'Clientes nuevos', current: report.current.customers.new, previous: report.previous.customers.new, formatter: number, reliable: report.comparability.customers },
     { label: 'Ventas por cada $1 de publicidad', current: mer, previous: previousMer, formatter: ratio, reliable: comparisonReliable },
   ]
-  return <section className="space-y-4"><SectionTitle eyebrow="Comparación anual" title={`${currentYear} vs ${previousYear}, mismos meses`} badge="Acumulado" />{!comparisonReliable && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p className="font-semibold">La columna de Shopify de {previousYear} está incompleta.</p><p className="mt-1">El historial disponible empieza el {report.dataCoverage.shopifyFrom?.slice(0, 10)}. Mostramos los valores existentes, pero no calculamos crecimiento de ventas, pedidos, unidades, clientes ni eficiencia porque produciría una conclusión engañosa.</p></div>}<Card className="overflow-hidden border-0 shadow-sm"><CardContent className="overflow-x-auto p-0"><Table><TableHeader><TableRow><TableHead>Indicador</TableHead><TableHead className="text-right">{previousYear}<span className="block text-[10px] font-normal normal-case text-slate-400">{readableMonthRange(report.periods.previous.start, report.periods.previous.end)}</span></TableHead><TableHead className="text-right">{currentYear}<span className="block text-[10px] font-normal normal-case text-slate-400">{readableMonthRange(report.periods.current.start, report.periods.current.end)}</span></TableHead><TableHead className="text-right">Cambio</TableHead></TableRow></TableHeader><TableBody>{rows.map(row => { const change = row.reliable && row.current !== null && row.previous !== null && row.previous !== 0 ? (row.current - row.previous) / Math.abs(row.previous) : null; return <TableRow key={row.label}><TableCell className="font-medium text-[#172239]">{row.label}</TableCell><TableCell className="text-right">{row.previous === null ? 'Dato no disponible' : row.formatter(row.previous)}</TableCell><TableCell className="text-right font-semibold">{row.current === null ? 'Dato no disponible' : row.formatter(row.current)}</TableCell><TableCell className="text-right">{change === null ? <span className="text-xs text-slate-500">{row.reliable ? 'Sin comparación' : 'No concluyente'}</span> : <ChangeBadge value={change} />}</TableCell></TableRow> })}</TableBody></Table></CardContent></Card></section>
+  return <section className="space-y-4"><SectionTitle eyebrow="Comparación anual" title={`${currentYear} vs ${previousYear}, mismos meses`} badge="Acumulado" />{usesHistoricalSales && <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950"><p className="font-semibold">Ventas y pedidos de {previousYear} ya están completos.</p><p className="mt-1">Usamos el archivo diario hasta el {readableDate(report.dataCoverage.historicalSalesTo || '')} y Shopify desde el {readableDate(report.dataCoverage.shopifyFrom || '')}. No se superponen ni se duplican ventas.</p>{!report.comparability.units && <p className="mt-2 text-xs text-sky-800">Unidades, clientes, productos y tallas siguen sin comparación completa porque el archivo no contiene ese detalle.</p>}</div>}{!comparisonReliable && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p className="font-semibold">Ventas del periodo anterior incompletas.</p><p className="mt-1">No calculamos crecimiento hasta contar con todas las fechas del rango seleccionado.</p></div>}<Card className="overflow-hidden border-0 shadow-sm"><CardContent className="overflow-x-auto p-0"><Table><TableHeader><TableRow><TableHead>Indicador</TableHead><TableHead className="text-right">{previousYear}<span className="block text-[10px] font-normal normal-case text-slate-400">{readableMonthRange(report.periods.previous.start, report.periods.previous.end)}</span></TableHead><TableHead className="text-right">{currentYear}<span className="block text-[10px] font-normal normal-case text-slate-400">{readableMonthRange(report.periods.current.start, report.periods.current.end)}</span></TableHead><TableHead className="text-right">Cambio</TableHead></TableRow></TableHeader><TableBody>{rows.map(row => { const change = row.reliable && row.current !== null && row.previous !== null && row.previous !== 0 ? (row.current - row.previous) / Math.abs(row.previous) : null; return <TableRow key={row.label}><TableCell className="font-medium text-[#172239]">{row.label}</TableCell><TableCell className="text-right">{row.previous === null ? 'Dato no disponible' : row.formatter(row.previous)}</TableCell><TableCell className="text-right font-semibold">{row.current === null ? 'Dato no disponible' : row.formatter(row.current)}</TableCell><TableCell className="text-right">{change === null ? <span className="text-xs text-slate-500">{row.reliable ? 'Sin comparación' : 'No concluyente'}</span> : <ChangeBadge value={change} />}</TableCell></TableRow> })}</TableBody></Table></CardContent></Card></section>
 }
 
 function DashboardHeader() {

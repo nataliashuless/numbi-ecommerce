@@ -12,6 +12,13 @@ import {
   type MarketingView,
   type StockBySku,
 } from '@/lib/marketing/metrics'
+import {
+  addHistoricalSales,
+  hasCompleteSalesCoverage,
+  hasCompleteShopifyCoverage,
+  HISTORICAL_SALES_COVERAGE,
+  HISTORICAL_SALES_SOURCE,
+} from '@/lib/marketing/historical-sales'
 
 export const maxDuration = 60
 
@@ -104,26 +111,55 @@ export async function GET(request: Request) {
       stockBySku.set(sku, stock)
     }
 
-    const previous = aggregatePeriod(orders, periods.previous, stockBySku, filters)
+    const shopifyFrom = (orderStateResult.data?.earliest_at || orders[0]?.created_at || null)?.slice(0, 10) || null
+    const shopifyTo = (orderStateResult.data?.latest_at || orders.at(-1)?.created_at || null)?.slice(0, 10) || null
+    const historicalSalesEnabled = !filters.channel
+      && !filters.product
+      && !filters.size
+      && (!filters.customerType || filters.customerType === 'all')
+
+    const previous = addHistoricalSales(
+      aggregatePeriod(orders, periods.previous, stockBySku, filters),
+      periods.previous,
+      historicalSalesEnabled,
+    )
     const current = addProductComparisons(
-      aggregatePeriod(orders, periods.current, stockBySku, filters),
+      addHistoricalSales(
+        aggregatePeriod(orders, periods.current, stockBySku, filters),
+        periods.current,
+        historicalSalesEnabled,
+      ),
       previous,
     )
     const yearAgo = periods.yearAgo
-      ? aggregatePeriod(orders, periods.yearAgo, stockBySku, filters)
+      ? addHistoricalSales(
+        aggregatePeriod(orders, periods.yearAgo, stockBySku, filters),
+        periods.yearAgo,
+        historicalSalesEnabled,
+      )
       : null
+
+    const salesComparable = hasCompleteSalesCoverage(periods.current, shopifyFrom, shopifyTo, historicalSalesEnabled)
+      && hasCompleteSalesCoverage(periods.previous, shopifyFrom, shopifyTo, historicalSalesEnabled)
+    const shopifyComparable = hasCompleteShopifyCoverage(periods.current, shopifyFrom, shopifyTo)
+      && hasCompleteShopifyCoverage(periods.previous, shopifyFrom, shopifyTo)
 
     const trendEndMonth = `${periods.current.end.slice(0, 7)}-01`
     const trend = Array.from({ length: 12 }, (_, index) => addMonths(trendEndMonth, index - 11)).map(month => {
       const nextMonth = addMonths(month, 1)
-      const metrics = aggregatePeriod(orders, {
+      const trendPeriod = {
         start: month,
         end: new Date(`${nextMonth}T12:00:00Z`).getUTCDate() === 1
           ? new Date(new Date(`${nextMonth}T12:00:00Z`).getTime() - 86400000).toISOString().slice(0, 10)
           : nextMonth,
         label: month.slice(0, 7),
         complete: nextMonth <= `${periods.current.end.slice(0, 7)}-01`,
-      }, stockBySku, filters)
+      }
+      const metrics = addHistoricalSales(
+        aggregatePeriod(orders, trendPeriod, stockBySku, filters),
+        trendPeriod,
+        historicalSalesEnabled,
+      )
       return {
         month: month.slice(0, 7),
         sales: metrics.netSales,
@@ -158,14 +194,17 @@ export async function GET(request: Request) {
       .maybeSingle()
 
     const report: MarketingExecutiveReport = {
-      source: 'Shopify + Siigo inventory',
+      source: 'Shopify + archivo histórico de ventas + inventario Siigo',
       currency: 'COP',
       timeZone: 'America/Bogota',
       view,
       periods,
       dataCoverage: {
-        shopifyFrom: orderStateResult.data?.earliest_at || orders[0]?.created_at || null,
-        shopifyTo: orderStateResult.data?.latest_at || orders.at(-1)?.created_at || null,
+        shopifyFrom,
+        shopifyTo,
+        historicalSalesFrom: historicalSalesEnabled ? HISTORICAL_SALES_COVERAGE.from : null,
+        historicalSalesTo: historicalSalesEnabled ? HISTORICAL_SALES_COVERAGE.to : null,
+        historicalSalesSource: historicalSalesEnabled ? HISTORICAL_SALES_SOURCE : null,
         stockAsOf: stockStateResult.data?.last_full_sync_at || null,
       },
       filters: {
@@ -179,14 +218,21 @@ export async function GET(request: Request) {
       yearAgo,
       trend,
       comparisons: {
-        netSales: comparison(current.netSales, previous.netSales),
-        orders: comparison(current.orders, previous.orders),
-        units: comparison(current.units, previous.units),
-        aov: comparison(current.aov, previous.aov),
-        newCustomers: comparison(current.customers.new, previous.customers.new),
-        repeatPurchaseRate: comparison(current.customers.repeatPurchaseRate, previous.customers.repeatPurchaseRate),
-        discounts: comparison(current.discounts, previous.discounts),
-        refunds: comparison(current.refunds, previous.refunds),
+        netSales: comparison(current.netSales, salesComparable ? previous.netSales : null),
+        orders: comparison(current.orders, salesComparable ? previous.orders : null),
+        units: comparison(current.units, shopifyComparable ? previous.units : null),
+        aov: comparison(current.aov, salesComparable ? previous.aov : null),
+        newCustomers: comparison(current.customers.new, shopifyComparable ? previous.customers.new : null),
+        repeatPurchaseRate: comparison(current.customers.repeatPurchaseRate, shopifyComparable ? previous.customers.repeatPurchaseRate : null),
+        discounts: comparison(current.discounts, shopifyComparable ? previous.discounts : null),
+        refunds: comparison(current.refunds, shopifyComparable ? previous.refunds : null),
+      },
+      comparability: {
+        netSales: salesComparable,
+        orders: salesComparable,
+        aov: salesComparable,
+        units: shopifyComparable,
+        customers: shopifyComparable,
       },
       availability: {
         shopify: orders.length > 0,
@@ -198,13 +244,14 @@ export async function GET(request: Request) {
         exactNewCustomerAttribution: false,
       },
       limitations: [
-        'El historial Shopify disponible comienza en junio de 2025; cohortes y LTV anteriores a esa fecha no son concluyentes.',
+        'Ventas y pedidos anteriores al 15 de junio de 2025 provienen del archivo histórico diario; no contiene detalle de productos, unidades ni clientes.',
+        'El archivo histórico usa Ventas netas + Impuestos para mantener la misma base con IVA del subtotal actual de Shopify.',
         'El inventario proviene de Siigo y representa una foto actual, no un historial de inventario.',
         'No existen COGS ni costos variables completos; margen bruto y margen de contribución no se calculan.',
         'CAC de cliente nuevo atribuible requiere una unión confiable entre adquisición Meta y primer pedido Shopify.',
       ],
       formulas: [
-        { metric: 'Ventas netas Shopify', formula: 'Suma de current_subtotal_price en pedidos pagados; excluye pruebas y cancelados.', source: 'Shopify' },
+        { metric: 'Ventas netas', formula: 'Hasta 2025-06-14: Ventas netas + Impuestos del archivo diario. Desde 2025-06-15: suma de current_subtotal_price en pedidos Shopify pagados; excluye pruebas y cancelados.', source: 'Archivo histórico + Shopify' },
         { metric: 'AOV', formula: 'Ventas netas Shopify / pedidos con venta neta positiva.', source: 'Shopify' },
         { metric: 'Variación', formula: '(Periodo actual - periodo anterior) / valor absoluto del periodo anterior.', source: 'Cálculo interno' },
         { metric: 'Cliente nuevo', formula: 'Cliente cuyo created_at de Shopify cae dentro del periodo analizado.', source: 'Shopify' },

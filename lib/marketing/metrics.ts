@@ -130,7 +130,7 @@ export interface MetricComparison {
 }
 
 export interface MarketingExecutiveReport {
-  source: 'Shopify + Siigo inventory'
+  source: string
   currency: string
   timeZone: string
   view: MarketingView
@@ -142,6 +142,9 @@ export interface MarketingExecutiveReport {
   dataCoverage: {
     shopifyFrom: string | null
     shopifyTo: string | null
+    historicalSalesFrom: string | null
+    historicalSalesTo: string | null
+    historicalSalesSource: string | null
     stockAsOf: string | null
   }
   filters: {
@@ -155,6 +158,13 @@ export interface MarketingExecutiveReport {
   yearAgo: PeriodMetrics | null
   trend: Array<{ month: string; sales: number; orders: number; units: number; aov: number; newCustomers: number }>
   comparisons: Record<string, MetricComparison>
+  comparability: {
+    netSales: boolean
+    orders: boolean
+    aov: boolean
+    units: boolean
+    customers: boolean
+  }
   availability: {
     shopify: boolean
     inventory: boolean
