@@ -1,7 +1,7 @@
 export const BUSINESS_TIME_ZONE = 'America/Bogota'
 export const BUSINESS_CURRENCY = 'COP'
 
-export type MarketingView = 'weekly' | 'monthly'
+export type MarketingView = 'weekly' | 'monthly' | 'ytd'
 export type CustomerType = 'new' | 'returning' | 'unknown'
 
 export interface DatePeriod {
@@ -222,6 +222,13 @@ export function buildPeriods(
   now = new Date(),
 ): MarketingExecutiveReport['periods'] {
   if (customStart && customEnd) {
+    if (view === 'ytd') {
+      return {
+        current: { start: customStart, end: customEnd, label: `Acumulado ${customStart.slice(0, 4)}`, complete: customEnd < isoDateInTimeZone(now) },
+        previous: { start: shiftDateMonths(customStart, -12), end: shiftDateMonths(customEnd, -12), label: `Mismo rango ${String(Number(customStart.slice(0, 4)) - 1)}`, complete: true },
+        yearAgo: null,
+      }
+    }
     const length = daysInclusive(customStart, customEnd)
     const previousEnd = addDays(customStart, -1)
     const previousStart = addDays(previousEnd, -(length - 1))
@@ -235,6 +242,16 @@ export function buildPeriods(
   }
 
   const today = isoDateInTimeZone(now)
+  if (view === 'ytd') {
+    const currentEnd = addDays(today, -1)
+    const currentYear = currentEnd.slice(0, 4)
+    const previousYear = String(Number(currentYear) - 1)
+    return {
+      current: { start: `${currentYear}-01-01`, end: currentEnd, label: `Acumulado ${currentYear}`, complete: true },
+      previous: { start: `${previousYear}-01-01`, end: shiftDateMonths(currentEnd, -12), label: `Mismo rango ${previousYear}`, complete: true },
+      yearAgo: null,
+    }
+  }
   if (view === 'weekly') {
     const currentEnd = addDays(today, -1)
     const currentStart = addDays(currentEnd, -6)

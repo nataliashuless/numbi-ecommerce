@@ -45,7 +45,8 @@ export async function GET(request: Request) {
   if (error) return error
 
   const { searchParams } = new URL(request.url)
-  const view: MarketingView = searchParams.get('view') === 'monthly' ? 'monthly' : 'weekly'
+  const requestedView = searchParams.get('view')
+  const view: MarketingView = requestedView === 'monthly' || requestedView === 'ytd' ? requestedView : 'weekly'
   const start = cleanFilter(searchParams.get('start_date'))
   const end = cleanFilter(searchParams.get('end_date'))
   if ((start && !DATE_PATTERN.test(start)) || (end && !DATE_PATTERN.test(end)) || Boolean(start) !== Boolean(end)) {
