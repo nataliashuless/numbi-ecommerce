@@ -6,6 +6,8 @@ export interface CachedSiigoInvoice {
   date: string
   total: number
   credited_amount: number | null
+  customer_identification: string | null
+  assigned_feria_id: string | null
   observations: string | null
   raw: {
     payments?: Array<{
@@ -17,6 +19,12 @@ export interface CachedSiigoInvoice {
 
 export const SHOPIFY_START_DATE = '2025-07-01'
 const MERCADO_PAGO_PAYMENT_ID = 8362
+
+export interface OnlineSalesClassificationContext {
+  shopifyOrderNumbers: Set<number>
+  tiendaNits: Set<string>
+  feriaWindows: Array<{ start: string; end: string }>
+}
 
 function isMercadoPagoInvoice(invoice: CachedSiigoInvoice): boolean {
   return (invoice.raw?.payments || []).some(payment => {
@@ -32,21 +40,31 @@ function shopifyOrderNumber(observations: string | null): number | null {
 
 export function isOnlineMarketingInvoice(
   invoice: CachedSiigoInvoice,
-  shopifyOrderNumbers: Set<number>,
+  context: OnlineSalesClassificationContext,
 ): boolean {
+  if (invoice.assigned_feria_id) return false
+  if (invoice.customer_identification && context.tiendaNits.has(invoice.customer_identification)) return false
+
+  const isFeriaDate = context.feriaWindows.some(window => {
+    const date = invoice.date.slice(0, 10)
+    return date >= window.start && date <= window.end
+  })
+
   if (invoice.date.slice(0, 10) < SHOPIFY_START_DATE) {
-    return isMercadoPagoInvoice(invoice)
+    if (isMercadoPagoInvoice(invoice)) return true
+    return !isFeriaDate
   }
 
   const orderNumber = shopifyOrderNumber(invoice.observations)
-  return orderNumber !== null && shopifyOrderNumbers.has(orderNumber)
+  if (orderNumber !== null && context.shopifyOrderNumbers.has(orderNumber)) return true
+  return !isFeriaDate
 }
 
 export function replaceSalesWithSiigoOnline(
   metrics: PeriodMetrics,
   invoices: CachedSiigoInvoice[],
   period: DatePeriod,
-  shopifyOrderNumbers: Set<number>,
+  context: OnlineSalesClassificationContext,
 ): PeriodMetrics {
   const daily = new Map(metrics.daily.map(day => [day.date, { ...day, sales: 0 }]))
   let netSales = 0
@@ -54,7 +72,7 @@ export function replaceSalesWithSiigoOnline(
   for (const invoice of invoices) {
     const date = invoice.date.slice(0, 10)
     if (date < period.start || date > period.end) continue
-    if (!isOnlineMarketingInvoice(invoice, shopifyOrderNumbers)) continue
+    if (!isOnlineMarketingInvoice(invoice, context)) continue
 
     const total = Number(invoice.total) || 0
     const credited = Number(invoice.credited_amount) || 0

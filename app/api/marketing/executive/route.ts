@@ -78,10 +78,10 @@ export async function GET(request: Request) {
       .order('created_at', { ascending: true })
       .range(from, to))
 
-    const [siigoInvoices, orderStateResult, invoiceStateResult, stockStateResult, warehouseResult] = await Promise.all([
+    const [siigoInvoices, orderStateResult, invoiceStateResult, stockStateResult, warehouseResult, tiendaResult, feriaResult] = await Promise.all([
       loadPaged<CachedSiigoInvoice>((from, to) => supabase
         .from('siigo_invoices')
-        .select('id, date, total, credited_amount, observations, raw')
+        .select('id, date, total, credited_amount, customer_identification, assigned_feria_id, observations, raw')
         .gte('date', periods.previous.start)
         .lte('date', periods.current.end)
         .order('date', { ascending: true })
@@ -90,6 +90,8 @@ export async function GET(request: Request) {
       supabase.from('siigo_invoices_sync_state').select('earliest_date, last_full_sync_at').eq('id', 1).maybeSingle(),
       supabase.from('siigo_stock_sync_state').select('last_full_sync_at').eq('id', 1).maybeSingle(),
       supabase.from('siigo_warehouses').select('id, name').range(0, 999),
+      supabase.from('tiendas_terceros').select('siigo_customer_identification').not('siigo_customer_identification', 'is', null).range(0, 999),
+      supabase.from('ferias').select('fecha_inicio, fecha_fin').eq('activa', true).range(0, 999),
     ])
 
     const ownWarehouseIds = new Set<number>([PRINCIPAL_WAREHOUSE_ID])
@@ -126,13 +128,21 @@ export async function GET(request: Request) {
     const shopifyOrderNumbers = new Set(
       orders.map(order => Number(order.raw?.order_number)).filter(orderNumber => Number.isFinite(orderNumber) && orderNumber > 0),
     )
+    const onlineSalesContext = {
+      shopifyOrderNumbers,
+      tiendaNits: new Set((tiendaResult.data || []).map(tienda => tienda.siigo_customer_identification).filter(Boolean)),
+      feriaWindows: (feriaResult.data || []).map(feria => ({
+        start: feria.fecha_inicio,
+        end: feria.fecha_fin,
+      })),
+    }
 
     const previousShopify = aggregatePeriod(orders, periods.previous, stockBySku, filters)
     const previous = replaceSalesWithSiigoOnline(
       previousShopify,
       siigoInvoices,
       periods.previous,
-      shopifyOrderNumbers,
+      onlineSalesContext,
     )
     const current = replaceSalesWithSiigoOnline(
       addProductComparisons(
@@ -141,14 +151,14 @@ export async function GET(request: Request) {
       ),
       siigoInvoices,
       periods.current,
-      shopifyOrderNumbers,
+      onlineSalesContext,
     )
     const yearAgo = periods.yearAgo
       ? replaceSalesWithSiigoOnline(
         aggregatePeriod(orders, periods.yearAgo, stockBySku, filters),
         siigoInvoices,
         periods.yearAgo,
-        shopifyOrderNumbers,
+        onlineSalesContext,
       )
       : null
 
@@ -172,7 +182,7 @@ export async function GET(request: Request) {
         aggregatePeriod(orders, trendPeriod, stockBySku, filters),
         siigoInvoices,
         trendPeriod,
-        shopifyOrderNumbers,
+        onlineSalesContext,
       )
       return {
         month: month.slice(0, 7),
@@ -259,7 +269,8 @@ export async function GET(request: Request) {
         exactNewCustomerAttribution: false,
       },
       limitations: [
-        'Las ventas online provienen de Siigo: antes de julio de 2025 se identifican por el medio de pago Mercado Pago; desde julio de 2025, por el número de pedido Shopify registrado en la factura.',
+        'Las ventas online provienen de Siigo e incluyen WooCommerce histórico, Shopify y WhatsApp. Se excluyen tiendas y ferias.',
+        'Antes de julio de 2025, Mercado Pago identifica WooCommerce; las demás facturas directas válidas se clasifican como WhatsApp. Desde julio de 2025, el número de pedido identifica Shopify y las demás facturas directas válidas se clasifican como WhatsApp.',
         'Las notas crédito se descuentan de la factura relacionada y las ventas se muestran antes de IVA.',
         'Pedidos, AOV, unidades, clientes, productos, tallas y conversión provienen de Shopify y no deben interpretarse como el detalle completo de las ventas Siigo.',
         'Los filtros ecommerce no modifican el total de ventas online identificado en Siigo.',
@@ -268,7 +279,7 @@ export async function GET(request: Request) {
         'CAC de cliente nuevo atribuible requiere una unión confiable entre adquisición Meta y primer pedido Shopify.',
       ],
       formulas: [
-        { metric: 'Ventas online netas antes de IVA', formula: '(Total factura Siigo - notas crédito aplicadas) / 1,19. Antes de 2025-07-01: medio de pago Mercado Pago. Desde 2025-07-01: número de pedido coincidente con Shopify.', source: 'Siigo + identificación Shopify' },
+        { metric: 'Ventas online netas antes de IVA', formula: '(Total factura Siigo - notas crédito aplicadas) / 1,19. Online = WooCommerce histórico (Mercado Pago) + Shopify (número de pedido) + WhatsApp (facturas directas no clasificadas como tienda o feria).', source: 'Siigo + identificación Shopify' },
         { metric: 'AOV ecommerce', formula: 'Ventas Shopify antes de IVA / pedidos Shopify con venta neta positiva.', source: 'Shopify' },
         { metric: 'Variación', formula: '(Periodo actual - periodo anterior) / valor absoluto del periodo anterior.', source: 'Cálculo interno' },
         { metric: 'Cliente nuevo', formula: 'Cliente cuyo created_at de Shopify cae dentro del periodo analizado.', source: 'Shopify' },
