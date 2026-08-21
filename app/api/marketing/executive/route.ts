@@ -100,6 +100,8 @@ export async function GET(request: Request) {
     customerType: (cleanFilter(searchParams.get('customer_type')) as MarketingFilters['customerType']) || 'all',
   }
   const periods = buildPeriods(view, start, end)
+  const designHistoryStart = `${Number(periods.current.end.slice(0, 4)) - 1}-01-01`
+  const siigoQueryStart = periods.previous.start < designHistoryStart ? periods.previous.start : designHistoryStart
   const supabase = getAdminClient()
 
   try {
@@ -113,7 +115,7 @@ export async function GET(request: Request) {
       loadPaged<CachedSiigoInvoice>((from, to) => supabase
         .from('siigo_invoices')
         .select('id, date, total, credited_amount, customer_identification, assigned_feria_id, observations, items, raw')
-        .gte('date', periods.previous.start)
+        .gte('date', siigoQueryStart)
         .lte('date', periods.current.end)
         .order('date', { ascending: true })
         .range(from, to)),
@@ -213,10 +215,12 @@ export async function GET(request: Request) {
       || (date >= periods.previous.start && date <= periods.previous.end),
     )
     const categoryChannelBuckets = new Map<string, { month: string; category: string; web: number; whatsapp: number }>()
-    const designSalesBuckets = new Map<string, { design: string; category: string; sales: number }>()
+    const designSalesBuckets = new Map<string, { year: string; design: string; category: string; sales: number }>()
     for (const invoice of siigoInvoices) {
       const date = invoice.date.slice(0, 10)
-      if (date < periods.current.start || date > periods.current.end) continue
+      const belongsToCurrentPeriod = date >= periods.current.start && date <= periods.current.end
+      const belongsToDesignHistory = date >= designHistoryStart && date <= periods.current.end
+      if (!belongsToCurrentPeriod && !belongsToDesignHistory) continue
       const total = Number(invoice.total) || 0
       if (total <= 0 || (Number(invoice.credited_amount) || 0) >= total) continue
       const channel = onlineMarketingChannel(invoice, onlineSalesContext)
@@ -230,19 +234,24 @@ export async function GET(request: Request) {
       for (const item of productItems) {
         const quantity = Math.max(0, Number(item.quantity) || 0)
         const category = categoryFromDescription(item.description || '')
-        const month = date.slice(0, 7)
-        const key = `${month}\u0000${category}`
-        const bucket = categoryChannelBuckets.get(key) || { month, category, web: 0, whatsapp: 0 }
-        bucket[channel] += quantity
-        categoryChannelBuckets.set(key, bucket)
+        if (belongsToCurrentPeriod) {
+          const month = date.slice(0, 7)
+          const key = `${month}\u0000${category}`
+          const bucket = categoryChannelBuckets.get(key) || { month, category, web: 0, whatsapp: 0 }
+          bucket[channel] += quantity
+          categoryChannelBuckets.set(key, bucket)
+        }
 
-        const itemTotal = Math.max(0, Number(item.total) || quantity * (Number(item.price) || 0))
-        const allocatedSales = invoiceItemTotal > 0 ? invoiceNetSales * (itemTotal / invoiceItemTotal) : 0
-        const design = designFromDescription(item.description || '')
-        const designBucketKey = `${category}\u0000${designKey(design)}`
-        const designBucket = designSalesBuckets.get(designBucketKey) || { design, category, sales: 0 }
-        designBucket.sales += allocatedSales
-        designSalesBuckets.set(designBucketKey, designBucket)
+        if (belongsToDesignHistory) {
+          const itemTotal = Math.max(0, Number(item.total) || quantity * (Number(item.price) || 0))
+          const allocatedSales = invoiceItemTotal > 0 ? invoiceNetSales * (itemTotal / invoiceItemTotal) : 0
+          const year = date.slice(0, 4)
+          const design = designFromDescription(item.description || '')
+          const designBucketKey = `${year}\u0000${category}\u0000${designKey(design)}`
+          const designBucket = designSalesBuckets.get(designBucketKey) || { year, design, category, sales: 0 }
+          designBucket.sales += allocatedSales
+          designSalesBuckets.set(designBucketKey, designBucket)
+        }
       }
     }
 
@@ -330,7 +339,9 @@ export async function GET(request: Request) {
       categoryChannelUnits: Array.from(categoryChannelBuckets.values()).sort((a, b) =>
         a.month.localeCompare(b.month) || a.category.localeCompare(b.category, 'es'),
       ),
-      designSales: Array.from(designSalesBuckets.values()).sort((a, b) => b.sales - a.sales),
+      designSales: Array.from(designSalesBuckets.values()).sort((a, b) =>
+        b.year.localeCompare(a.year) || b.sales - a.sales,
+      ),
       comparisons: {
         netSales: comparison(current.netSales, salesComparable ? previous.netSales : null),
         orders: comparison(current.onlineOrders, ordersComparable ? previous.onlineOrders : null),

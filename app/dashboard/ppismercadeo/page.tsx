@@ -412,9 +412,13 @@ const DESIGN_COLORS = ['#7378f4', '#17356f', '#f7bb1b', '#ff5a2a', '#1f9d55', '#
 function DesignSalesChart({ report }: { report: MarketingExecutiveReport }) {
   const allCategories = '__all__'
   const categories = Array.from(new Set(report.designSales.map(row => row.category))).sort((a, b) => a.localeCompare(b, 'es'))
+  const years = Array.from(new Set(report.designSales.map(row => row.year))).sort((a, b) => b.localeCompare(a))
+  const currentYear = report.periods.current.end.slice(0, 4)
   const [requestedCategory, setRequestedCategory] = useState(allCategories)
+  const [requestedYear, setRequestedYear] = useState(currentYear)
   const category = requestedCategory === allCategories || categories.includes(requestedCategory) ? requestedCategory : allCategories
-  const filtered = report.designSales.filter(row => category === allCategories || row.category === category)
+  const year = years.includes(requestedYear) ? requestedYear : years[0] || currentYear
+  const filtered = report.designSales.filter(row => row.year === year && (category === allCategories || row.category === category))
   const sorted = [...filtered].sort((a, b) => b.sales - a.sales)
   const top = sorted.slice(0, 10).map(row => ({ name: row.design, value: row.sales }))
   const remaining = sorted.slice(10).reduce((sum, row) => sum + row.sales, 0)
@@ -425,8 +429,8 @@ function DesignSalesChart({ report }: { report: MarketingExecutiveReport }) {
     <SectionTitle eyebrow="Concentración de ventas" title="Ventas por diseño" badge="Antes de IVA · Siigo" />
     <Card className="border-0 shadow-sm">
       <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div><CardTitle className="text-lg text-[#172239]">Participación de cada diseño</CardTitle><p className="mt-1 text-xs text-slate-500">Porcentaje de las ventas online netas del periodo seleccionado.</p></div>
-        <label className="flex items-center gap-2 text-sm font-semibold text-[#172239]">Categoría<select value={category} onChange={event => setRequestedCategory(event.target.value)} className="h-10 rounded-lg border bg-white px-3 font-normal"><option value={allCategories}>Todas las categorías</option>{categories.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
+        <div><CardTitle className="text-lg text-[#172239]">Participación de cada diseño</CardTitle><p className="mt-1 text-xs text-slate-500">{year === currentYear ? `${year} acumulado hasta ${readableDate(report.periods.current.end)}` : `Año calendario ${year}`}.</p></div>
+        <div className="flex flex-wrap gap-3"><label className="flex items-center gap-2 text-sm font-semibold text-[#172239]">Año<select value={year} onChange={event => setRequestedYear(event.target.value)} className="h-10 rounded-lg border bg-white px-3 font-normal">{years.map(item => <option key={item} value={item}>{item}</option>)}</select></label><label className="flex items-center gap-2 text-sm font-semibold text-[#172239]">Categoría<select value={category} onChange={event => setRequestedCategory(event.target.value)} className="h-10 rounded-lg border bg-white px-3 font-normal"><option value={allCategories}>Todas las categorías</option>{categories.map(item => <option key={item} value={item}>{item}</option>)}</select></label></div>
       </CardHeader>
       <CardContent>
         {data.length === 0 || total <= 0 ? <p className="py-16 text-center text-sm text-slate-500">Dato no disponible para el periodo seleccionado.</p> : <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(240px,0.65fr)] lg:items-center">
