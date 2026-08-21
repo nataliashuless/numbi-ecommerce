@@ -8,7 +8,7 @@ import {
   ShieldCheck, Store, Target, Tent, TrendingUp, Users, WalletCards, X,
 } from 'lucide-react'
 import {
-  Bar, BarChart, CartesianGrid, ComposedChart, LabelList, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Bar, BarChart, CartesianGrid, Cell, ComposedChart, LabelList, Legend, Line, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -363,6 +363,7 @@ export default function MarketingPage() {
         <SimpleExecutiveSummary report={report} spend={spend} previousSpend={previousSpend} mer={mer} insights={insights} actions={simpleActions.slice(0, 3)} onOpenDetails={() => setShowDetails(true)} comparisonReliable={comparisonReliable} />
         {view === 'ytd' && <YtdComparison report={report} spend={spend} previousSpend={previousSpend} mer={mer} previousMer={previousMer} comparisonReliable={comparisonReliable} />}
         <CategoryChannelUnitsChart report={report} />
+        <DesignSalesChart report={report} />
 
         <div className="flex justify-center">
           <Button variant="outline" size="lg" onClick={() => setShowDetails(!showDetails)} className="min-w-64 bg-white">
@@ -404,6 +405,47 @@ export default function MarketingPage() {
     {showSettings && <SettingsPanel objectives={objectives} setObjectives={setObjectives} available={settingsAvailable} onClose={() => setShowSettings(false)} onSave={saveObjectives} />}
     {showAnnotation && <AnnotationPanel form={annotationForm} setForm={setAnnotationForm} available={annotationsAvailable} onClose={() => setShowAnnotation(false)} onSave={createAnnotation} />}
   </div>
+}
+
+const DESIGN_COLORS = ['#7378f4', '#17356f', '#f7bb1b', '#ff5a2a', '#1f9d55', '#147d77', '#c62828', '#ea7ba7', '#40523d', '#70b7ec', '#a965ef']
+
+function DesignSalesChart({ report }: { report: MarketingExecutiveReport }) {
+  const allCategories = '__all__'
+  const categories = Array.from(new Set(report.designSales.map(row => row.category))).sort((a, b) => a.localeCompare(b, 'es'))
+  const [requestedCategory, setRequestedCategory] = useState(allCategories)
+  const category = requestedCategory === allCategories || categories.includes(requestedCategory) ? requestedCategory : allCategories
+  const filtered = report.designSales.filter(row => category === allCategories || row.category === category)
+  const sorted = [...filtered].sort((a, b) => b.sales - a.sales)
+  const top = sorted.slice(0, 10).map(row => ({ name: row.design, value: row.sales }))
+  const remaining = sorted.slice(10).reduce((sum, row) => sum + row.sales, 0)
+  const data = remaining > 0 ? [...top, { name: 'Otros diseños', value: remaining }] : top
+  const total = data.reduce((sum, row) => sum + row.value, 0)
+
+  return <section className="space-y-4">
+    <SectionTitle eyebrow="Concentración de ventas" title="Ventas por diseño" badge="Antes de IVA · Siigo" />
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div><CardTitle className="text-lg text-[#172239]">Participación de cada diseño</CardTitle><p className="mt-1 text-xs text-slate-500">Porcentaje de las ventas online netas del periodo seleccionado.</p></div>
+        <label className="flex items-center gap-2 text-sm font-semibold text-[#172239]">Categoría<select value={category} onChange={event => setRequestedCategory(event.target.value)} className="h-10 rounded-lg border bg-white px-3 font-normal"><option value={allCategories}>Todas las categorías</option>{categories.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
+      </CardHeader>
+      <CardContent>
+        {data.length === 0 || total <= 0 ? <p className="py-16 text-center text-sm text-slate-500">Dato no disponible para el periodo seleccionado.</p> : <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(240px,0.65fr)] lg:items-center">
+          <div className="h-[390px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="82%" labelLine={false} label={({ percent }) => percent !== undefined && percent >= 0.04 ? `${(percent * 100).toFixed(1)}%` : ''}>
+                  {data.map((row, index) => <Cell key={row.name} fill={DESIGN_COLORS[index % DESIGN_COLORS.length]} />)}
+                </Pie>
+                <Tooltip formatter={(value, name) => [currency(Number(value)), String(name)]} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">{data.map((row, index) => <div key={row.name} className="flex items-center justify-between gap-4 rounded-lg border px-3 py-2 text-sm"><span className="flex min-w-0 items-center gap-2"><span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: DESIGN_COLORS[index % DESIGN_COLORS.length] }} /><span className="truncate font-medium text-[#172239]">{row.name}</span></span><span className="shrink-0 text-xs font-semibold text-slate-500">{percent(row.value / total)}</span></div>)}</div>
+        </div>}
+        <p className="mt-3 text-xs text-slate-500">Se muestran los 10 diseños con mayores ventas; los demás se agrupan como “Otros diseños”. Ventas online antes de IVA, con notas crédito descontadas.</p>
+      </CardContent>
+    </Card>
+  </section>
 }
 
 function CategoryChannelUnitsChart({ report }: { report: MarketingExecutiveReport }) {

@@ -164,6 +164,7 @@ export interface MarketingExecutiveReport {
   yearAgo: PeriodMetrics | null
   trend: Array<{ month: string; sales: number; orders: number; units: number; aov: number; newCustomers: number }>
   categoryChannelUnits: Array<{ month: string; category: string; web: number; whatsapp: number }>
+  designSales: Array<{ design: string; category: string; sales: number }>
   comparisons: Record<string, MetricComparison>
   comparability: {
     netSales: boolean

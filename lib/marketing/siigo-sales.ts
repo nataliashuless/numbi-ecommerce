@@ -13,6 +13,8 @@ export interface CachedSiigoInvoice {
     code?: string | null
     description?: string | null
     quantity?: number | null
+    price?: number | null
+    total?: number | null
   }>
   raw: {
     payments?: Array<{
