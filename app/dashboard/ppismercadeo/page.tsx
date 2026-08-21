@@ -407,9 +407,11 @@ export default function MarketingPage() {
 }
 
 function ProductChannelUnitsChart({ report }: { report: MarketingExecutiveReport }) {
+  const allProducts = '__all__'
   const products = Array.from(new Set(report.productChannelUnits.map(row => row.product))).sort((a, b) => a.localeCompare(b, 'es'))
   const [requestedProduct, setRequestedProduct] = useState('Niño')
-  const product = products.includes(requestedProduct) ? requestedProduct : products[0] || ''
+  const product = requestedProduct === allProducts || products.includes(requestedProduct) ? requestedProduct : products[0] || ''
+  const productLabel = product === allProducts ? 'Todos los productos' : product
   const monthKeys: string[] = []
   let cursor = `${report.periods.current.start.slice(0, 7)}-01`
   const lastMonth = report.periods.current.end.slice(0, 7)
@@ -420,12 +422,12 @@ function ProductChannelUnitsChart({ report }: { report: MarketingExecutiveReport
     cursor = date.toISOString().slice(0, 10)
   }
   const data = monthKeys.map(month => {
-    const row = report.productChannelUnits.find(item => item.month === month && item.product === product)
+    const rows = report.productChannelUnits.filter(item => item.month === month && (product === allProducts || item.product === product))
     return {
       month,
       label: new Intl.DateTimeFormat('es-CO', { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${month}-01T12:00:00Z`)),
-      web: row?.web || 0,
-      whatsapp: row?.whatsapp || 0,
+      web: rows.reduce((sum, row) => sum + row.web, 0),
+      whatsapp: rows.reduce((sum, row) => sum + row.whatsapp, 0),
     }
   })
 
@@ -434,7 +436,7 @@ function ProductChannelUnitsChart({ report }: { report: MarketingExecutiveReport
     <Card className="border-0 shadow-sm">
       <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div><CardTitle className="text-lg text-[#172239]">Shuless.co vs WhatsApp</CardTitle><p className="mt-1 text-xs text-slate-500">Unidades facturadas del producto seleccionado. No son ventas en pesos.</p></div>
-        <label className="flex items-center gap-2 text-sm font-semibold text-[#172239]">Producto<select value={product} onChange={event => setRequestedProduct(event.target.value)} className="h-10 rounded-lg border bg-white px-3 font-normal">{products.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
+        <label className="flex items-center gap-2 text-sm font-semibold text-[#172239]">Producto<select value={product} onChange={event => setRequestedProduct(event.target.value)} className="h-10 rounded-lg border bg-white px-3 font-normal"><option value={allProducts}>Todos los productos</option>{products.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
       </CardHeader>
       <CardContent>
         {products.length === 0 ? <p className="py-16 text-center text-sm text-slate-500">Dato no disponible para el periodo seleccionado.</p> : <div className="h-[340px] w-full">
@@ -443,7 +445,7 @@ function ProductChannelUnitsChart({ report }: { report: MarketingExecutiveReport
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
               <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#334155' }} axisLine={false} tickLine={false} />
               <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
-              <Tooltip formatter={(value, name) => [number(Number(value)), name === 'web' ? 'Shuless.co' : 'WhatsApp']} labelFormatter={label => `${product} · ${label}`} contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0' }} />
+              <Tooltip formatter={(value, name) => [number(Number(value)), name === 'web' ? 'Shuless.co' : 'WhatsApp']} labelFormatter={label => `${productLabel} · ${label}`} contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0' }} />
               <Legend formatter={value => value === 'web' ? 'Shuless.co' : 'WhatsApp'} />
               <Bar dataKey="web" stackId="online" fill="#7378f4" radius={[0, 0, 4, 4]}>
                 <LabelList dataKey="web" position="center" fill="#172239" fontWeight={700} formatter={(value: unknown) => Number(value) > 0 ? number(Number(value)) : ''} />
