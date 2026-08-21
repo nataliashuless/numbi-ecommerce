@@ -8,7 +8,7 @@ import {
   ShieldCheck, Store, Target, Tent, TrendingUp, Users, WalletCards, X,
 } from 'lucide-react'
 import {
-  Bar, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Bar, BarChart, CartesianGrid, ComposedChart, LabelList, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -362,6 +362,7 @@ export default function MarketingPage() {
         {metaError && <Card className="border-rose-200 bg-rose-50"><CardContent className="flex flex-col gap-3 p-5 text-rose-900 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">Meta Ads necesita reconexión</p><p className="mt-1 text-sm">{metaError.includes('Session has expired') ? 'El token de acceso venció. Gasto, campañas y anuncios no se pueden consultar hasta renovarlo.' : metaError}</p></div><Link href="/dashboard/configuracion"><Button variant="outline" className="border-rose-300 bg-white text-rose-900">Ir a configuración</Button></Link></CardContent></Card>}
         <SimpleExecutiveSummary report={report} spend={spend} previousSpend={previousSpend} mer={mer} insights={insights} actions={simpleActions.slice(0, 3)} onOpenDetails={() => setShowDetails(true)} comparisonReliable={comparisonReliable} />
         {view === 'ytd' && <YtdComparison report={report} spend={spend} previousSpend={previousSpend} mer={mer} previousMer={previousMer} comparisonReliable={comparisonReliable} />}
+        <ProductChannelUnitsChart report={report} />
 
         <div className="flex justify-center">
           <Button variant="outline" size="lg" onClick={() => setShowDetails(!showDetails)} className="min-w-64 bg-white">
@@ -403,6 +404,60 @@ export default function MarketingPage() {
     {showSettings && <SettingsPanel objectives={objectives} setObjectives={setObjectives} available={settingsAvailable} onClose={() => setShowSettings(false)} onSave={saveObjectives} />}
     {showAnnotation && <AnnotationPanel form={annotationForm} setForm={setAnnotationForm} available={annotationsAvailable} onClose={() => setShowAnnotation(false)} onSave={createAnnotation} />}
   </div>
+}
+
+function ProductChannelUnitsChart({ report }: { report: MarketingExecutiveReport }) {
+  const products = Array.from(new Set(report.productChannelUnits.map(row => row.product))).sort((a, b) => a.localeCompare(b, 'es'))
+  const [requestedProduct, setRequestedProduct] = useState('Niño')
+  const product = products.includes(requestedProduct) ? requestedProduct : products[0] || ''
+  const monthKeys: string[] = []
+  let cursor = `${report.periods.current.start.slice(0, 7)}-01`
+  const lastMonth = report.periods.current.end.slice(0, 7)
+  while (cursor.slice(0, 7) <= lastMonth) {
+    monthKeys.push(cursor.slice(0, 7))
+    const date = new Date(`${cursor}T12:00:00Z`)
+    date.setUTCMonth(date.getUTCMonth() + 1)
+    cursor = date.toISOString().slice(0, 10)
+  }
+  const data = monthKeys.map(month => {
+    const row = report.productChannelUnits.find(item => item.month === month && item.product === product)
+    return {
+      month,
+      label: new Intl.DateTimeFormat('es-CO', { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${month}-01T12:00:00Z`)),
+      web: row?.web || 0,
+      whatsapp: row?.whatsapp || 0,
+    }
+  })
+
+  return <section className="space-y-4">
+    <SectionTitle eyebrow="Producto y canal" title="Unidades online por mes" badge="Fuente: Siigo" />
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div><CardTitle className="text-lg text-[#172239]">Shuless.co vs WhatsApp</CardTitle><p className="mt-1 text-xs text-slate-500">Unidades facturadas del producto seleccionado. No son ventas en pesos.</p></div>
+        <label className="flex items-center gap-2 text-sm font-semibold text-[#172239]">Producto<select value={product} onChange={event => setRequestedProduct(event.target.value)} className="h-10 rounded-lg border bg-white px-3 font-normal">{products.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
+      </CardHeader>
+      <CardContent>
+        {products.length === 0 ? <p className="py-16 text-center text-sm text-slate-500">Dato no disponible para el periodo seleccionado.</p> : <div className="h-[340px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 24, right: 12, left: 0, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+              <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#334155' }} axisLine={false} tickLine={false} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+              <Tooltip formatter={(value, name) => [number(Number(value)), name === 'web' ? 'Shuless.co' : 'WhatsApp']} labelFormatter={label => `${product} · ${label}`} contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0' }} />
+              <Legend formatter={value => value === 'web' ? 'Shuless.co' : 'WhatsApp'} />
+              <Bar dataKey="web" stackId="online" fill="#7378f4" radius={[0, 0, 4, 4]}>
+                <LabelList dataKey="web" position="center" fill="#172239" fontWeight={700} formatter={(value: unknown) => Number(value) > 0 ? number(Number(value)) : ''} />
+              </Bar>
+              <Bar dataKey="whatsapp" stackId="online" fill="#17356f" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="whatsapp" position="top" fill="#17356f" fontWeight={700} formatter={(value: unknown) => Number(value) > 0 ? number(Number(value)) : ''} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>}
+        <p className="mt-3 text-xs text-slate-500">Shuless.co se identifica por el número de pedido web en la factura. WhatsApp corresponde a facturas online directas. Tiendas y ferias no participan.</p>
+      </CardContent>
+    </Card>
+  </section>
 }
 
 function SimpleExecutiveSummary({

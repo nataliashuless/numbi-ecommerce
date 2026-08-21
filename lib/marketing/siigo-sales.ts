@@ -9,6 +9,11 @@ export interface CachedSiigoInvoice {
   customer_identification: string | null
   assigned_feria_id: string | null
   observations: string | null
+  items?: Array<{
+    code?: string | null
+    description?: string | null
+    quantity?: number | null
+  }>
   raw: {
     payments?: Array<{
       id?: number
@@ -26,6 +31,8 @@ export interface OnlineSalesClassificationContext {
   feriaWindows: Array<{ start: string; end: string }>
 }
 
+export type OnlineMarketingChannel = 'web' | 'whatsapp'
+
 function isMercadoPagoInvoice(invoice: CachedSiigoInvoice): boolean {
   return (invoice.raw?.payments || []).some(payment => {
     if (Number(payment.id) === MERCADO_PAGO_PAYMENT_ID) return true
@@ -42,8 +49,15 @@ export function isOnlineMarketingInvoice(
   invoice: CachedSiigoInvoice,
   context: OnlineSalesClassificationContext,
 ): boolean {
-  if (invoice.assigned_feria_id) return false
-  if (invoice.customer_identification && context.tiendaNits.has(invoice.customer_identification)) return false
+  return onlineMarketingChannel(invoice, context) !== null
+}
+
+export function onlineMarketingChannel(
+  invoice: CachedSiigoInvoice,
+  context: OnlineSalesClassificationContext,
+): OnlineMarketingChannel | null {
+  if (invoice.assigned_feria_id) return null
+  if (invoice.customer_identification && context.tiendaNits.has(invoice.customer_identification)) return null
 
   const isFeriaDate = context.feriaWindows.some(window => {
     const date = invoice.date.slice(0, 10)
@@ -51,13 +65,13 @@ export function isOnlineMarketingInvoice(
   })
 
   if (invoice.date.slice(0, 10) < SHOPIFY_START_DATE) {
-    if (isMercadoPagoInvoice(invoice)) return true
-    return !isFeriaDate
+    if (isMercadoPagoInvoice(invoice)) return 'web'
+    return isFeriaDate ? null : 'whatsapp'
   }
 
   const orderNumber = shopifyOrderNumber(invoice.observations)
-  if (orderNumber !== null && context.shopifyOrderNumbers.has(orderNumber)) return true
-  return !isFeriaDate
+  if (orderNumber !== null && context.shopifyOrderNumbers.has(orderNumber)) return 'web'
+  return isFeriaDate ? null : 'whatsapp'
 }
 
 export function replaceSalesWithSiigoOnline(

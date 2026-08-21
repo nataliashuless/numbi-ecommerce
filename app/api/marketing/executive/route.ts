@@ -16,6 +16,7 @@ import {
   type CachedSiigoInvoice,
   hasCompleteOnlineSalesCoverage,
   hasCompleteShopifyCoverage,
+  onlineMarketingChannel,
   replaceSalesWithSiigoOnline,
 } from '@/lib/marketing/siigo-sales'
 import {
@@ -33,6 +34,27 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const PRINCIPAL_WAREHOUSE_ID = 27
 const PRODUCT_ACCOUNT_GROUP_ID = 339
 const OWN_WAREHOUSE_NAME_PATTERN = /ekho|eko\b/i
+const PRODUCT_DESIGNS: Array<[RegExp, string]> = [
+  [/\bblanco\b/i, 'Blanco'],
+  [/\brosa\b/i, 'Rosa'],
+  [/niña|nina/i, 'Niña'],
+  [/niño|nino/i, 'Niño'],
+  [/\bchocolate\b/i, 'Chocolate'],
+  [/\belefante\b/i, 'Elefante'],
+  [/\bglobo\b/i, 'Globo'],
+  [/\bjirafa\b/i, 'Jirafa'],
+  [/\bespacio\b/i, 'Espacio'],
+  [/\bleo\b/i, 'Leo'],
+]
+
+function productName(description: string): string {
+  const design = PRODUCT_DESIGNS.find(([pattern]) => pattern.test(description))
+  if (design) return design[1]
+  return description
+    .replace(/\s*[-–—]?\s*talla\s+\d+(?:[.,]\d+)?$/i, '')
+    .replace(/\s*[-–—]\s*\d+(?:[.,]\d+)?$/, '')
+    .trim() || 'Sin referencia'
+}
 
 async function loadPaged<T>(
   queryPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
@@ -89,7 +111,7 @@ export async function GET(request: Request) {
     const [siigoInvoices, orderStateResult, invoiceStateResult, stockStateResult, warehouseResult, tiendaResult, feriaResult] = await Promise.all([
       loadPaged<CachedSiigoInvoice>((from, to) => supabase
         .from('siigo_invoices')
-        .select('id, date, total, credited_amount, customer_identification, assigned_feria_id, observations, raw')
+        .select('id, date, total, credited_amount, customer_identification, assigned_feria_id, observations, items, raw')
         .gte('date', periods.previous.start)
         .lte('date', periods.current.end)
         .order('date', { ascending: true })
@@ -189,6 +211,26 @@ export async function GET(request: Request) {
       (date >= periods.current.start && date <= periods.current.end)
       || (date >= periods.previous.start && date <= periods.previous.end),
     )
+    const productChannelBuckets = new Map<string, { month: string; product: string; web: number; whatsapp: number }>()
+    for (const invoice of siigoInvoices) {
+      const date = invoice.date.slice(0, 10)
+      if (date < periods.current.start || date > periods.current.end) continue
+      const total = Number(invoice.total) || 0
+      if (total <= 0 || (Number(invoice.credited_amount) || 0) >= total) continue
+      const channel = onlineMarketingChannel(invoice, onlineSalesContext)
+      if (!channel) continue
+      for (const item of invoice.items || []) {
+        if (!item.code || item.code === 'ENVIO') continue
+        const quantity = Math.max(0, Number(item.quantity) || 0)
+        if (quantity <= 0) continue
+        const product = productName(item.description || '')
+        const month = date.slice(0, 7)
+        const key = `${month}\u0000${product}`
+        const bucket = productChannelBuckets.get(key) || { month, product, web: 0, whatsapp: 0 }
+        bucket[channel] += quantity
+        productChannelBuckets.set(key, bucket)
+      }
+    }
 
     const trendEndMonth = `${periods.current.end.slice(0, 7)}-01`
     const trend = Array.from({ length: 12 }, (_, index) => addMonths(trendEndMonth, index - 11)).map(month => {
@@ -271,6 +313,9 @@ export async function GET(request: Request) {
       previous,
       yearAgo,
       trend,
+      productChannelUnits: Array.from(productChannelBuckets.values()).sort((a, b) =>
+        a.month.localeCompare(b.month) || a.product.localeCompare(b.product, 'es'),
+      ),
       comparisons: {
         netSales: comparison(current.netSales, salesComparable ? previous.netSales : null),
         orders: comparison(current.onlineOrders, ordersComparable ? previous.onlineOrders : null),
@@ -305,6 +350,7 @@ export async function GET(request: Request) {
         `Los pedidos anteriores a julio de 2025 provienen de ${HISTORICAL_ORDERS_SOURCE}; desde julio de 2025 provienen de Shopify.`,
         `El archivo histórico tiene ${HISTORICAL_ORDER_MISSING_DATES.length} fechas sin dato (${HISTORICAL_ORDER_MISSING_DATES.join(', ')}); esos días no se interpretan como cero y los periodos que los incluyen no se consideran comparables.`,
         'AOV, unidades, clientes, productos, tallas y conversión provienen de Shopify y no deben interpretarse como el detalle completo de las ventas Siigo.',
+        'La gráfica de unidades por producto y canal usa las líneas de factura Siigo. Las notas crédito parciales no descuentan unidades porque no existe un cruce confiable por línea.',
         'Los filtros ecommerce no modifican el total de ventas online identificado en Siigo.',
         'El inventario proviene de Siigo y representa una foto actual, no un historial de inventario.',
         'No existen COGS ni costos variables completos; margen bruto y margen de contribución no se calculan.',
@@ -313,6 +359,7 @@ export async function GET(request: Request) {
       formulas: [
         { metric: 'Ventas online netas antes de IVA', formula: '(Total factura Siigo - notas crédito aplicadas) / 1,19. Online = WooCommerce histórico (Mercado Pago) + Shopify (número de pedido) + WhatsApp (facturas directas no clasificadas como tienda o feria).', source: 'Siigo + identificación Shopify' },
         { metric: 'Pedidos online', formula: 'Suma diaria del archivo histórico antes de julio de 2025 + pedidos Shopify desde julio de 2025. Las fechas vacías se mantienen como dato faltante.', source: `${HISTORICAL_ORDERS_SOURCE} + Shopify` },
+        { metric: 'Unidades online por producto y canal', formula: 'Suma de cantidades facturadas por mes. Shuless.co = factura con pedido web identificado; WhatsApp = factura online directa. Se excluyen tiendas, ferias, envíos y facturas totalmente anuladas.', source: 'Siigo + identificación Shopify' },
         { metric: 'AOV ecommerce', formula: 'Ventas Shopify antes de IVA / pedidos Shopify con venta neta positiva.', source: 'Shopify' },
         { metric: 'Variación', formula: '(Periodo actual - periodo anterior) / valor absoluto del periodo anterior.', source: 'Cálculo interno' },
         { metric: 'Cliente nuevo', formula: 'Cliente cuyo created_at de Shopify cae dentro del periodo analizado.', source: 'Shopify' },
