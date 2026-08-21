@@ -29,6 +29,7 @@ export interface ShopifyLineItemRaw {
 }
 
 export interface ShopifyOrderRaw {
+  order_number?: number
   created_at?: string
   processed_at?: string
   cancelled_at?: string | null
