@@ -143,9 +143,9 @@ export interface MarketingExecutiveReport {
   dataCoverage: {
     shopifyFrom: string | null
     shopifyTo: string | null
-    historicalSalesFrom: string | null
-    historicalSalesTo: string | null
-    historicalSalesSource: string | null
+    siigoFrom: string | null
+    siigoSyncedThrough: string | null
+    siigoLastSync: string | null
     stockAsOf: string | null
   }
   filters: {
@@ -168,6 +168,7 @@ export interface MarketingExecutiveReport {
   }
   availability: {
     shopify: boolean
+    siigoSales: boolean
     inventory: boolean
     meta: boolean
     ga4: boolean

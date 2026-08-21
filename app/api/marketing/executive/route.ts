@@ -13,12 +13,11 @@ import {
   type StockBySku,
 } from '@/lib/marketing/metrics'
 import {
-  addHistoricalSales,
-  hasCompleteSalesCoverage,
+  type CachedSiigoInvoice,
+  hasCompleteSiigoCoverage,
   hasCompleteShopifyCoverage,
-  HISTORICAL_SALES_COVERAGE,
-  HISTORICAL_SALES_SOURCE,
-} from '@/lib/marketing/historical-sales'
+  replaceSalesWithSiigo,
+} from '@/lib/marketing/siigo-sales'
 
 export const maxDuration = 60
 
@@ -79,8 +78,16 @@ export async function GET(request: Request) {
       .order('created_at', { ascending: true })
       .range(from, to))
 
-    const [orderStateResult, stockStateResult, warehouseResult] = await Promise.all([
+    const [siigoInvoices, orderStateResult, invoiceStateResult, stockStateResult, warehouseResult] = await Promise.all([
+      loadPaged<CachedSiigoInvoice>((from, to) => supabase
+        .from('siigo_invoices')
+        .select('id, date, total, credited_amount')
+        .gte('date', periods.previous.start)
+        .lte('date', periods.current.end)
+        .order('date', { ascending: true })
+        .range(from, to)),
       supabase.from('shopify_orders_sync_state').select('earliest_at, latest_at').eq('id', 1).maybeSingle(),
+      supabase.from('siigo_invoices_sync_state').select('earliest_date, last_full_sync_at').eq('id', 1).maybeSingle(),
       supabase.from('siigo_stock_sync_state').select('last_full_sync_at').eq('id', 1).maybeSingle(),
       supabase.from('siigo_warehouses').select('id, name').range(0, 999),
     ])
@@ -113,34 +120,34 @@ export async function GET(request: Request) {
 
     const shopifyFrom = (orderStateResult.data?.earliest_at || orders[0]?.created_at || null)?.slice(0, 10) || null
     const shopifyTo = (orderStateResult.data?.latest_at || orders.at(-1)?.created_at || null)?.slice(0, 10) || null
-    const historicalSalesEnabled = !filters.channel
-      && !filters.product
-      && !filters.size
-      && (!filters.customerType || filters.customerType === 'all')
+    const siigoFrom = invoiceStateResult.data?.earliest_date || siigoInvoices[0]?.date?.slice(0, 10) || null
+    const siigoLastSync = invoiceStateResult.data?.last_full_sync_at || null
+    const siigoSyncedThrough = siigoLastSync?.slice(0, 10) || null
 
-    const previous = addHistoricalSales(
-      aggregatePeriod(orders, periods.previous, stockBySku, filters),
+    const previousShopify = aggregatePeriod(orders, periods.previous, stockBySku, filters)
+    const previous = replaceSalesWithSiigo(
+      previousShopify,
+      siigoInvoices,
       periods.previous,
-      historicalSalesEnabled,
     )
-    const current = addProductComparisons(
-      addHistoricalSales(
+    const current = replaceSalesWithSiigo(
+      addProductComparisons(
         aggregatePeriod(orders, periods.current, stockBySku, filters),
-        periods.current,
-        historicalSalesEnabled,
+        previousShopify,
       ),
-      previous,
+      siigoInvoices,
+      periods.current,
     )
     const yearAgo = periods.yearAgo
-      ? addHistoricalSales(
+      ? replaceSalesWithSiigo(
         aggregatePeriod(orders, periods.yearAgo, stockBySku, filters),
+        siigoInvoices,
         periods.yearAgo,
-        historicalSalesEnabled,
       )
       : null
 
-    const salesComparable = hasCompleteSalesCoverage(periods.current, shopifyFrom, shopifyTo, historicalSalesEnabled)
-      && hasCompleteSalesCoverage(periods.previous, shopifyFrom, shopifyTo, historicalSalesEnabled)
+    const salesComparable = hasCompleteSiigoCoverage(periods.current, siigoFrom, siigoSyncedThrough)
+      && hasCompleteSiigoCoverage(periods.previous, siigoFrom, siigoSyncedThrough)
     const shopifyComparable = hasCompleteShopifyCoverage(periods.current, shopifyFrom, shopifyTo)
       && hasCompleteShopifyCoverage(periods.previous, shopifyFrom, shopifyTo)
 
@@ -155,10 +162,10 @@ export async function GET(request: Request) {
         label: month.slice(0, 7),
         complete: nextMonth <= `${periods.current.end.slice(0, 7)}-01`,
       }
-      const metrics = addHistoricalSales(
+      const metrics = replaceSalesWithSiigo(
         aggregatePeriod(orders, trendPeriod, stockBySku, filters),
+        siigoInvoices,
         trendPeriod,
-        historicalSalesEnabled,
       )
       return {
         month: month.slice(0, 7),
@@ -194,7 +201,7 @@ export async function GET(request: Request) {
       .maybeSingle()
 
     const report: MarketingExecutiveReport = {
-      source: 'Shopify + archivo histórico de ventas + inventario Siigo',
+      source: 'Ventas Siigo + detalle ecommerce Shopify + inventario Siigo',
       currency: 'COP',
       timeZone: 'America/Bogota',
       view,
@@ -202,9 +209,9 @@ export async function GET(request: Request) {
       dataCoverage: {
         shopifyFrom,
         shopifyTo,
-        historicalSalesFrom: historicalSalesEnabled ? HISTORICAL_SALES_COVERAGE.from : null,
-        historicalSalesTo: historicalSalesEnabled ? HISTORICAL_SALES_COVERAGE.to : null,
-        historicalSalesSource: historicalSalesEnabled ? HISTORICAL_SALES_SOURCE : null,
+        siigoFrom,
+        siigoSyncedThrough,
+        siigoLastSync,
         stockAsOf: stockStateResult.data?.last_full_sync_at || null,
       },
       filters: {
@@ -219,9 +226,9 @@ export async function GET(request: Request) {
       trend,
       comparisons: {
         netSales: comparison(current.netSales, salesComparable ? previous.netSales : null),
-        orders: comparison(current.orders, salesComparable ? previous.orders : null),
+        orders: comparison(current.orders, shopifyComparable ? previous.orders : null),
         units: comparison(current.units, shopifyComparable ? previous.units : null),
-        aov: comparison(current.aov, salesComparable ? previous.aov : null),
+        aov: comparison(current.aov, shopifyComparable ? previous.aov : null),
         newCustomers: comparison(current.customers.new, shopifyComparable ? previous.customers.new : null),
         repeatPurchaseRate: comparison(current.customers.repeatPurchaseRate, shopifyComparable ? previous.customers.repeatPurchaseRate : null),
         discounts: comparison(current.discounts, shopifyComparable ? previous.discounts : null),
@@ -229,13 +236,14 @@ export async function GET(request: Request) {
       },
       comparability: {
         netSales: salesComparable,
-        orders: salesComparable,
-        aov: salesComparable,
+        orders: shopifyComparable,
+        aov: shopifyComparable,
         units: shopifyComparable,
         customers: shopifyComparable,
       },
       availability: {
         shopify: orders.length > 0,
+        siigoSales: siigoInvoices.length > 0,
         inventory: stockRows.length > 0,
         meta: Boolean(!metaProbe.error && metaProbe.data?.meta_access_token && metaProbe.data?.meta_ad_account_id),
         ga4: Boolean(!ga4Probe.error && ga4Probe.data?.ga4_property_id && ga4Probe.data?.ga4_service_account_json),
@@ -244,15 +252,16 @@ export async function GET(request: Request) {
         exactNewCustomerAttribution: false,
       },
       limitations: [
-        'Ventas y pedidos anteriores al 15 de junio de 2025 provienen del archivo histórico diario; no contiene detalle de productos, unidades ni clientes.',
-        'Las ventas comparadas están antes de IVA: el archivo usa Ventas netas y Shopify resta el impuesto de los productos al subtotal actual.',
+        'Las ventas reales provienen de facturas Siigo de todos los canales; se descuentan notas crédito y se muestran antes de IVA.',
+        'Pedidos, AOV, unidades, clientes, productos, tallas y conversión provienen de Shopify y no deben interpretarse como el detalle completo de las ventas Siigo.',
+        'Los filtros ecommerce no modifican el total contable de ventas Siigo.',
         'El inventario proviene de Siigo y representa una foto actual, no un historial de inventario.',
         'No existen COGS ni costos variables completos; margen bruto y margen de contribución no se calculan.',
         'CAC de cliente nuevo atribuible requiere una unión confiable entre adquisición Meta y primer pedido Shopify.',
       ],
       formulas: [
-        { metric: 'Ventas netas antes de IVA', formula: 'Hasta 2025-06-14: Ventas netas del archivo diario. Desde 2025-06-15: current_subtotal_price menos el IVA de las líneas vigentes en pedidos Shopify pagados; excluye pruebas y cancelados.', source: 'Archivo histórico + Shopify' },
-        { metric: 'AOV', formula: 'Ventas netas antes de IVA / pedidos con venta neta positiva.', source: 'Archivo histórico + Shopify' },
+        { metric: 'Ventas netas antes de IVA', formula: '(Total factura Siigo - notas crédito aplicadas) / 1,19. Las facturas totalmente acreditadas se excluyen.', source: 'Siigo' },
+        { metric: 'AOV ecommerce', formula: 'Ventas Shopify antes de IVA / pedidos Shopify con venta neta positiva.', source: 'Shopify' },
         { metric: 'Variación', formula: '(Periodo actual - periodo anterior) / valor absoluto del periodo anterior.', source: 'Cálculo interno' },
         { metric: 'Cliente nuevo', formula: 'Cliente cuyo created_at de Shopify cae dentro del periodo analizado.', source: 'Shopify' },
         { metric: 'Concentración Top N', formula: 'Ventas netas de las N referencias principales / ventas netas totales.', source: 'Shopify' },
