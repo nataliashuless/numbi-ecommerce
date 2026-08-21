@@ -34,26 +34,14 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const PRINCIPAL_WAREHOUSE_ID = 27
 const PRODUCT_ACCOUNT_GROUP_ID = 339
 const OWN_WAREHOUSE_NAME_PATTERN = /ekho|eko\b/i
-const PRODUCT_DESIGNS: Array<[RegExp, string]> = [
-  [/\bblanco\b/i, 'Blanco'],
-  [/\brosa\b/i, 'Rosa'],
-  [/niña|nina/i, 'Niña'],
-  [/niño|nino/i, 'Niño'],
-  [/\bchocolate\b/i, 'Chocolate'],
-  [/\belefante\b/i, 'Elefante'],
-  [/\bglobo\b/i, 'Globo'],
-  [/\bjirafa\b/i, 'Jirafa'],
-  [/\bespacio\b/i, 'Espacio'],
-  [/\bleo\b/i, 'Leo'],
-]
-
-function productName(description: string): string {
-  const design = PRODUCT_DESIGNS.find(([pattern]) => pattern.test(description))
-  if (design) return design[1]
-  return description
-    .replace(/\s*[-–—]?\s*talla\s+\d+(?:[.,]\d+)?$/i, '')
-    .replace(/\s*[-–—]\s*\d+(?:[.,]\d+)?$/, '')
-    .trim() || 'Sin referencia'
+function categoryFromDescription(description: string): string {
+  const sizeMatch = description.match(/talla\s+(\d+(?:[.,]\d+)?)/i)
+    || description.match(/[\s\-–—](\d{2})(?:\s|$)/)
+    || description.match(/(\d{2})$/)
+  const size = sizeMatch ? Number(sizeMatch[1].replace(',', '.')) : Number.NaN
+  if (size >= 19 && size <= 22) return 'Bebé / Pequeños Caminantes'
+  if (size >= 23 && size <= 29) return 'Infantil / Exploradores'
+  return 'Otros'
 }
 
 async function loadPaged<T>(
@@ -211,7 +199,7 @@ export async function GET(request: Request) {
       (date >= periods.current.start && date <= periods.current.end)
       || (date >= periods.previous.start && date <= periods.previous.end),
     )
-    const productChannelBuckets = new Map<string, { month: string; product: string; web: number; whatsapp: number }>()
+    const categoryChannelBuckets = new Map<string, { month: string; category: string; web: number; whatsapp: number }>()
     for (const invoice of siigoInvoices) {
       const date = invoice.date.slice(0, 10)
       if (date < periods.current.start || date > periods.current.end) continue
@@ -223,12 +211,12 @@ export async function GET(request: Request) {
         if (!item.code || item.code === 'ENVIO') continue
         const quantity = Math.max(0, Number(item.quantity) || 0)
         if (quantity <= 0) continue
-        const product = productName(item.description || '')
+        const category = categoryFromDescription(item.description || '')
         const month = date.slice(0, 7)
-        const key = `${month}\u0000${product}`
-        const bucket = productChannelBuckets.get(key) || { month, product, web: 0, whatsapp: 0 }
+        const key = `${month}\u0000${category}`
+        const bucket = categoryChannelBuckets.get(key) || { month, category, web: 0, whatsapp: 0 }
         bucket[channel] += quantity
-        productChannelBuckets.set(key, bucket)
+        categoryChannelBuckets.set(key, bucket)
       }
     }
 
@@ -313,8 +301,8 @@ export async function GET(request: Request) {
       previous,
       yearAgo,
       trend,
-      productChannelUnits: Array.from(productChannelBuckets.values()).sort((a, b) =>
-        a.month.localeCompare(b.month) || a.product.localeCompare(b.product, 'es'),
+      categoryChannelUnits: Array.from(categoryChannelBuckets.values()).sort((a, b) =>
+        a.month.localeCompare(b.month) || a.category.localeCompare(b.category, 'es'),
       ),
       comparisons: {
         netSales: comparison(current.netSales, salesComparable ? previous.netSales : null),
@@ -350,7 +338,8 @@ export async function GET(request: Request) {
         `Los pedidos anteriores a julio de 2025 provienen de ${HISTORICAL_ORDERS_SOURCE}; desde julio de 2025 provienen de Shopify.`,
         `El archivo histórico tiene ${HISTORICAL_ORDER_MISSING_DATES.length} fechas sin dato (${HISTORICAL_ORDER_MISSING_DATES.join(', ')}); esos días no se interpretan como cero y los periodos que los incluyen no se consideran comparables.`,
         'AOV, unidades, clientes, productos, tallas y conversión provienen de Shopify y no deben interpretarse como el detalle completo de las ventas Siigo.',
-        'La gráfica de unidades por producto y canal usa las líneas de factura Siigo. Las notas crédito parciales no descuentan unidades porque no existe un cruce confiable por línea.',
+        'La gráfica mensual de unidades usa las líneas de factura Siigo. Bebé/Pequeños Caminantes corresponde a tallas 19–22 e Infantil/Exploradores a tallas 23–29, igual que las categorías de Shopify.',
+        'Las notas crédito parciales no descuentan unidades porque no existe un cruce confiable por línea.',
         'Los filtros ecommerce no modifican el total de ventas online identificado en Siigo.',
         'El inventario proviene de Siigo y representa una foto actual, no un historial de inventario.',
         'No existen COGS ni costos variables completos; margen bruto y margen de contribución no se calculan.',
@@ -359,7 +348,7 @@ export async function GET(request: Request) {
       formulas: [
         { metric: 'Ventas online netas antes de IVA', formula: '(Total factura Siigo - notas crédito aplicadas) / 1,19. Online = WooCommerce histórico (Mercado Pago) + Shopify (número de pedido) + WhatsApp (facturas directas no clasificadas como tienda o feria).', source: 'Siigo + identificación Shopify' },
         { metric: 'Pedidos online', formula: 'Suma diaria del archivo histórico antes de julio de 2025 + pedidos Shopify desde julio de 2025. Las fechas vacías se mantienen como dato faltante.', source: `${HISTORICAL_ORDERS_SOURCE} + Shopify` },
-        { metric: 'Unidades online por producto y canal', formula: 'Suma de cantidades facturadas por mes. Shuless.co = factura con pedido web identificado; WhatsApp = factura online directa. Se excluyen tiendas, ferias, envíos y facturas totalmente anuladas.', source: 'Siigo + identificación Shopify' },
+        { metric: 'Unidades vendidas por mes, categoría y canal', formula: 'Suma de cantidades facturadas por mes. Categorías: Bebé/Pequeños Caminantes = tallas 19–22; Infantil/Exploradores = tallas 23–29. Shuless.co = factura con pedido web identificado; WhatsApp = factura online directa.', source: 'Siigo + categorías Shopify' },
         { metric: 'AOV ecommerce', formula: 'Ventas Shopify antes de IVA / pedidos Shopify con venta neta positiva.', source: 'Shopify' },
         { metric: 'Variación', formula: '(Periodo actual - periodo anterior) / valor absoluto del periodo anterior.', source: 'Cálculo interno' },
         { metric: 'Cliente nuevo', formula: 'Cliente cuyo created_at de Shopify cae dentro del periodo analizado.', source: 'Shopify' },
