@@ -103,6 +103,7 @@ export interface ProductMetric {
 
 export interface PeriodMetrics {
   netSales: number
+  onlineOrders: number
   orders: number
   units: number
   aov: number
@@ -144,6 +145,9 @@ export interface MarketingExecutiveReport {
   dataCoverage: {
     shopifyFrom: string | null
     shopifyTo: string | null
+    historicalOrdersFrom: string | null
+    historicalOrdersTo: string | null
+    historicalOrderMissingDates: string[]
     siigoFrom: string | null
     siigoSyncedThrough: string | null
     siigoLastSync: string | null
@@ -346,6 +350,7 @@ function refundAmount(order: CachedShopifyOrder): number {
 function emptyPeriodMetrics(): PeriodMetrics {
   return {
     netSales: 0,
+    onlineOrders: 0,
     orders: 0,
     units: 0,
     aov: 0,
@@ -418,6 +423,7 @@ export function aggregatePeriod(
     if (sales <= 0 && units <= 0) continue
 
     result.netSales += sales
+    result.onlineOrders += 1
     result.orders += 1
     result.units += units
     result.discounts += Number(raw.current_total_discounts ?? raw.total_discounts ?? 0) || 0

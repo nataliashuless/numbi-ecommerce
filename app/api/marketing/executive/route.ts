@@ -18,6 +18,14 @@ import {
   hasCompleteShopifyCoverage,
   replaceSalesWithSiigoOnline,
 } from '@/lib/marketing/siigo-sales'
+import {
+  HISTORICAL_ORDER_MISSING_DATES,
+  HISTORICAL_ORDERS_FROM,
+  HISTORICAL_ORDERS_SOURCE,
+  HISTORICAL_ORDERS_TO,
+  hasCompleteOnlineOrderCoverage,
+  replaceOnlineOrders,
+} from '@/lib/marketing/historical-orders'
 
 export const maxDuration = 60
 
@@ -138,27 +146,36 @@ export async function GET(request: Request) {
     }
 
     const previousShopify = aggregatePeriod(orders, periods.previous, stockBySku, filters)
-    const previous = replaceSalesWithSiigoOnline(
-      previousShopify,
-      siigoInvoices,
+    const previousShopifyAll = aggregatePeriod(orders, periods.previous, stockBySku)
+    const previous = replaceOnlineOrders(
+      replaceSalesWithSiigoOnline(previousShopify, siigoInvoices, periods.previous, onlineSalesContext),
+      previousShopifyAll,
       periods.previous,
-      onlineSalesContext,
     )
-    const current = replaceSalesWithSiigoOnline(
-      addProductComparisons(
-        aggregatePeriod(orders, periods.current, stockBySku, filters),
-        previousShopify,
+    const currentShopifyAll = aggregatePeriod(orders, periods.current, stockBySku)
+    const current = replaceOnlineOrders(
+      replaceSalesWithSiigoOnline(
+        addProductComparisons(
+          aggregatePeriod(orders, periods.current, stockBySku, filters),
+          previousShopify,
+        ),
+        siigoInvoices,
+        periods.current,
+        onlineSalesContext,
       ),
-      siigoInvoices,
+      currentShopifyAll,
       periods.current,
-      onlineSalesContext,
     )
     const yearAgo = periods.yearAgo
-      ? replaceSalesWithSiigoOnline(
-        aggregatePeriod(orders, periods.yearAgo, stockBySku, filters),
-        siigoInvoices,
+      ? replaceOnlineOrders(
+        replaceSalesWithSiigoOnline(
+          aggregatePeriod(orders, periods.yearAgo, stockBySku, filters),
+          siigoInvoices,
+          periods.yearAgo,
+          onlineSalesContext,
+        ),
+        aggregatePeriod(orders, periods.yearAgo, stockBySku),
         periods.yearAgo,
-        onlineSalesContext,
       )
       : null
 
@@ -166,6 +183,12 @@ export async function GET(request: Request) {
       && hasCompleteOnlineSalesCoverage(periods.previous, siigoFrom, siigoSyncedThrough, shopifyFrom, shopifyTo)
     const shopifyComparable = hasCompleteShopifyCoverage(periods.current, shopifyFrom, shopifyTo)
       && hasCompleteShopifyCoverage(periods.previous, shopifyFrom, shopifyTo)
+    const ordersComparable = hasCompleteOnlineOrderCoverage(periods.current, shopifyFrom, shopifyTo)
+      && hasCompleteOnlineOrderCoverage(periods.previous, shopifyFrom, shopifyTo)
+    const historicalOrderMissingDates = HISTORICAL_ORDER_MISSING_DATES.filter(date =>
+      (date >= periods.current.start && date <= periods.current.end)
+      || (date >= periods.previous.start && date <= periods.previous.end),
+    )
 
     const trendEndMonth = `${periods.current.end.slice(0, 7)}-01`
     const trend = Array.from({ length: 12 }, (_, index) => addMonths(trendEndMonth, index - 11)).map(month => {
@@ -178,16 +201,20 @@ export async function GET(request: Request) {
         label: month.slice(0, 7),
         complete: nextMonth <= `${periods.current.end.slice(0, 7)}-01`,
       }
-      const metrics = replaceSalesWithSiigoOnline(
-        aggregatePeriod(orders, trendPeriod, stockBySku, filters),
-        siigoInvoices,
+      const metrics = replaceOnlineOrders(
+        replaceSalesWithSiigoOnline(
+          aggregatePeriod(orders, trendPeriod, stockBySku, filters),
+          siigoInvoices,
+          trendPeriod,
+          onlineSalesContext,
+        ),
+        aggregatePeriod(orders, trendPeriod, stockBySku),
         trendPeriod,
-        onlineSalesContext,
       )
       return {
         month: month.slice(0, 7),
         sales: metrics.netSales,
-        orders: metrics.orders,
+        orders: metrics.onlineOrders,
         units: metrics.units,
         aov: metrics.aov,
         newCustomers: metrics.customers.new,
@@ -226,6 +253,9 @@ export async function GET(request: Request) {
       dataCoverage: {
         shopifyFrom,
         shopifyTo,
+        historicalOrdersFrom: HISTORICAL_ORDERS_FROM,
+        historicalOrdersTo: HISTORICAL_ORDERS_TO,
+        historicalOrderMissingDates,
         siigoFrom,
         siigoSyncedThrough,
         siigoLastSync,
@@ -243,7 +273,7 @@ export async function GET(request: Request) {
       trend,
       comparisons: {
         netSales: comparison(current.netSales, salesComparable ? previous.netSales : null),
-        orders: comparison(current.orders, shopifyComparable ? previous.orders : null),
+        orders: comparison(current.onlineOrders, ordersComparable ? previous.onlineOrders : null),
         units: comparison(current.units, shopifyComparable ? previous.units : null),
         aov: comparison(current.aov, shopifyComparable ? previous.aov : null),
         newCustomers: comparison(current.customers.new, shopifyComparable ? previous.customers.new : null),
@@ -253,7 +283,7 @@ export async function GET(request: Request) {
       },
       comparability: {
         netSales: salesComparable,
-        orders: shopifyComparable,
+        orders: ordersComparable,
         aov: shopifyComparable,
         units: shopifyComparable,
         customers: shopifyComparable,
@@ -272,7 +302,9 @@ export async function GET(request: Request) {
         'Las ventas online provienen de Siigo e incluyen WooCommerce histórico, Shopify y WhatsApp. Se excluyen tiendas y ferias.',
         'Antes de julio de 2025, Mercado Pago identifica WooCommerce; las demás facturas directas válidas se clasifican como WhatsApp. Desde julio de 2025, el número de pedido identifica Shopify y las demás facturas directas válidas se clasifican como WhatsApp.',
         'Las notas crédito se descuentan de la factura relacionada y las ventas se muestran antes de IVA.',
-        'Pedidos, AOV, unidades, clientes, productos, tallas y conversión provienen de Shopify y no deben interpretarse como el detalle completo de las ventas Siigo.',
+        `Los pedidos anteriores a julio de 2025 provienen de ${HISTORICAL_ORDERS_SOURCE}; desde julio de 2025 provienen de Shopify.`,
+        `El archivo histórico tiene ${HISTORICAL_ORDER_MISSING_DATES.length} fechas sin dato (${HISTORICAL_ORDER_MISSING_DATES.join(', ')}); esos días no se interpretan como cero y los periodos que los incluyen no se consideran comparables.`,
+        'AOV, unidades, clientes, productos, tallas y conversión provienen de Shopify y no deben interpretarse como el detalle completo de las ventas Siigo.',
         'Los filtros ecommerce no modifican el total de ventas online identificado en Siigo.',
         'El inventario proviene de Siigo y representa una foto actual, no un historial de inventario.',
         'No existen COGS ni costos variables completos; margen bruto y margen de contribución no se calculan.',
@@ -280,6 +312,7 @@ export async function GET(request: Request) {
       ],
       formulas: [
         { metric: 'Ventas online netas antes de IVA', formula: '(Total factura Siigo - notas crédito aplicadas) / 1,19. Online = WooCommerce histórico (Mercado Pago) + Shopify (número de pedido) + WhatsApp (facturas directas no clasificadas como tienda o feria).', source: 'Siigo + identificación Shopify' },
+        { metric: 'Pedidos online', formula: 'Suma diaria del archivo histórico antes de julio de 2025 + pedidos Shopify desde julio de 2025. Las fechas vacías se mantienen como dato faltante.', source: `${HISTORICAL_ORDERS_SOURCE} + Shopify` },
         { metric: 'AOV ecommerce', formula: 'Ventas Shopify antes de IVA / pedidos Shopify con venta neta positiva.', source: 'Shopify' },
         { metric: 'Variación', formula: '(Periodo actual - periodo anterior) / valor absoluto del periodo anterior.', source: 'Cálculo interno' },
         { metric: 'Cliente nuevo', formula: 'Cliente cuyo created_at de Shopify cae dentro del periodo analizado.', source: 'Shopify' },
