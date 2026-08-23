@@ -260,7 +260,9 @@ export default function MarketingPage() {
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'No fue posible cargar Marketing')
       setReport(payload)
-      await fetchSupportingData(payload)
+      await fetchSupportingData(payload).catch(() => {
+        setMetaError('No fue posible actualizar Meta en este momento. El reporte de Siigo continúa disponible.')
+      })
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Error desconocido') }
     finally { setLoading(false) }
   }
