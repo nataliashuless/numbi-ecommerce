@@ -112,6 +112,10 @@ interface ForecastItem {
   ventasWhatsApp: number
   ventasTiendas: number
   ventasTotal: number
+  ventasPeriodoEstacional: number
+  velocidadDiariaReciente: number
+  velocidadDiariaEstacional: number
+  demandaFuente: 'reciente' | 'estacional'
   velocidadDiaria: number
   velocidadSemanal: number
   diasHastaAgotamiento: number | null
@@ -128,6 +132,7 @@ interface ForecastReference {
   enCamino: number
   ventasTotal: number
   ventasTiendas: number
+  ventasPeriodoEstacional: number
   velocidadDiaria: number
   sugerenciaProduccion: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
@@ -156,6 +161,8 @@ interface ForecastData {
     totalVentasOnline: number
     totalVentasWhatsApp: number
     totalVentasTiendas: number
+    totalVentasPeriodoEstacional: number
+    skusConAjusteEstacional: number
   }
   parametros: {
     diasAnalisis: number
@@ -163,6 +170,9 @@ interface ForecastData {
     stockSeguridad: number
     fechaInicio: string
     fechaFin: string
+    horizonteDias: number
+    fechaInicioEstacional: string
+    fechaFinEstacional: string
   }
 }
 
@@ -384,6 +394,10 @@ export default function InventarioPage() {
       'Ventas WhatsApp': f.ventasWhatsApp,
       'Ventas Tiendas': f.ventasTiendas,
       'Ventas totales': f.ventasTotal,
+      'Ventas período estacional año anterior': f.ventasPeriodoEstacional,
+      'Velocidad diaria reciente': f.velocidadDiariaReciente,
+      'Velocidad diaria estacional': f.velocidadDiariaEstacional,
+      'Demanda usada': f.demandaFuente === 'estacional' ? 'Estacionalidad año anterior' : 'Ventas recientes',
       'Velocidad diaria': Number(f.velocidadDiaria.toFixed(2)),
       'Velocidad semanal': Number(f.velocidadSemanal.toFixed(2)),
       'Días hasta agotamiento': f.diasHastaAgotamiento ?? '∞',
@@ -408,6 +422,7 @@ export default function InventarioPage() {
       'En camino': r.enCamino,
       'Ventas totales': r.ventasTotal,
       'Ventas tiendas': r.ventasTiendas,
+      'Ventas período estacional año anterior': r.ventasPeriodoEstacional,
       'Promedio mensual tiendas': Number((r.ventasTiendas * 30 / (parseInt(diasAnalisis) || 1)).toFixed(1)),
       'Velocidad diaria': Number(r.velocidadDiaria.toFixed(2)),
       'Sugerencia producción': suggestion,
@@ -422,6 +437,8 @@ export default function InventarioPage() {
       { Parámetro: 'Stock a descontar', Valor: incluirConsignado ? 'Bodega + Consignado' : 'Solo bodega' },
       { Parámetro: 'Total a producir sugerido', Valor: detalle.reduce((s, d) => s + (d['Sugerencia producción'] || 0), 0) },
       { Parámetro: 'Ventas en el período', Valor: forecastData.resumen.totalVentasPeriodo },
+      { Parámetro: 'Período estacional comparado', Valor: `${forecastData.parametros.fechaInicioEstacional} a ${forecastData.parametros.fechaFinEstacional}` },
+      { Parámetro: 'Productos/tallas ajustados por estacionalidad', Valor: forecastData.resumen.skusConAjusteEstacional },
       { Parámetro: 'Urgentes (≤7 días)', Valor: forecastKpis.criticos },
       { Parámetro: 'Alta prioridad (≤14 días)', Valor: forecastKpis.altos },
       { Parámetro: 'Media prioridad (≤30 días)', Valor: forecastKpis.medios },
@@ -1051,6 +1068,9 @@ export default function InventarioPage() {
                       <p className="text-xs text-[#545454]">
                         Online {forecastData.resumen.totalVentasOnline.toLocaleString()} · WhatsApp {forecastData.resumen.totalVentasWhatsApp.toLocaleString()} · Tiendas {forecastData.resumen.totalVentasTiendas.toLocaleString()}
                       </p>
+                      <p className="mt-1 text-xs font-medium text-purple-700">
+                        {forecastData.resumen.skusConAjusteEstacional} productos/tallas ajustados por estacionalidad
+                      </p>
                     </CardContent>
                   </Card>
                 </div>
@@ -1330,6 +1350,7 @@ export default function InventarioPage() {
                             enCamino: variants.reduce((s, v) => s + (v.enCamino || 0), 0),
                             ventasTotal: variants.reduce((s, v) => s + v.ventasTotal, 0),
                             ventasTiendas: variants.reduce((s, v) => s + v.ventasTiendas, 0),
+                            ventasPeriodoEstacional: variants.reduce((s, v) => s + v.ventasPeriodoEstacional, 0),
                             velocidadDiaria: Math.round(variants.reduce((s, v) => s + v.velocidadDiaria, 0) * 100) / 100,
                             sugerenciaProduccion: variants.reduce((s, v) => s + v.sugerenciaProduccion, 0),
                             prioridad: worst,
@@ -1475,6 +1496,11 @@ export default function InventarioPage() {
                                                     <div className="text-xs text-[#545454]">
                                                       Online:{v.ventasShopify} · WhatsApp:{v.ventasWhatsApp} · Tiendas:{v.ventasTiendas}
                                                       {v.ventasTiendas > 0 && ` · Tiendas ${(v.ventasTiendas * 30 / (parseInt(diasAnalisis) || 1)).toFixed(1)}/mes`}
+                                                    </div>
+                                                  )}
+                                                  {v.demandaFuente === 'estacional' && (
+                                                    <div className="text-xs font-medium text-purple-700">
+                                                      Estacionalidad: {v.ventasPeriodoEstacional} uds. año anterior
                                                     </div>
                                                   )}
                                                 </div>

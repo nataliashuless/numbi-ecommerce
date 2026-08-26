@@ -18,6 +18,10 @@ interface VariantForecast {
   ventasWhatsApp: number
   ventasTiendas: number
   ventasTotal: number
+  ventasPeriodoEstacional: number
+  velocidadDiariaReciente: number
+  velocidadDiariaEstacional: number
+  demandaFuente: 'reciente' | 'estacional'
   velocidadDiaria: number
   velocidadSemanal: number
   diasHastaAgotamiento: number | null
@@ -34,6 +38,7 @@ interface ReferenceForecast {
   enCamino: number
   ventasTotal: number
   ventasTiendas: number
+  ventasPeriodoEstacional: number
   velocidadDiaria: number
   sugerenciaProduccion: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
@@ -118,6 +123,14 @@ export async function GET(request: Request) {
     startDate.setDate(startDate.getDate() - diasAnalisis)
     const startDateStr = startDate.toISOString().slice(0, 10)
     const endDateStr = endDate.toISOString().slice(0, 10)
+    const horizonteDias = Math.max(1, leadTimeDias + stockSeguridad)
+    const seasonalStart = new Date(endDate)
+    seasonalStart.setFullYear(seasonalStart.getFullYear() - 1)
+    const seasonalEnd = new Date(endDate)
+    seasonalEnd.setDate(seasonalEnd.getDate() + horizonteDias - 1)
+    seasonalEnd.setFullYear(seasonalEnd.getFullYear() - 1)
+    const seasonalStartStr = seasonalStart.toISOString().slice(0, 10)
+    const seasonalEndStr = seasonalEnd.toISOString().slice(0, 10)
 
     // 1. Stock per SKU from siigo_product_stock (paginated)
     type StockRow = {
@@ -215,28 +228,35 @@ export async function GET(request: Request) {
       total: number
       credited_amount: number | null
     }
-    const invoices: Invoice[] = []
-    {
+    async function fetchInvoices(from: string, to: string): Promise<Invoice[]> {
+      const result: Invoice[] = []
       let pageStart = 0
       const pageSize = 1000
       for (let i = 0; i < 50; i++) {
-        const { data: page } = await supabase
+        const { data: page, error: invoiceError } = await supabase
           .from('siigo_invoices')
           .select('id, date, customer_identification, observations, items, total, credited_amount')
-          .gte('date', startDateStr)
-          .lte('date', endDateStr)
+          .gte('date', from)
+          .lte('date', to)
           .range(pageStart, pageStart + pageSize - 1)
+        if (invoiceError) throw new Error(invoiceError.message)
         if (!page || page.length === 0) break
         const fresh = (page as Invoice[]).filter(p => (p.credited_amount || 0) < p.total)
-        invoices.push(...fresh)
+        result.push(...fresh)
         if (page.length < pageSize) break
         pageStart += pageSize
       }
+      return result
     }
+    const [invoices, seasonalInvoices] = await Promise.all([
+      fetchInvoices(startDateStr, endDateStr),
+      fetchInvoices(seasonalStartStr, seasonalEndStr),
+    ])
 
     // 4. Aggregate sales per SKU per channel
     type Sales = { shopify: number; whatsapp: number; tiendas: number }
     const ventasPorSku = new Map<string, Sales>()
+    const ventasEstacionalesPorSku = new Map<string, number>()
 
     for (const inv of invoices) {
       const isTienda = identificationKeys(inv.customer_identification).some(nit => tiendaNits.has(nit))
@@ -253,6 +273,16 @@ export async function GET(request: Request) {
           ventasPorSku.set(it.code, s)
         }
         s[channel] += it.quantity || 0
+      }
+    }
+
+    for (const inv of seasonalInvoices) {
+      for (const it of inv.items || []) {
+        if (!it.code || it.code === 'ENVIO') continue
+        ventasEstacionalesPorSku.set(
+          it.code,
+          (ventasEstacionalesPorSku.get(it.code) || 0) + (Number(it.quantity) || 0)
+        )
       }
     }
 
@@ -296,6 +326,7 @@ export async function GET(request: Request) {
     for (const sku of allSkus) {
       const stockInfo = stockBySku.get(sku) || { product_name: '', stockBodega: 0, stockConsignado: 0 }
       const ventas = ventasPorSku.get(sku) || { shopify: 0, whatsapp: 0, tiendas: 0 }
+      const ventasPeriodoEstacional = ventasEstacionalesPorSku.get(sku) || 0
 
       // Only include SKUs that exist in product cache (i.e. are real products, not raw mat)
       // If a SKU has sales but no stock entry, it might be a raw material item we don't want.
@@ -304,7 +335,14 @@ export async function GET(request: Request) {
       const ventasTotal = ventas.shopify + ventas.whatsapp + ventas.tiendas
       const stockTotal = stockInfo.stockBodega + stockInfo.stockConsignado
 
-      const velocidadDiaria = ventasTotal / diasAnalisis
+      const velocidadDiariaReciente = ventasTotal / diasAnalisis
+      const velocidadDiariaEstacional = ventasPeriodoEstacional / horizonteDias
+      const demandaFuente: VariantForecast['demandaFuente'] =
+        velocidadDiariaEstacional > velocidadDiariaReciente ? 'estacional' : 'reciente'
+      // Preserve current momentum, but raise the demand rate when the same
+      // upcoming calendar window sold faster last year (Black Friday,
+      // regreso a clases, etc.).
+      const velocidadDiaria = Math.max(velocidadDiariaReciente, velocidadDiariaEstacional)
       const velocidadSemanal = velocidadDiaria * 7
 
       let diasHastaAgotamiento: number | null = null
@@ -371,6 +409,10 @@ export async function GET(request: Request) {
         ventasWhatsApp: ventas.whatsapp,
         ventasTiendas: ventas.tiendas,
         ventasTotal,
+        ventasPeriodoEstacional,
+        velocidadDiariaReciente: Math.round(velocidadDiariaReciente * 100) / 100,
+        velocidadDiariaEstacional: Math.round(velocidadDiariaEstacional * 100) / 100,
+        demandaFuente,
         velocidadDiaria: Math.round(velocidadDiaria * 100) / 100,
         velocidadSemanal: Math.round(velocidadSemanal * 100) / 100,
         diasHastaAgotamiento,
@@ -394,6 +436,7 @@ export async function GET(request: Request) {
           enCamino: 0,
           ventasTotal: 0,
           ventasTiendas: 0,
+          ventasPeriodoEstacional: 0,
           velocidadDiaria: 0,
           sugerenciaProduccion: 0,
           prioridad: 'baja',
@@ -409,6 +452,7 @@ export async function GET(request: Request) {
       r.enCamino += v.enCamino
       r.ventasTotal += v.ventasTotal
       r.ventasTiendas += v.ventasTiendas
+      r.ventasPeriodoEstacional += v.ventasPeriodoEstacional
       r.velocidadDiaria += v.velocidadDiaria
       r.sugerenciaProduccion += v.sugerenciaProduccion
       // Inherit worst priority of any variant
@@ -456,6 +500,8 @@ export async function GET(request: Request) {
       totalVentasOnline: forecast.reduce((sum, f) => sum + f.ventasShopify, 0),
       totalVentasWhatsApp: forecast.reduce((sum, f) => sum + f.ventasWhatsApp, 0),
       totalVentasTiendas: forecast.reduce((sum, f) => sum + f.ventasTiendas, 0),
+      totalVentasPeriodoEstacional: forecast.reduce((sum, f) => sum + f.ventasPeriodoEstacional, 0),
+      skusConAjusteEstacional: forecast.filter(f => f.demandaFuente === 'estacional').length,
       totalStockBodega: forecast.reduce((sum, f) => sum + f.stockBodega, 0),
       totalStockConsignado: forecast.reduce((sum, f) => sum + f.stockConsignado, 0),
     }
@@ -489,6 +535,9 @@ export async function GET(request: Request) {
         stockSeguridad,
         fechaInicio: startDateStr,
         fechaFin: endDateStr,
+        horizonteDias,
+        fechaInicioEstacional: seasonalStartStr,
+        fechaFinEstacional: seasonalEndStr,
       },
     })
   } catch (err) {
