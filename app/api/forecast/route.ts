@@ -1,5 +1,15 @@
 import { NextResponse } from 'next/server'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
+import {
+  addBusinessDays,
+  correctedSizeProfile,
+  forecastMonths,
+  largestRemainder,
+  monthlyStoreReplenishments,
+  pendingEligibleAfterArrival,
+  safetyStock,
+  selectDemandModel,
+} from '@/lib/forecast/demand-model'
 
 interface VariantForecast {
   sku: string
@@ -75,6 +85,8 @@ function designMatchesNorm(a: string, b: string): boolean {
 
 const PRINCIPAL_WAREHOUSE_ID = 27
 const PRODUCT_ACCOUNT_GROUP_ID = 339 // solo productos terminados
+const PRODUCTION_LEAD_BUSINESS_DAYS = 50
+const REVIEW_PERIOD_MONTHS = 1
 
 function parseProductName(desc: string): { reference: string; size: string | null } {
   const trimmed = (desc || '').trim()
@@ -123,7 +135,12 @@ export async function GET(request: Request) {
     startDate.setDate(startDate.getDate() - diasAnalisis)
     const startDateStr = startDate.toISOString().slice(0, 10)
     const endDateStr = endDate.toISOString().slice(0, 10)
-    const horizonteDias = Math.max(1, leadTimeDias + stockSeguridad)
+    const leadTimeEnd = addBusinessDays(endDate, PRODUCTION_LEAD_BUSINESS_DAYS)
+    const protectionEnd = new Date(leadTimeEnd)
+    protectionEnd.setMonth(protectionEnd.getMonth() + REVIEW_PERIOD_MONTHS)
+    const protectionDays = Math.max(1, Math.ceil((protectionEnd.getTime() - endDate.getTime()) / 86_400_000))
+    const protectionMonths = protectionDays / 30.4375
+    const horizonteDias = protectionDays
     const seasonalStart = new Date(endDate)
     seasonalStart.setFullYear(seasonalStart.getFullYear() - 1)
     const seasonalEnd = new Date(endDate)
@@ -173,6 +190,7 @@ export async function GET(request: Request) {
       stockConsignado: number
     }
     const stockBySku = new Map<string, StockBucket>()
+    const stockByWarehouseSku = new Map<string, number>()
     // Diagnostic: units + bucket per warehouse so the UI can show where stock sits.
     const warehouseDiag = new Map<number, { name: string; bucket: 'bodega' | 'consignado'; units: number }>()
     for (const row of stockRows) {
@@ -185,6 +203,7 @@ export async function GET(request: Request) {
       }
       if (!b.product_name && row.product_name) b.product_name = row.product_name
       const qty = Number(row.quantity) || 0
+      stockByWarehouseSku.set(`${row.warehouse_id}|${sku}`, Math.max(0, qty))
       const own = isOwnWarehouse(row.warehouse_id, row.warehouse_name)
       if (own) {
         // Own warehouses accumulate (principal + Ekho + any other own)
@@ -197,17 +216,43 @@ export async function GET(request: Request) {
       if (qty > 0 || own) wd.units += qty
       warehouseDiag.set(row.warehouse_id, wd)
     }
+    for (const bucket of stockBySku.values()) {
+      // Siigo can temporarily expose negative balances after adjustments. A
+      // negative physical inventory is not a valid inventory position.
+      bucket.stockBodega = Math.max(0, bucket.stockBodega)
+      bucket.stockConsignado = Math.max(0, bucket.stockConsignado)
+    }
 
     // 3. Sales in last N days: from Siigo invoice cache, items × quantity, classifying by channel
+    type Store = { id: string; siigo_customer_identification: string | null; siigo_warehouse_id: number | null }
     const { data: tiendaNitsRaw } = await supabase
       .from('tiendas_terceros')
-      .select('siigo_customer_identification')
-      .not('siigo_customer_identification', 'is', null)
-    const tiendaNits = new Set(
-      (tiendaNitsRaw || []).flatMap((t: { siigo_customer_identification: string }) =>
-        identificationKeys(t.siigo_customer_identification)
-      )
-    )
+      .select('id, siigo_customer_identification, siigo_warehouse_id')
+      .eq('activa', true)
+    const stores = (tiendaNitsRaw || []) as Store[]
+    const storeByNit = new Map<string, Store>()
+    for (const store of stores) {
+      for (const nit of identificationKeys(store.siigo_customer_identification)) storeByNit.set(nit, store)
+    }
+
+    type StoreSale = { tienda_id: string; fecha: string; producto_sku: string | null; cantidad: number }
+    const realStoreSales: StoreSale[] = []
+    for (let pageStart = 0; pageStart < 50_000; pageStart += 1000) {
+      const { data: page, error: storeSalesError } = await supabase
+        .from('ventas_terceros')
+        .select('tienda_id, fecha, producto_sku, cantidad')
+        .range(pageStart, pageStart + 999)
+      if (storeSalesError) throw new Error(storeSalesError.message)
+      if (!page?.length) break
+      realStoreSales.push(...(page as StoreSale[]))
+      if (page.length < 1000) break
+    }
+    const realStoreSalesBySkuMonth = new Map<string, number>()
+    for (const sale of realStoreSales) {
+      if (!sale.producto_sku) continue
+      const key = `${sale.tienda_id}|${sale.producto_sku}|${sale.fecha.slice(0, 7)}`
+      realStoreSalesBySkuMonth.set(key, (realStoreSalesBySkuMonth.get(key) || 0) + Math.max(0, Number(sale.cantidad) || 0))
+    }
 
     const { data: shopOrdersRaw } = await supabase
       .from('shopify_orders')
@@ -248,10 +293,13 @@ export async function GET(request: Request) {
       }
       return result
     }
-    const [invoices, seasonalInvoices] = await Promise.all([
-      fetchInvoices(startDateStr, endDateStr),
-      fetchInvoices(seasonalStartStr, seasonalEndStr),
-    ])
+    // Load all available history. The cache currently begins in Nov-2023;
+    // asking from 2000 keeps this logic future-proof as older data is added.
+    const allInvoices = await fetchInvoices('2000-01-01', endDateStr)
+    // Defensive deduplication by immutable Siigo invoice id.
+    const uniqueInvoices = [...new Map(allInvoices.map(inv => [inv.id, inv])).values()]
+    const invoices = uniqueInvoices.filter(inv => inv.date >= startDateStr && inv.date <= endDateStr)
+    const seasonalInvoices = uniqueInvoices.filter(inv => inv.date >= seasonalStartStr && inv.date <= seasonalEndStr)
 
     // 4. Aggregate sales per SKU per channel
     type Sales = { shopify: number; whatsapp: number; tiendas: number }
@@ -259,7 +307,8 @@ export async function GET(request: Request) {
     const ventasEstacionalesPorSku = new Map<string, number>()
 
     for (const inv of invoices) {
-      const isTienda = identificationKeys(inv.customer_identification).some(nit => tiendaNits.has(nit))
+      const invoiceStore = identificationKeys(inv.customer_identification).map(nit => storeByNit.get(nit)).find(Boolean)
+      const isTienda = invoiceStore != null
       const orderNum = extractOrderNum(inv.observations)
       const isShopify = !isTienda && orderNum !== null && shopOrderNumbers.has(orderNum)
       // Default: WhatsApp (direct sale)
@@ -267,6 +316,9 @@ export async function GET(request: Request) {
 
       for (const it of inv.items || []) {
         if (!it.code || it.code === 'ENVIO') continue
+        // A real store sell-through record replaces the Siigo replenishment
+        // proxy for the same SKU/month; never add both.
+        if (invoiceStore && realStoreSalesBySkuMonth.has(`${invoiceStore.id}|${it.code}|${inv.date.slice(0, 7)}`)) continue
         let s = ventasPorSku.get(it.code)
         if (!s) {
           s = { shopify: 0, whatsapp: 0, tiendas: 0 }
@@ -274,6 +326,12 @@ export async function GET(request: Request) {
         }
         s[channel] += it.quantity || 0
       }
+    }
+    for (const sale of realStoreSales) {
+      if (!sale.producto_sku || sale.fecha < startDateStr || sale.fecha > endDateStr) continue
+      const current = ventasPorSku.get(sale.producto_sku) || { shopify: 0, whatsapp: 0, tiendas: 0 }
+      current.tiendas += Math.max(0, Number(sale.cantidad) || 0)
+      ventasPorSku.set(sale.producto_sku, current)
     }
 
     for (const inv of seasonalInvoices) {
@@ -286,8 +344,251 @@ export async function GET(request: Request) {
       }
     }
 
+    // Complete monthly history by SKU. Store invoices are the available
+    // replenishment proxy because ventas_terceros/consignaciones currently have
+    // no rows. They are already part of Siigo invoices, so no second store
+    // signal is added (which would duplicate demand).
+    const monthKey = (date: string) => date.slice(0, 7)
+    const monthSequence: string[] = []
+    const firstInvoiceMonth = uniqueInvoices.length
+      ? uniqueInvoices.reduce((min, inv) => monthKey(inv.date) < min ? monthKey(inv.date) : min, monthKey(uniqueInvoices[0].date))
+      : monthKey(startDateStr)
+    const monthCursor = new Date(`${firstInvoiceMonth}-01T12:00:00`)
+    const lastHistoryMonth = monthKey(endDateStr)
+    while (monthKey(monthCursor.toISOString()) <= lastHistoryMonth) {
+      monthSequence.push(monthKey(monthCursor.toISOString()))
+      monthCursor.setMonth(monthCursor.getMonth() + 1)
+    }
+    const monthIndex = new Map(monthSequence.map((month, index) => [month, index]))
+    const skuMonthly = new Map<string, number[]>()
+    const directSkuMonthly = new Map<string, number[]>()
+    const storeSkuMonthly = new Map<string, Map<string, number[]>>()
+    for (const sku of stockBySku.keys()) {
+      skuMonthly.set(sku, Array(monthSequence.length).fill(0))
+      directSkuMonthly.set(sku, Array(monthSequence.length).fill(0))
+    }
+    for (const store of stores) {
+      storeSkuMonthly.set(store.id, new Map([...stockBySku.keys()].map(sku => [sku, Array(monthSequence.length).fill(0)])))
+    }
+    for (const inv of uniqueInvoices) {
+      const index = monthIndex.get(monthKey(inv.date))
+      if (index == null) continue
+      const invoiceStore = identificationKeys(inv.customer_identification).map(nit => storeByNit.get(nit)).find(Boolean)
+      for (const it of inv.items || []) {
+        if (!it.code || it.code === 'ENVIO' || !stockBySku.has(it.code)) continue
+        if (invoiceStore && realStoreSalesBySkuMonth.has(`${invoiceStore.id}|${it.code}|${monthKey(inv.date)}`)) continue
+        const qty = Math.max(0, Number(it.quantity) || 0)
+        const series = skuMonthly.get(it.code)!
+        series[index] += qty
+        if (invoiceStore) {
+          const storeSeries = storeSkuMonthly.get(invoiceStore.id)?.get(it.code)
+          if (storeSeries) storeSeries[index] += qty
+        } else directSkuMonthly.get(it.code)![index] += qty
+      }
+    }
+    for (const sale of realStoreSales) {
+      if (!sale.producto_sku || !stockBySku.has(sale.producto_sku)) continue
+      const index = monthIndex.get(monthKey(sale.fecha))
+      if (index == null) continue
+      const qty = Math.max(0, Number(sale.cantidad) || 0)
+      skuMonthly.get(sale.producto_sku)![index] += qty
+      const storeSeries = storeSkuMonthly.get(sale.tienda_id)?.get(sale.producto_sku)
+      if (storeSeries) storeSeries[index] += qty
+    }
+
+    // Forecast the reference first, then allocate the inventory target through
+    // a stockout-corrected historical size curve. This keeps every integer pair
+    // reconciled between reference and size.
+    const skusByReference = new Map<string, string[]>()
+    for (const [sku, stock] of stockBySku) {
+      const reference = parseProductName(stock.product_name).reference
+      const list = skusByReference.get(reference) || []
+      list.push(sku)
+      skusByReference.set(reference, list)
+    }
+    const targetBySku = new Map<string, number>()
+    const needEventsBySku = new Map<string, Array<{ date: string; quantity: number }>>()
+    const modelByReference = new Map<string, ReturnType<typeof selectDemandModel>>()
+    const comparableMonthlyLevels = [...skusByReference.values()]
+      .map(skus => {
+        const recent = monthSequence.slice(-3).map((_, offset) => {
+          const index = monthSequence.length - 3 + offset
+          return skus.reduce((sum, sku) => sum + (skuMonthly.get(sku)?.[index] || 0), 0)
+        })
+        return recent.reduce((sum, value) => sum + value, 0) / Math.max(1, recent.length)
+      })
+      .filter(value => value > 0)
+      .sort((a, b) => a - b)
+    // Conservative comparable-product baseline for a reference with no sales
+    // history. Product creation/category metadata is unavailable, so use the
+    // lower quartile rather than the portfolio mean to limit overproduction.
+    const newReferenceFallback = comparableMonthlyLevels.length
+      ? comparableMonthlyLevels[Math.floor((comparableMonthlyLevels.length - 1) * 0.25)]
+      : 0
+    let baselineAbsError = 0
+    let selectedAbsError = 0
+    let backtestActual = 0
+    const addTarget = (sku: string, quantity: number, date: Date) => {
+      if (quantity <= 0) return
+      targetBySku.set(sku, (targetBySku.get(sku) || 0) + quantity)
+      const events = needEventsBySku.get(sku) || []
+      events.push({ date: date.toISOString().slice(0, 10), quantity })
+      needEventsBySku.set(sku, events)
+    }
+    const allocateToSkus = (skus: string[], total: number, profile: Map<string, number>) => {
+      const bySize = largestRemainder(total, [...profile].map(([key, share]) => ({ key, share })))
+      const result = new Map<string, number>()
+      for (const [size, sizeTarget] of bySize) {
+        const sizeSkus = skus.filter(sku => (parseProductName(stockBySku.get(sku)?.product_name || '').size || sku) === size)
+        const skuTargets = largestRemainder(sizeTarget, sizeSkus.map(sku => ({
+          key: sku,
+          share: (skuMonthly.get(sku) || []).reduce((sum, value) => sum + value, 0),
+        })))
+        for (const [sku, quantity] of skuTargets) result.set(sku, quantity)
+      }
+      return result
+    }
+    for (const [reference, skus] of skusByReference) {
+      const referenceSeries = monthSequence.map((_, i) =>
+        skus.reduce((sum, sku) => sum + (skuMonthly.get(sku)?.[i] || 0), 0)
+      )
+      // Exclude structural pre-launch zeros; zeros after first demand remain and
+      // are meaningful observations at reference level.
+      const firstPositive = referenceSeries.findIndex(value => value > 0)
+      const training = firstPositive >= 0
+        ? referenceSeries.slice(firstPositive)
+        : [newReferenceFallback, newReferenceFallback, newReferenceFallback]
+      const selected = selectDemandModel(training)
+      modelByReference.set(reference, selected)
+      const monthsNeeded = Math.max(1, Math.ceil(protectionMonths))
+      const sizeSeries = new Map<string, number[]>()
+      for (const sku of skus) {
+        const size = parseProductName(stockBySku.get(sku)?.product_name || '').size || sku
+        const existing = sizeSeries.get(size) || Array(monthSequence.length).fill(0)
+        const values = skuMonthly.get(sku) || []
+        for (let i = 0; i < existing.length; i++) existing[i] += values[i] || 0
+        sizeSeries.set(size, existing)
+      }
+      const profile = correctedSizeProfile(sizeSeries, referenceSeries)
+
+      // Direct Online/WhatsApp demand: forecast at reference level. Its error
+      // buffer is the only warehouse safety stock; store uncertainty is handled
+      // separately below and is never buffered again at warehouse level.
+      const directSeries = monthSequence.map((_, i) =>
+        skus.reduce((sum, sku) => sum + (directSkuMonthly.get(sku)?.[i] || 0), 0)
+      )
+      const directFirst = directSeries.findIndex(value => value > 0)
+      const directTraining = directFirst >= 0 ? directSeries.slice(directFirst) : training
+      const directModel = selectDemandModel(directTraining)
+      const directFuture = forecastMonths(directTraining, directModel.name, monthsNeeded)
+      const wholeMonths = Math.floor(protectionMonths)
+      const partial = protectionMonths - wholeMonths
+      for (let monthOffset = 0; monthOffset < monthsNeeded; monthOffset++) {
+        const factor = monthOffset < wholeMonths ? 1 : monthOffset === wholeMonths ? partial : 0
+        const quantity = Math.max(0, Math.round((directFuture[monthOffset] || 0) * factor))
+        const eventDate = new Date(endDate)
+        eventDate.setMonth(eventDate.getMonth() + monthOffset + 1)
+        for (const [sku, units] of allocateToSkus(skus, quantity, profile)) addTarget(sku, units, eventDate)
+      }
+      const directExpected = directFuture.slice(0, wholeMonths).reduce((sum, value) => sum + value, 0)
+        + (partial > 0 ? (directFuture[wholeMonths] || 0) * partial : 0)
+      const directSafety = Math.round(safetyStock(directModel, protectionMonths, directExpected))
+      for (const [sku, units] of allocateToSkus(skus, directSafety, profile)) addTarget(sku, units, protectionEnd)
+
+      // Store demand: each location owns its stock and receives one independent
+      // replenishment per month. A store with sparse history inherits the same
+      // reference aggregated across stores, scaled by its stable recent share.
+      const aggregateStoreSeries = monthSequence.map((_, i) => stores.reduce((sum, store) =>
+        sum + skus.reduce((skuSum, sku) => skuSum + (storeSkuMonthly.get(store.id)?.get(sku)?.[i] || 0), 0), 0
+      ))
+      const aggregateFirst = aggregateStoreSeries.findIndex(value => value > 0)
+      const aggregateTraining = aggregateFirst >= 0 ? aggregateStoreSeries.slice(aggregateFirst) : training
+      const aggregateModel = selectDemandModel(aggregateTraining)
+      const aggregateFuture = forecastMonths(aggregateTraining, aggregateModel.name, monthsNeeded)
+      const eligibleStores = stores.filter(store => skus.some(sku =>
+        (store.siigo_warehouse_id != null && (stockByWarehouseSku.get(`${store.siigo_warehouse_id}|${sku}`) || 0) > 0)
+        || (storeSkuMonthly.get(store.id)?.get(sku) || []).some(value => value > 0)
+      ))
+      const aggregateRecent = aggregateStoreSeries.slice(-6).reduce((sum, value) => sum + value, 0)
+      for (const store of eligibleStores) {
+        const storeSeries = monthSequence.map((_, i) => skus.reduce((sum, sku) =>
+          sum + (storeSkuMonthly.get(store.id)?.get(sku)?.[i] || 0), 0
+        ))
+        const storeFirst = storeSeries.findIndex(value => value > 0)
+        const storeTraining = storeFirst >= 0 ? storeSeries.slice(storeFirst) : []
+        const enoughHistory = storeTraining.length >= 6 && storeTraining.filter(value => value > 0).length >= 3
+        const storeRecent = storeSeries.slice(-6).reduce((sum, value) => sum + value, 0)
+        const equalShare = 1 / Math.max(1, eligibleStores.length)
+        // Empirical-Bayes smoothing: sparse stores inherit part of the stable
+        // aggregate reference rate instead of receiving a forced zero, while
+        // established stores retain most of their observed share.
+        const share = aggregateRecent > 0
+          ? (storeRecent + aggregateRecent * equalShare * 0.25) / (aggregateRecent * 1.25)
+          : equalShare
+        const storeModel = enoughHistory ? selectDemandModel(storeTraining) : aggregateModel
+        const storeFuture = enoughHistory
+          ? forecastMonths(storeTraining, storeModel.name, monthsNeeded)
+          : aggregateFuture.map(value => value * share)
+        const monthlyExpected = storeFuture[0] || 0
+        const storeBuffer = Math.round(enoughHistory
+          ? safetyStock(storeModel, 1, monthlyExpected)
+          : safetyStock(aggregateModel, 1, aggregateFuture[0] || 0) * share)
+        const storeSizeSeries = new Map<string, number[]>()
+        for (const sku of skus) {
+          const size = parseProductName(stockBySku.get(sku)?.product_name || '').size || sku
+          const existing = storeSizeSeries.get(size) || Array(monthSequence.length).fill(0)
+          const values = storeSkuMonthly.get(store.id)?.get(sku) || []
+          for (let i = 0; i < existing.length; i++) existing[i] += values[i] || 0
+          storeSizeSeries.set(size, existing)
+        }
+        const storeProfile = storeSeries.some(value => value > 0)
+          ? correctedSizeProfile(storeSizeSeries, storeSeries)
+          : profile
+        // If a store has demand but no warehouse link, do not silently drop its
+        // replenishment. Its observable stock is unknown, so use zero rather
+        // than inventing inventory that may not exist.
+        const safetyAllocation = allocateToSkus(skus, storeBuffer, storeProfile)
+        const demandBySku = new Map(skus.map(sku => [sku, [] as number[]]))
+        for (let monthOffset = 0; monthOffset < monthsNeeded; monthOffset++) {
+          const factor = monthOffset < wholeMonths ? 1 : monthOffset === wholeMonths ? partial : 0
+          if (factor <= 0) continue
+          const demandAllocation = allocateToSkus(skus, Math.max(0, Math.round((storeFuture[monthOffset] || 0) * factor)), storeProfile)
+          for (const sku of skus) {
+            demandBySku.get(sku)!.push(demandAllocation.get(sku) || 0)
+          }
+        }
+        for (const sku of skus) {
+          const initialStock = store.siigo_warehouse_id == null
+            ? 0
+            : stockByWarehouseSku.get(`${store.siigo_warehouse_id}|${sku}`) || 0
+          const replenishments = monthlyStoreReplenishments(
+            demandBySku.get(sku) || [],
+            safetyAllocation.get(sku) || 0,
+            initialStock,
+          )
+          replenishments.forEach((quantity, monthOffset) => {
+            const reviewDate = new Date(endDate)
+            reviewDate.setMonth(reviewDate.getMonth() + monthOffset)
+            addTarget(sku, quantity, reviewDate)
+          })
+        }
+      }
+
+      // Aggregate comparable one-step metrics for the internal baseline report.
+      if (selected.metrics.observations > 0) {
+        const actualScale = training.slice(-selected.metrics.observations).reduce((sum, value) => sum + Math.abs(value), 0)
+        backtestActual += actualScale
+        selectedAbsError += selected.metrics.wape * actualScale
+        const naiveErrors: number[] = []
+        const start = Math.max(1, training.length - selected.metrics.observations)
+        for (let i = start; i < training.length; i++) naiveErrors.push(Math.abs(training[i] - training[i - 1]))
+        baselineAbsError += naiveErrors.reduce((sum, value) => sum + value, 0)
+      }
+    }
+
     // 4b. Pending production orders (zapatos en camino) → units by (diseño, talla)
-    const enCaminoByKey = new Map<string, number>()
+    type PendingLine = { quantity: number; arrival: string }
+    const enCaminoByKey = new Map<string, PendingLine[]>()
     // Keep the original label per key so diagnostics can show "Oso 23", not the
     // normalized key.
     const enCaminoLabelByKey = new Map<string, string>()
@@ -295,20 +596,24 @@ export async function GET(request: Request) {
     {
       const { data: pendingOrders } = await supabase
         .from('production_orders')
-        .select('id')
+        .select('id, fecha_entrega')
         .eq('estado', 'pendiente')
         .range(0, 999)
-      const orderIds = (pendingOrders || []).map((o: { id: string }) => o.id)
+      const typedOrders = (pendingOrders || []) as Array<{ id: string; fecha_entrega: string | null }>
+      const orderIds = typedOrders.map(o => o.id)
+      const arrivalByOrder = new Map(typedOrders.map(o => [o.id, o.fecha_entrega || endDateStr]))
       if (orderIds.length > 0) {
         const { data: items } = await supabase
           .from('production_order_items')
-          .select('diseno, talla, cantidad')
+          .select('order_id, diseno, talla, cantidad')
           .in('order_id', orderIds)
           .range(0, 9999)
-        for (const it of (items || []) as Array<{ diseno: string; talla: string | null; cantidad: number }>) {
+        for (const it of (items || []) as Array<{ order_id: string; diseno: string; talla: string | null; cantidad: number }>) {
           const key = enCaminoKey(it.diseno, it.talla)
           const qty = Number(it.cantidad) || 0
-          enCaminoByKey.set(key, (enCaminoByKey.get(key) || 0) + qty)
+          const lines = enCaminoByKey.get(key) || []
+          lines.push({ quantity: qty, arrival: arrivalByOrder.get(it.order_id) || endDateStr })
+          enCaminoByKey.set(key, lines)
           enCaminoTotalUnits += qty
           if (!enCaminoLabelByKey.has(key)) {
             enCaminoLabelByKey.set(key, `${it.diseno}${it.talla ? ` ${it.talla}` : ''}`)
@@ -318,6 +623,8 @@ export async function GET(request: Request) {
     }
     // Track which keys actually matched a forecast variant.
     const enCaminoMatchedKeys = new Set<string>()
+    const eligiblePending = (sku: string, lines: PendingLine[]) =>
+      pendingEligibleAfterArrival(lines, needEventsBySku.get(sku) || [])
 
     // 5. Build variant forecasts
     const allSkus = new Set<string>([...stockBySku.keys(), ...ventasPorSku.keys()])
@@ -333,16 +640,23 @@ export async function GET(request: Request) {
       if (!stockBySku.has(sku)) continue
 
       const ventasTotal = ventas.shopify + ventas.whatsapp + ventas.tiendas
-      const stockTotal = stockInfo.stockBodega + stockInfo.stockConsignado
+      // Store inventory was already netted location-by-location when producing
+      // replenishment needs. It must not be subtracted again as a pooled asset.
+      const stockTotal = stockInfo.stockBodega
 
       const velocidadDiariaReciente = ventasTotal / diasAnalisis
       const velocidadDiariaEstacional = ventasPeriodoEstacional / horizonteDias
+      const { reference, size } = parseProductName(stockInfo.product_name)
+      const selectedModel = modelByReference.get(reference)
       const demandaFuente: VariantForecast['demandaFuente'] =
-        velocidadDiariaEstacional > velocidadDiariaReciente ? 'estacional' : 'reciente'
-      // Preserve current momentum, but raise the demand rate when the same
-      // upcoming calendar window sold faster last year (Black Friday,
-      // regreso a clases, etc.).
-      const velocidadDiaria = Math.max(velocidadDiariaReciente, velocidadDiariaEstacional)
+        selectedModel?.name.startsWith('seasonal') ? 'estacional' : 'reciente'
+      // The current view derives production as rate × its visible parameter
+      // denominator. Encode the backend inventory target as a compatible rate,
+      // so the view stays byte-for-byte unchanged while all planning logic lives
+      // here. The tiny epsilon prevents floating point ceil from adding a pair.
+      const viewDenominator = Math.max(1, leadTimeDias + stockSeguridad)
+      const targetInventory = targetBySku.get(sku) || 0
+      const velocidadDiaria = targetInventory > 0 ? (targetInventory - 1e-9) / viewDenominator : 0
       const velocidadSemanal = velocidadDiaria * 7
 
       let diasHastaAgotamiento: number | null = null
@@ -352,8 +666,6 @@ export async function GET(request: Request) {
         diasHastaAgotamiento = 0
       }
 
-      const { reference, size } = parseProductName(stockInfo.product_name)
-
       // Units already on order (in transit) for this design + size.
       // Try exact key first, then a tolerant word-level design match (same size),
       // consuming each order key once so it can't discount two variants.
@@ -362,17 +674,17 @@ export async function GET(request: Request) {
       let enCamino = 0
       const exactK = `${refNorm}|${sizePart}`
       if (enCaminoByKey.has(exactK) && !enCaminoMatchedKeys.has(exactK)) {
-        enCamino = enCaminoByKey.get(exactK) || 0
+        enCamino = eligiblePending(sku, enCaminoByKey.get(exactK) || [])
         enCaminoMatchedKeys.add(exactK)
       } else {
-        for (const [k, qty] of enCaminoByKey) {
+        for (const [k, lines] of enCaminoByKey) {
           if (enCaminoMatchedKeys.has(k)) continue
           const sep = k.lastIndexOf('|')
           const kDesign = k.slice(0, sep)
           const kSize = k.slice(sep + 1)
           if (kSize !== sizePart) continue
           if (designMatchesNorm(kDesign, refNorm)) {
-            enCamino += qty
+            enCamino += eligiblePending(sku, lines)
             enCaminoMatchedKeys.add(k)
             break
           }
@@ -402,7 +714,7 @@ export async function GET(request: Request) {
         size,
         description: stockInfo.product_name,
         stockBodega: stockInfo.stockBodega,
-        stockConsignado: stockInfo.stockConsignado,
+        stockConsignado: 0,
         stockTotal,
         enCamino,
         ventasShopify: ventas.shopify,
@@ -413,8 +725,8 @@ export async function GET(request: Request) {
         velocidadDiariaReciente: Math.round(velocidadDiariaReciente * 100) / 100,
         velocidadDiariaEstacional: Math.round(velocidadDiariaEstacional * 100) / 100,
         demandaFuente,
-        velocidadDiaria: Math.round(velocidadDiaria * 100) / 100,
-        velocidadSemanal: Math.round(velocidadSemanal * 100) / 100,
+        velocidadDiaria,
+        velocidadSemanal,
         diasHastaAgotamiento,
         sugerenciaProduccion,
         prioridad,
@@ -511,7 +823,8 @@ export async function GET(request: Request) {
     // NOT being discounted from the suggestion.
     const enCaminoSinMatch: Array<{ label: string; unidades: number }> = []
     let enCaminoMatchedUnits = 0
-    for (const [key, qty] of enCaminoByKey) {
+    for (const [key, lines] of enCaminoByKey) {
+      const qty = lines.reduce((sum, line) => sum + line.quantity, 0)
       if (enCaminoMatchedKeys.has(key)) enCaminoMatchedUnits += qty
       else enCaminoSinMatch.push({ label: enCaminoLabelByKey.get(key) || key, unidades: qty })
     }
@@ -538,6 +851,28 @@ export async function GET(request: Request) {
         horizonteDias,
         fechaInicioEstacional: seasonalStartStr,
         fechaFinEstacional: seasonalEndStr,
+      },
+      // Internal diagnostics; the current view does not render these fields.
+      metodologia: {
+        leadTimeBusinessDays: PRODUCTION_LEAD_BUSINESS_DAYS,
+        reviewPeriodMonths: REVIEW_PERIOD_MONTHS,
+        protectionDays,
+        historyStart: firstInvoiceMonth,
+        historyMonths: monthSequence.length,
+        stockoutHistory: 'inferred_size_gaps_only_no_historical_stock_snapshots',
+        storeDemand: realStoreSales.length
+          ? 'real_sell_through_replaces_same_sku_month_replenishment_proxy'
+          : 'siigo_store_invoices_as_replenishment_proxy_no_double_count',
+        stores: {
+          active: stores.length,
+          withWarehouse: stores.filter(store => store.siigo_warehouse_id != null).length,
+          missingWarehouseAssumedZeroStock: stores.filter(store => store.siigo_warehouse_id == null).length,
+        },
+        backtest: {
+          baseline: 'one_step_naive',
+          baselineWape: backtestActual > 0 ? baselineAbsError / backtestActual : null,
+          selectedWape: backtestActual > 0 ? selectedAbsError / backtestActual : null,
+        },
       },
     })
   } catch (err) {
