@@ -153,6 +153,8 @@ interface ForecastData {
     bajos: number
     totalProducirSugerido: number
     totalVentasPeriodo: number
+    totalVentasOnline: number
+    totalVentasWhatsApp: number
     totalVentasTiendas: number
   }
   parametros: {
@@ -1029,7 +1031,9 @@ export default function InventarioPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-[#1A2238]">{forecastData.resumen.totalVentasPeriodo.toLocaleString()}</div>
-                      <p className="text-xs text-[#545454]">unidades vendidas</p>
+                      <p className="text-xs text-[#545454]">
+                        Online {forecastData.resumen.totalVentasOnline.toLocaleString()} · WhatsApp {forecastData.resumen.totalVentasWhatsApp.toLocaleString()} · Tiendas {forecastData.resumen.totalVentasTiendas.toLocaleString()}
+                      </p>
                     </CardContent>
                   </Card>
                 </div>
@@ -1161,27 +1165,30 @@ export default function InventarioPage() {
                       </Link>
                     </div>
                     <div className="mt-4 pt-4 border-t flex items-center gap-3 flex-wrap">
-                      <Label className="text-sm">Stock para descontar:</Label>
+                      <Label className="text-sm">Stock que se descuenta al calcular cuánto producir:</Label>
                       <div className="flex border rounded-md text-sm overflow-hidden">
                         <button
                           type="button"
                           onClick={() => setIncluirConsignado(true)}
                           className={`px-3 py-1.5 ${incluirConsignado ? 'bg-[#1DA9EF] text-white font-medium' : 'bg-white text-[#545454] hover:bg-gray-50'}`}
                         >
-                          Bodega + Consignado en tiendas
+                          Bodega propia + stock consignado en tiendas
                         </button>
                         <button
                           type="button"
                           onClick={() => setIncluirConsignado(false)}
                           className={`px-3 py-1.5 border-l ${!incluirConsignado ? 'bg-[#1DA9EF] text-white font-medium' : 'bg-white text-[#545454] hover:bg-gray-50'}`}
                         >
-                          Solo bodega
+                          Solo stock de bodega propia
                         </button>
                       </div>
                       <p className="text-xs text-[#545454]">
                         {incluirConsignado
-                          ? 'Asume que el stock consignado se va a vender — no produce de más.'
-                          : 'Más conservador — produce para reabastecer bodega ignorando consignado.'}
+                          ? 'Descuenta el inventario de la bodega propia y el inventario que está consignado en tiendas.'
+                          : 'Descuenta únicamente el inventario disponible en la bodega propia; no descuenta el consignado.'}
+                      </p>
+                      <p className="w-full text-xs font-medium text-[#1A2238]">
+                        Demanda incluida en el forecast: ventas Online + WhatsApp + Tiendas.
                       </p>
                     </div>
                   </CardContent>
@@ -1449,7 +1456,7 @@ export default function InventarioPage() {
                                                   <span className="font-medium">{v.ventasTotal}</span>
                                                   {v.ventasTotal > 0 && (
                                                     <div className="text-xs text-[#545454]">
-                                                      S:{v.ventasShopify} W:{v.ventasWhatsApp} T:{v.ventasTiendas}
+                                                      Online:{v.ventasShopify} · WhatsApp:{v.ventasWhatsApp} · Tiendas:{v.ventasTiendas}
                                                       {v.ventasTiendas > 0 && ` · Tiendas ${(v.ventasTiendas * 30 / (parseInt(diasAnalisis) || 1)).toFixed(1)}/mes`}
                                                     </div>
                                                   )}

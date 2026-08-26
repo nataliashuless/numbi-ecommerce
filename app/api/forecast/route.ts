@@ -453,6 +453,8 @@ export async function GET(request: Request) {
       bajos: forecast.filter(f => f.prioridad === 'baja').length,
       totalProducirSugerido: forecast.reduce((sum, f) => sum + f.sugerenciaProduccion, 0),
       totalVentasPeriodo: forecast.reduce((sum, f) => sum + f.ventasTotal, 0),
+      totalVentasOnline: forecast.reduce((sum, f) => sum + f.ventasShopify, 0),
+      totalVentasWhatsApp: forecast.reduce((sum, f) => sum + f.ventasWhatsApp, 0),
       totalVentasTiendas: forecast.reduce((sum, f) => sum + f.ventasTiendas, 0),
       totalStockBodega: forecast.reduce((sum, f) => sum + f.stockBodega, 0),
       totalStockConsignado: forecast.reduce((sum, f) => sum + f.stockConsignado, 0),
