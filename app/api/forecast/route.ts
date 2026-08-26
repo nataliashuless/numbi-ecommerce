@@ -33,6 +33,7 @@ interface ReferenceForecast {
   stockTotal: number
   enCamino: number
   ventasTotal: number
+  ventasTiendas: number
   velocidadDiaria: number
   sugerenciaProduccion: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
@@ -85,6 +86,19 @@ function extractOrderNum(obs: string | null): number | null {
   if (!obs) return null
   const m = obs.match(/#(\d+)/)
   return m ? parseInt(m[1], 10) : null
+}
+
+// Siigo normally returns the customer identification without formatting, while
+// it is common to save a tienda NIT with dots and an explicit check digit
+// (for example 900.123.456-7). Return every safe representation so both forms
+// identify the same tienda without dropping a real digit from unformatted IDs.
+function identificationKeys(value: string | null): string[] {
+  if (!value) return []
+  const digits = value.replace(/\D/g, '')
+  if (!digits) return []
+  const keys = [digits]
+  if (/[-–—]\s*\d\s*$/.test(value) && digits.length > 1) keys.push(digits.slice(0, -1))
+  return keys
 }
 
 export async function GET(request: Request) {
@@ -177,7 +191,9 @@ export async function GET(request: Request) {
       .select('siigo_customer_identification')
       .not('siigo_customer_identification', 'is', null)
     const tiendaNits = new Set(
-      (tiendaNitsRaw || []).map((t: { siigo_customer_identification: string }) => t.siigo_customer_identification)
+      (tiendaNitsRaw || []).flatMap((t: { siigo_customer_identification: string }) =>
+        identificationKeys(t.siigo_customer_identification)
+      )
     )
 
     const { data: shopOrdersRaw } = await supabase
@@ -223,7 +239,7 @@ export async function GET(request: Request) {
     const ventasPorSku = new Map<string, Sales>()
 
     for (const inv of invoices) {
-      const isTienda = inv.customer_identification && tiendaNits.has(inv.customer_identification)
+      const isTienda = identificationKeys(inv.customer_identification).some(nit => tiendaNits.has(nit))
       const orderNum = extractOrderNum(inv.observations)
       const isShopify = !isTienda && orderNum !== null && shopOrderNumbers.has(orderNum)
       // Default: WhatsApp (direct sale)
@@ -377,6 +393,7 @@ export async function GET(request: Request) {
           stockTotal: 0,
           enCamino: 0,
           ventasTotal: 0,
+          ventasTiendas: 0,
           velocidadDiaria: 0,
           sugerenciaProduccion: 0,
           prioridad: 'baja',
@@ -391,6 +408,7 @@ export async function GET(request: Request) {
       r.stockTotal += v.stockTotal
       r.enCamino += v.enCamino
       r.ventasTotal += v.ventasTotal
+      r.ventasTiendas += v.ventasTiendas
       r.velocidadDiaria += v.velocidadDiaria
       r.sugerenciaProduccion += v.sugerenciaProduccion
       // Inherit worst priority of any variant
@@ -435,6 +453,7 @@ export async function GET(request: Request) {
       bajos: forecast.filter(f => f.prioridad === 'baja').length,
       totalProducirSugerido: forecast.reduce((sum, f) => sum + f.sugerenciaProduccion, 0),
       totalVentasPeriodo: forecast.reduce((sum, f) => sum + f.ventasTotal, 0),
+      totalVentasTiendas: forecast.reduce((sum, f) => sum + f.ventasTiendas, 0),
       totalStockBodega: forecast.reduce((sum, f) => sum + f.stockBodega, 0),
       totalStockConsignado: forecast.reduce((sum, f) => sum + f.stockConsignado, 0),
     }

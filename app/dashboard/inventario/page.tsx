@@ -127,6 +127,7 @@ interface ForecastReference {
   stockTotal: number
   enCamino: number
   ventasTotal: number
+  ventasTiendas: number
   velocidadDiaria: number
   sugerenciaProduccion: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
@@ -152,6 +153,7 @@ interface ForecastData {
     bajos: number
     totalProducirSugerido: number
     totalVentasPeriodo: number
+    totalVentasTiendas: number
   }
   parametros: {
     diasAnalisis: number
@@ -386,6 +388,8 @@ export default function InventarioPage() {
       'Stock total': r.stockTotal,
       'En camino': r.enCamino,
       'Ventas totales': r.ventasTotal,
+      'Ventas tiendas': r.ventasTiendas,
+      'Promedio mensual tiendas': Number((r.ventasTiendas * 30 / (parseInt(diasAnalisis) || 1)).toFixed(1)),
       'Velocidad diaria': Number(r.velocidadDiaria.toFixed(2)),
       'Sugerencia producción': r.variants.reduce((s, v) => s + suggestFor(v), 0),
       'Prioridad': PRIORIDAD_LABEL[r.prioridad] || r.prioridad,
@@ -1301,6 +1305,7 @@ export default function InventarioPage() {
                             stockTotal: variants.reduce((s, v) => s + v.stockTotal, 0),
                             enCamino: variants.reduce((s, v) => s + (v.enCamino || 0), 0),
                             ventasTotal: variants.reduce((s, v) => s + v.ventasTotal, 0),
+                            ventasTiendas: variants.reduce((s, v) => s + v.ventasTiendas, 0),
                             velocidadDiaria: Math.round(variants.reduce((s, v) => s + v.velocidadDiaria, 0) * 100) / 100,
                             sugerenciaProduccion: variants.reduce((s, v) => s + v.sugerenciaProduccion, 0),
                             prioridad: worst,
@@ -1377,7 +1382,14 @@ export default function InventarioPage() {
                                               <span className="text-[#D1D5DB]">—</span>
                                             )}
                                           </TableCell>
-                                          <TableCell className="text-center font-medium">{r.ventasTotal}</TableCell>
+                                          <TableCell className="text-center font-medium">
+                                            <div>{r.ventasTotal}</div>
+                                            {r.ventasTiendas > 0 && (
+                                              <div className="text-xs font-normal text-purple-700">
+                                                Tiendas: {r.ventasTiendas} ({(r.ventasTiendas * 30 / (parseInt(diasAnalisis) || 1)).toFixed(1)}/mes)
+                                              </div>
+                                            )}
+                                          </TableCell>
                                           <TableCell className="text-center">
                                             <span className="font-medium">{(r.velocidadDiaria * 7).toFixed(1)}</span>
                                             <span className="text-xs text-[#545454]"> uds/sem</span>
@@ -1438,6 +1450,7 @@ export default function InventarioPage() {
                                                   {v.ventasTotal > 0 && (
                                                     <div className="text-xs text-[#545454]">
                                                       S:{v.ventasShopify} W:{v.ventasWhatsApp} T:{v.ventasTiendas}
+                                                      {v.ventasTiendas > 0 && ` · Tiendas ${(v.ventasTiendas * 30 / (parseInt(diasAnalisis) || 1)).toFixed(1)}/mes`}
                                                     </div>
                                                   )}
                                                 </div>
