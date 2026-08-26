@@ -360,8 +360,18 @@ export default function InventarioPage() {
       return Math.max(0, stockNecesario - stockBase - (f.enCamino || 0))
     }
 
+    // The downloaded workbook is an actionable production order: omit SKUs
+    // that do not need units and sort references alphabetically.
+    const orderedForecast = forecastData.forecast
+      .filter(f => suggestFor(f) > 0)
+      .sort((a, b) => {
+        const byReference = a.producto.localeCompare(b.producto, 'es', { sensitivity: 'base' })
+        if (byReference !== 0) return byReference
+        return (a.size || '').localeCompare(b.size || '', 'es', { numeric: true })
+      })
+
     // Sheet 1: Detalle por variante (SKU)
-    const detalle = forecastData.forecast.map(f => ({
+    const detalle = orderedForecast.map(f => ({
       'SKU': f.sku,
       'Producto': f.producto,
       'Variante': f.variante,
@@ -382,7 +392,14 @@ export default function InventarioPage() {
     }))
 
     // Sheet 2: Resumen por referencia
-    const resumen = (forecastData.referencias || []).map(r => ({
+    const resumen = (forecastData.referencias || [])
+      .map(r => ({
+        reference: r,
+        suggestion: r.variants.reduce((s, v) => s + suggestFor(v), 0),
+      }))
+      .filter(({ suggestion }) => suggestion > 0)
+      .sort((a, b) => a.reference.reference.localeCompare(b.reference.reference, 'es', { sensitivity: 'base' }))
+      .map(({ reference: r, suggestion }) => ({
       'Referencia': r.reference,
       'Variantes': r.variantCount,
       'Stock bodega': r.stockBodega,
@@ -393,9 +410,9 @@ export default function InventarioPage() {
       'Ventas tiendas': r.ventasTiendas,
       'Promedio mensual tiendas': Number((r.ventasTiendas * 30 / (parseInt(diasAnalisis) || 1)).toFixed(1)),
       'Velocidad diaria': Number(r.velocidadDiaria.toFixed(2)),
-      'Sugerencia producción': r.variants.reduce((s, v) => s + suggestFor(v), 0),
+      'Sugerencia producción': suggestion,
       'Prioridad': PRIORIDAD_LABEL[r.prioridad] || r.prioridad,
-    }))
+      }))
 
     // Sheet 3: Parámetros usados
     const parametros = [
