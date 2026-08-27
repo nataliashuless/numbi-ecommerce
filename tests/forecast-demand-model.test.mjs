@@ -8,6 +8,7 @@ import {
   monthlyStoreReplenishments,
   partialMonthContinuousDelta,
   pendingEligibleAfterArrival,
+  productionWithIncrementalReviewCoverage,
   proratePartialMonth,
   safetyStock,
   selectDemandModel,
@@ -96,4 +97,10 @@ test('monthly store replenishment stays fixed while continuous sales are prorate
   const adjustedTotal = monthlyStoreProxy + onlineSales + partialMonthContinuousDelta(onlineSales, 20, 30)
   assert.equal(adjustedTotal, 40)
   assert.equal(monthlyStoreProxy, 10)
+})
+
+test('review period adds only the shortfall not covered after lead time', () => {
+  assert.equal(productionWithIncrementalReviewCoverage(60, 20, 75), 5)
+  assert.equal(productionWithIncrementalReviewCoverage(60, 20, 80), 0)
+  assert.equal(productionWithIncrementalReviewCoverage(60, 20, 40), 40)
 })

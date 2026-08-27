@@ -272,6 +272,24 @@ export function pendingEligibleAfterArrival(
   return eligible
 }
 
+export function productionWithIncrementalReviewCoverage(
+  leadTimeTarget: number,
+  reviewPeriodTarget: number,
+  inventoryPosition: number,
+): number {
+  const leadNeed = Math.max(0, leadTimeTarget)
+  const reviewNeed = Math.max(0, reviewPeriodTarget)
+  const available = Math.max(0, inventoryPosition)
+
+  // The review month is not an automatic extra month of production. Inventory
+  // remaining after lead-time coverage offsets it first; only its net shortfall
+  // is added to today's order.
+  const leadShortfall = Math.max(0, leadNeed - available)
+  const surplusAfterLead = Math.max(0, available - leadNeed)
+  const incrementalReview = Math.max(0, reviewNeed - surplusAfterLead)
+  return Math.round(leadShortfall + incrementalReview)
+}
+
 function easterSunday(year: number): Date {
   const a = year % 19
   const b = Math.floor(year / 100)

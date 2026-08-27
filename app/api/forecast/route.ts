@@ -8,6 +8,7 @@ import {
   monthlyStoreReplenishments,
   partialMonthContinuousDelta,
   pendingEligibleAfterArrival,
+  productionWithIncrementalReviewCoverage,
   safetyStock,
   selectDemandModel,
   stabilizedStoreSizeProfile,
@@ -749,6 +750,11 @@ export async function GET(request: Request) {
       // here. The tiny epsilon prevents floating point ceil from adding a pair.
       const viewDenominator = Math.max(1, leadTimeDias + stockSeguridad)
       const targetInventory = targetBySku.get(sku) || 0
+      const datedNeeds = needEventsBySku.get(sku) || []
+      const leadTimeTarget = datedNeeds
+        .filter(need => need.date <= leadTimeEnd.toISOString().slice(0, 10))
+        .reduce((sum, need) => sum + need.quantity, 0)
+      const reviewPeriodTarget = Math.max(0, targetInventory - leadTimeTarget)
       const velocidadDiaria = targetInventory > 0 ? (targetInventory - 1e-9) / viewDenominator : 0
       const velocidadSemanal = velocidadDiaria * 7
 
@@ -787,12 +793,16 @@ export async function GET(request: Request) {
       }
       const enCamino = eligiblePending(sku, matchingPendingLines)
 
-      // Suggestion: cover lead time + safety stock based on total available,
-      // discounting stock AND units already in transit (zapatos en camino).
+      // The monthly review is incremental coverage, not an automatic full
+      // extra month. Stock and eligible inbound first cover the lead-time
+      // target; any projected surplus then covers the review-period target.
       let sugerenciaProduccion = 0
       if (velocidadDiaria > 0) {
-        const stockNecesario = Math.ceil(velocidadDiaria * (leadTimeDias + stockSeguridad))
-        sugerenciaProduccion = Math.max(0, stockNecesario - stockTotal - enCamino)
+        sugerenciaProduccion = productionWithIncrementalReviewCoverage(
+          leadTimeTarget,
+          reviewPeriodTarget,
+          stockTotal + enCamino,
+        )
       }
 
       let prioridad: VariantForecast['prioridad'] = 'baja'
