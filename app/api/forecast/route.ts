@@ -10,6 +10,7 @@ import {
   proratePartialMonth,
   safetyStock,
   selectDemandModel,
+  stabilizedStoreSizeProfile,
 } from '@/lib/forecast/demand-model'
 
 interface VariantForecast {
@@ -585,9 +586,24 @@ export async function GET(request: Request) {
           for (let i = 0; i < existing.length; i++) existing[i] += values[i] || 0
           storeSizeSeries.set(size, existing)
         }
-        const storeProfile = storeSeries.some(value => value > 0)
+        const localStoreProfile = storeSeries.some(value => value > 0)
           ? correctedSizeProfile(storeSizeSeries, storeSeries)
           : profile
+        const unavailableSizes = new Set(skus
+          .filter(sku => store.siigo_warehouse_id == null
+            || (stockByWarehouseSku.get(`${store.siigo_warehouse_id}|${sku}`) || 0) <= 0)
+          .map(sku => parseProductName(stockBySku.get(sku)?.product_name || '').size || sku))
+        const observedStoreUnits = storeSeries.reduce((sum, value) => sum + Math.max(0, value), 0)
+        // A missing size cannot be interpreted as demand zero. Blend the
+        // store's own curve with the aggregate reference curve; currently
+        // unavailable sizes receive a stronger stable prior. This restores
+        // plausible lost demand without blindly filling every size.
+        const storeProfile = stabilizedStoreSizeProfile(
+          localStoreProfile,
+          profile,
+          observedStoreUnits,
+          unavailableSizes,
+        )
         // If a store has demand but no warehouse link, do not silently drop its
         // replenishment. Its observable stock is unknown, so use zero rather
         // than inventing inventory that may not exist.

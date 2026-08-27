@@ -10,6 +10,7 @@ import {
   proratePartialMonth,
   safetyStock,
   selectDemandModel,
+  stabilizedStoreSizeProfile,
 } from '../lib/forecast/demand-model.ts'
 
 test('seasonal history can select and reproduce an annual pattern', () => {
@@ -61,6 +62,17 @@ test('store stock only offsets that same store replenishment', () => {
   assert.deepEqual(storeA, [5])
   assert.deepEqual(storeB, [0])
   assert.equal(storeA[0] + storeB[0], 5)
+})
+
+test('an unavailable store size retains demand through the stable aggregate curve', () => {
+  const profile = stabilizedStoreSizeProfile(
+    new Map([['23', 1], ['24', 0]]),
+    new Map([['23', 0.6], ['24', 0.4]]),
+    8,
+    new Set(['24']),
+  )
+  assert.ok((profile.get('24') || 0) > 0)
+  assert.ok(Math.abs([...profile.values()].reduce((sum, value) => sum + value, 0) - 1) < 1e-9)
 })
 
 test('pending production only covers needs on or after arrival', () => {

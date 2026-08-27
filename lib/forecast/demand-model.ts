@@ -196,6 +196,37 @@ export function correctedSizeProfile(
   return correctedTotals
 }
 
+export function stabilizedStoreSizeProfile(
+  localProfile: Map<string, number>,
+  aggregateProfile: Map<string, number>,
+  observedStoreUnits: number,
+  unavailableSizes: Set<string>,
+): Map<string, number> {
+  const sizes = new Set([...aggregateProfile.keys(), ...localProfile.keys()])
+  if (!sizes.size) return new Map()
+
+  // Twelve observed pairs are enough for the store's own size curve to carry
+  // half the weight. A currently unavailable size receives a slightly stronger
+  // portfolio prior because its recent zero may be censored by a stockout.
+  const evidence = Math.max(0, observedStoreUnits)
+  const result = new Map<string, number>()
+  for (const size of sizes) {
+    const priorStrength = unavailableSizes.has(size) ? 18 : 12
+    const localWeight = evidence / (evidence + priorStrength)
+    const localShare = Math.max(0, localProfile.get(size) || 0)
+    const aggregateShare = Math.max(0, aggregateProfile.get(size) || 0)
+    result.set(size, localShare * localWeight + aggregateShare * (1 - localWeight))
+  }
+  const total = [...result.values()].reduce((sum, share) => sum + share, 0)
+  if (total > 0) {
+    for (const [size, share] of result) result.set(size, share / total)
+  } else {
+    const equal = 1 / sizes.size
+    for (const size of sizes) result.set(size, equal)
+  }
+  return result
+}
+
 export function addBusinessDays(start: Date, businessDays: number): Date {
   const date = new Date(start)
   let added = 0
