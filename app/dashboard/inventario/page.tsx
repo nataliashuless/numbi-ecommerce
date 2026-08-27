@@ -244,7 +244,9 @@ export default function InventarioPage() {
   const [diasAnalisis, setDiasAnalisis] = useState('90')
   const [leadTime, setLeadTime] = useState('52')
   const [stockSeguridad, setStockSeguridad] = useState('7')
-  const [incluirConsignado, setIncluirConsignado] = useState(false)
+  // Store stock is already netted independently by location in the backend.
+  // Never pool it here or subtract it a second time from production needs.
+  const incluirConsignado = false
 
   const [lastStockSync, setLastStockSync] = useState<string | null>(null)
   const [syncingStock, setSyncingStock] = useState(false)
@@ -1055,7 +1057,7 @@ export default function InventarioPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-[#1A2238]">{totalProducirToggle.toLocaleString()}</div>
-                      <p className="text-xs text-[#545454]">{incluirConsignado ? 'descuenta bodega + consignado' : 'solo bodega'}</p>
+                      <p className="text-xs text-[#545454]">cálculo automático para Online, WhatsApp y Tiendas</p>
                     </CardContent>
                   </Card>
                   <Card>
@@ -1201,31 +1203,12 @@ export default function InventarioPage() {
                         </Button>
                       </Link>
                     </div>
-                    <div className="mt-4 pt-4 border-t flex items-center gap-3 flex-wrap">
-                      <Label className="text-sm">Stock que se descuenta al calcular cuánto producir:</Label>
-                      <div className="flex border rounded-md text-sm overflow-hidden">
-                        <button
-                          type="button"
-                          onClick={() => setIncluirConsignado(true)}
-                          className={`px-3 py-1.5 ${incluirConsignado ? 'bg-[#1DA9EF] text-white font-medium' : 'bg-white text-[#545454] hover:bg-gray-50'}`}
-                        >
-                          Bodega propia + stock consignado en tiendas
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setIncluirConsignado(false)}
-                          className={`px-3 py-1.5 border-l ${!incluirConsignado ? 'bg-[#1DA9EF] text-white font-medium' : 'bg-white text-[#545454] hover:bg-gray-50'}`}
-                        >
-                          Solo stock de bodega propia
-                        </button>
-                      </div>
-                      <p className="text-xs text-[#545454]">
-                        {incluirConsignado
-                          ? 'Descuenta el inventario de la bodega propia y el inventario que está consignado en tiendas.'
-                          : 'Descuenta únicamente el inventario disponible en la bodega propia; no descuenta el consignado.'}
+                    <div className="mt-4 pt-4 border-t">
+                      <p className="text-sm font-medium text-[#1A2238]">
+                        Cálculo automático: cubre ventas Online + WhatsApp y la reposición necesaria de cada tienda.
                       </p>
-                      <p className="w-full text-xs font-medium text-[#1A2238]">
-                        Demanda incluida en el forecast: ventas Online + WhatsApp + Tiendas.
+                      <p className="mt-1 text-xs text-[#545454]">
+                        El inventario de cada tienda cubre únicamente esa tienda. También se descuentan la bodega propia y las órdenes en camino aplicables.
                       </p>
                     </div>
                   </CardContent>
