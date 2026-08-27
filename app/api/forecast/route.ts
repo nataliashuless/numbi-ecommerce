@@ -698,25 +698,28 @@ export async function GET(request: Request) {
       // consuming each order key once so it can't discount two variants.
       const refNorm = normName(reference)
       const sizePart = size != null ? String(size).trim() : ''
-      let enCamino = 0
       const exactK = `${refNorm}|${sizePart}`
+      const matchingPendingLines: PendingLine[] = []
       if (enCaminoByKey.has(exactK) && !enCaminoMatchedKeys.has(exactK)) {
-        enCamino = eligiblePending(sku, enCaminoByKey.get(exactK) || [])
+        matchingPendingLines.push(...(enCaminoByKey.get(exactK) || []))
         enCaminoMatchedKeys.add(exactK)
-      } else {
-        for (const [k, lines] of enCaminoByKey) {
-          if (enCaminoMatchedKeys.has(k)) continue
-          const sep = k.lastIndexOf('|')
-          const kDesign = k.slice(0, sep)
-          const kSize = k.slice(sep + 1)
-          if (kSize !== sizePart) continue
-          if (designMatchesNorm(kDesign, refNorm)) {
-            enCamino += eligiblePending(sku, lines)
-            enCaminoMatchedKeys.add(k)
-            break
-          }
+      }
+      // More than one pending order may use an alias for the same Siigo
+      // product (e.g. "Niño 21" and "Básico Niño 21"). Combine every
+      // compatible key before applying it to dated needs, instead of stopping
+      // after the exact name and falsely reporting the alias as unmatched.
+      for (const [k, lines] of enCaminoByKey) {
+        if (enCaminoMatchedKeys.has(k)) continue
+        const sep = k.lastIndexOf('|')
+        const kDesign = k.slice(0, sep)
+        const kSize = k.slice(sep + 1)
+        if (kSize !== sizePart) continue
+        if (designMatchesNorm(kDesign, refNorm)) {
+          matchingPendingLines.push(...lines)
+          enCaminoMatchedKeys.add(k)
         }
       }
+      const enCamino = eligiblePending(sku, matchingPendingLines)
 
       // Suggestion: cover lead time + safety stock based on total available,
       // discounting stock AND units already in transit (zapatos en camino).
