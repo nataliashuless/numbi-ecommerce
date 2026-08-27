@@ -15,6 +15,14 @@ export interface SelectedModel {
 
 const mean = (values: number[]) => values.length ? values.reduce((s, x) => s + x, 0) / values.length : 0
 
+export function proratePartialMonth(units: number, observedDays: number, daysInMonth: number): number {
+  if (units <= 0 || observedDays <= 0 || daysInMonth <= 0 || observedDays >= daysInMonth) return Math.max(0, units)
+  // Require at least one week before extrapolating; earlier data is too noisy
+  // and the raw units are a safer signal for a newly launched product.
+  if (observedDays < 7) return Math.max(0, units)
+  return Math.max(0, units * daysInMonth / observedDays)
+}
+
 function predict(name: ModelName, history: number[]): number | null {
   if (!history.length) return null
   const h = history.map(x => Math.max(0, Number(x) || 0))

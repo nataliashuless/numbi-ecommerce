@@ -7,6 +7,7 @@ import {
   largestRemainder,
   monthlyStoreReplenishments,
   pendingEligibleAfterArrival,
+  proratePartialMonth,
   safetyStock,
   selectDemandModel,
 } from '@/lib/forecast/demand-model'
@@ -363,11 +364,7 @@ export async function GET(request: Request) {
       ? uniqueInvoices.reduce((min, inv) => monthKey(inv.date) < min ? monthKey(inv.date) : min, monthKey(uniqueInvoices[0].date))
       : monthKey(startDateStr)
     const monthCursor = new Date(`${firstInvoiceMonth}-01T12:00:00`)
-    const endDay = endDate.getDate()
-    const lastDayOfCurrentMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate()
-    const completedHistoryDate = new Date(endDate)
-    if (endDay < lastDayOfCurrentMonth) completedHistoryDate.setMonth(completedHistoryDate.getMonth() - 1)
-    const lastHistoryMonth = monthKey(completedHistoryDate.toISOString())
+    const lastHistoryMonth = monthKey(endDateStr)
     while (monthKey(monthCursor.toISOString()) <= lastHistoryMonth) {
       monthSequence.push(monthKey(monthCursor.toISOString()))
       monthCursor.setMonth(monthCursor.getMonth() + 1)
@@ -408,6 +405,30 @@ export async function GET(request: Request) {
       skuMonthly.get(sale.producto_sku)![index] += qty
       const storeSeries = storeSkuMonthly.get(sale.tienda_id)?.get(sale.producto_sku)
       if (storeSeries) storeSeries[index] += qty
+    }
+
+    // Include the open month as a current-demand signal. Forecasting models
+    // receive a run-rate estimate to avoid treating a partial month as a full
+    // low month; visible sales remain the actual, unscaled quantities above.
+    const latestObservedDate = uniqueInvoices.reduce(
+      (latest, invoice) => invoice.date > latest ? invoice.date : latest,
+      `${lastHistoryMonth}-01`,
+    )
+    const latestObserved = new Date(`${latestObservedDate}T12:00:00`)
+    if (monthKey(latestObservedDate) === lastHistoryMonth) {
+      const currentIndex = monthIndex.get(lastHistoryMonth)
+      const observedDays = latestObserved.getDate()
+      const daysInMonth = new Date(latestObserved.getFullYear(), latestObserved.getMonth() + 1, 0).getDate()
+      if (currentIndex != null && observedDays < daysInMonth) {
+        const scaleSeries = (series: number[]) => {
+          series[currentIndex] = proratePartialMonth(series[currentIndex], observedDays, daysInMonth)
+        }
+        for (const series of skuMonthly.values()) scaleSeries(series)
+        for (const series of directSkuMonthly.values()) scaleSeries(series)
+        for (const storeMap of storeSkuMonthly.values()) {
+          for (const series of storeMap.values()) scaleSeries(series)
+        }
+      }
     }
 
     // Forecast the reference first, then allocate the inventory target through

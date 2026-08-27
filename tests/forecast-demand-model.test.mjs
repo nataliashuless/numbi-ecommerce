@@ -7,6 +7,7 @@ import {
   largestRemainder,
   monthlyStoreReplenishments,
   pendingEligibleAfterArrival,
+  proratePartialMonth,
   safetyStock,
   selectDemandModel,
 } from '../lib/forecast/demand-model.ts'
@@ -68,4 +69,10 @@ test('pending production only covers needs on or after arrival', () => {
     [{ quantity: 6, date: '2026-11-01' }, { quantity: 8, date: '2026-12-01' }],
   )
   assert.equal(eligible, 8)
+})
+
+test('current month sales are prorated after one observed week', () => {
+  assert.equal(proratePartialMonth(20, 20, 30), 30)
+  assert.equal(proratePartialMonth(3, 3, 30), 3)
+  assert.equal(proratePartialMonth(20, 30, 30), 20)
 })
