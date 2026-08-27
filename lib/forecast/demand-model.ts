@@ -23,6 +23,10 @@ export function proratePartialMonth(units: number, observedDays: number, daysInM
   return Math.max(0, units * daysInMonth / observedDays)
 }
 
+export function partialMonthContinuousDelta(units: number, observedDays: number, daysInMonth: number): number {
+  return proratePartialMonth(units, observedDays, daysInMonth) - Math.max(0, units)
+}
+
 function predict(name: ModelName, history: number[]): number | null {
   if (!history.length) return null
   const h = history.map(x => Math.max(0, Number(x) || 0))

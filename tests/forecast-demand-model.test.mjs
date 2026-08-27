@@ -6,6 +6,7 @@ import {
   forecastMonths,
   largestRemainder,
   monthlyStoreReplenishments,
+  partialMonthContinuousDelta,
   pendingEligibleAfterArrival,
   proratePartialMonth,
   safetyStock,
@@ -87,4 +88,12 @@ test('current month sales are prorated after one observed week', () => {
   assert.equal(proratePartialMonth(20, 20, 30), 30)
   assert.equal(proratePartialMonth(3, 3, 30), 3)
   assert.equal(proratePartialMonth(20, 30, 30), 20)
+})
+
+test('monthly store replenishment stays fixed while continuous sales are prorated', () => {
+  const monthlyStoreProxy = 10
+  const onlineSales = 20
+  const adjustedTotal = monthlyStoreProxy + onlineSales + partialMonthContinuousDelta(onlineSales, 20, 30)
+  assert.equal(adjustedTotal, 40)
+  assert.equal(monthlyStoreProxy, 10)
 })

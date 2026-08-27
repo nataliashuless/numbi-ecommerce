@@ -6,8 +6,8 @@ import {
   forecastMonths,
   largestRemainder,
   monthlyStoreReplenishments,
+  partialMonthContinuousDelta,
   pendingEligibleAfterArrival,
-  proratePartialMonth,
   safetyStock,
   selectDemandModel,
   stabilizedStoreSizeProfile,
@@ -212,7 +212,11 @@ export async function GET(request: Request) {
       }
       if (!b.product_name && row.product_name) b.product_name = row.product_name
       const qty = Number(row.quantity) || 0
-      stockByWarehouseSku.set(`${row.warehouse_id}|${sku}`, Math.max(0, qty))
+      const warehouseSkuKey = `${row.warehouse_id}|${sku}`
+      stockByWarehouseSku.set(
+        warehouseSkuKey,
+        (stockByWarehouseSku.get(warehouseSkuKey) || 0) + Math.max(0, qty),
+      )
       const own = isOwnWarehouse(row.warehouse_id, row.warehouse_name)
       if (own) {
         // Own warehouses accumulate (principal + Ekho + any other own)
@@ -374,18 +378,24 @@ export async function GET(request: Request) {
     const skuMonthly = new Map<string, number[]>()
     const directSkuMonthly = new Map<string, number[]>()
     const storeSkuMonthly = new Map<string, Map<string, number[]>>()
+    const realStoreSkuMonthly = new Map<string, Map<string, number[]>>()
     for (const sku of stockBySku.keys()) {
       skuMonthly.set(sku, Array(monthSequence.length).fill(0))
       directSkuMonthly.set(sku, Array(monthSequence.length).fill(0))
     }
     for (const store of stores) {
       storeSkuMonthly.set(store.id, new Map([...stockBySku.keys()].map(sku => [sku, Array(monthSequence.length).fill(0)])))
+      realStoreSkuMonthly.set(store.id, new Map([...stockBySku.keys()].map(sku => [sku, Array(monthSequence.length).fill(0)])))
     }
     for (const inv of uniqueInvoices) {
       const index = monthIndex.get(monthKey(inv.date))
       if (index == null) continue
       const matchedStore = identificationKeys(inv.customer_identification).map(nit => storeByNit.get(nit)).find(Boolean)
-      const invoiceStore = inv.assigned_feria_id || (!matchedStore && isFeriaDate(inv.date)) ? undefined : matchedStore
+      const isFeriaInvoice = inv.assigned_feria_id != null || (!matchedStore && isFeriaDate(inv.date))
+      // Ferias are event demand, not recurring Online/WhatsApp demand and not
+      // a monthly store replenishment proxy.
+      if (isFeriaInvoice) continue
+      const invoiceStore = matchedStore
       for (const it of inv.items || []) {
         if (!it.code || it.code === 'ENVIO' || !stockBySku.has(it.code)) continue
         if (invoiceStore && realStoreSalesBySkuMonth.has(`${invoiceStore.id}|${it.code}|${monthKey(inv.date)}`)) continue
@@ -406,6 +416,8 @@ export async function GET(request: Request) {
       skuMonthly.get(sale.producto_sku)![index] += qty
       const storeSeries = storeSkuMonthly.get(sale.tienda_id)?.get(sale.producto_sku)
       if (storeSeries) storeSeries[index] += qty
+      const realSeries = realStoreSkuMonthly.get(sale.tienda_id)?.get(sale.producto_sku)
+      if (realSeries) realSeries[index] += qty
     }
 
     // Include the open month as a current-demand signal. Forecasting models
@@ -422,12 +434,29 @@ export async function GET(request: Request) {
       const daysInMonth = new Date(latestObserved.getFullYear(), latestObserved.getMonth() + 1, 0).getDate()
       if (currentIndex != null && observedDays < daysInMonth) {
         const scaleSeries = (series: number[]) => {
-          series[currentIndex] = proratePartialMonth(series[currentIndex], observedDays, daysInMonth)
+          const previous = series[currentIndex]
+          const delta = partialMonthContinuousDelta(previous, observedDays, daysInMonth)
+          series[currentIndex] = previous + delta
+          return delta
         }
-        for (const series of skuMonthly.values()) scaleSeries(series)
-        for (const series of directSkuMonthly.values()) scaleSeries(series)
-        for (const storeMap of storeSkuMonthly.values()) {
-          for (const series of storeMap.values()) scaleSeries(series)
+        // Direct sales occur continuously, so their open-month run rate can be
+        // extrapolated. Store invoices are one monthly replenishment and must
+        // never be multiplied by the day of month. Only real store sell-through
+        // is continuous enough to prorate.
+        for (const [sku, series] of directSkuMonthly) {
+          const delta = scaleSeries(series)
+          const totalSeries = skuMonthly.get(sku)
+          if (totalSeries) totalSeries[currentIndex] += delta
+        }
+        for (const [storeId, storeMap] of realStoreSkuMonthly) {
+          for (const [sku, realSeries] of storeMap) {
+            const delta = scaleSeries(realSeries)
+            if (delta === 0) continue
+            const totalSeries = skuMonthly.get(sku)
+            if (totalSeries) totalSeries[currentIndex] += delta
+            const combinedStoreSeries = storeSkuMonthly.get(storeId)?.get(sku)
+            if (combinedStoreSeries) combinedStoreSeries[currentIndex] += delta
+          }
         }
       }
     }
