@@ -27,6 +27,7 @@ interface VariantForecast {
   ventasShopify: number
   ventasWhatsApp: number
   ventasTiendas: number
+  ventasFerias: number
   ventasTotal: number
   ventasPeriodoEstacional: number
   velocidadDiariaReciente: number
@@ -148,6 +149,12 @@ export async function GET(request: Request) {
     seasonalEnd.setFullYear(seasonalEnd.getFullYear() - 1)
     const seasonalStartStr = seasonalStart.toISOString().slice(0, 10)
     const seasonalEndStr = seasonalEnd.toISOString().slice(0, 10)
+    const { data: feriaRows } = await supabase
+      .from('ferias')
+      .select('fecha_inicio, fecha_fin')
+      .lte('fecha_inicio', endDateStr)
+    const feriaWindows = (feriaRows || []) as Array<{ fecha_inicio: string; fecha_fin: string }>
+    const isFeriaDate = (date: string) => feriaWindows.some(feria => date >= feria.fecha_inicio && date <= feria.fecha_fin)
 
     // 1. Stock per SKU from siigo_product_stock (paginated)
     type StockRow = {
@@ -272,6 +279,7 @@ export async function GET(request: Request) {
       items: Array<{ code: string; description: string; quantity: number }>
       total: number
       credited_amount: number | null
+      assigned_feria_id: string | null
     }
     async function fetchInvoices(from: string, to: string): Promise<Invoice[]> {
       const result: Invoice[] = []
@@ -280,7 +288,7 @@ export async function GET(request: Request) {
       for (let i = 0; i < 50; i++) {
         const { data: page, error: invoiceError } = await supabase
           .from('siigo_invoices')
-          .select('id, date, customer_identification, observations, items, total, credited_amount')
+          .select('id, date, customer_identification, observations, items, total, credited_amount, assigned_feria_id')
           .gte('date', from)
           .lte('date', to)
           .range(pageStart, pageStart + pageSize - 1)
@@ -302,17 +310,18 @@ export async function GET(request: Request) {
     const seasonalInvoices = uniqueInvoices.filter(inv => inv.date >= seasonalStartStr && inv.date <= seasonalEndStr)
 
     // 4. Aggregate sales per SKU per channel
-    type Sales = { shopify: number; whatsapp: number; tiendas: number }
+    type Sales = { shopify: number; whatsapp: number; tiendas: number; ferias: number }
     const ventasPorSku = new Map<string, Sales>()
     const ventasEstacionalesPorSku = new Map<string, number>()
 
     for (const inv of invoices) {
       const invoiceStore = identificationKeys(inv.customer_identification).map(nit => storeByNit.get(nit)).find(Boolean)
-      const isTienda = invoiceStore != null
+      const isFeria = inv.assigned_feria_id != null || (!invoiceStore && isFeriaDate(inv.date))
+      const isTienda = invoiceStore != null && !isFeria
       const orderNum = extractOrderNum(inv.observations)
-      const isShopify = !isTienda && orderNum !== null && shopOrderNumbers.has(orderNum)
+      const isShopify = !isFeria && !isTienda && orderNum !== null && shopOrderNumbers.has(orderNum)
       // Default: WhatsApp (direct sale)
-      const channel: 'shopify' | 'whatsapp' | 'tiendas' = isTienda ? 'tiendas' : isShopify ? 'shopify' : 'whatsapp'
+      const channel: keyof Sales = isFeria ? 'ferias' : isTienda ? 'tiendas' : isShopify ? 'shopify' : 'whatsapp'
 
       for (const it of inv.items || []) {
         if (!it.code || it.code === 'ENVIO') continue
@@ -321,7 +330,7 @@ export async function GET(request: Request) {
         if (invoiceStore && realStoreSalesBySkuMonth.has(`${invoiceStore.id}|${it.code}|${inv.date.slice(0, 7)}`)) continue
         let s = ventasPorSku.get(it.code)
         if (!s) {
-          s = { shopify: 0, whatsapp: 0, tiendas: 0 }
+          s = { shopify: 0, whatsapp: 0, tiendas: 0, ferias: 0 }
           ventasPorSku.set(it.code, s)
         }
         s[channel] += it.quantity || 0
@@ -329,7 +338,7 @@ export async function GET(request: Request) {
     }
     for (const sale of realStoreSales) {
       if (!sale.producto_sku || sale.fecha < startDateStr || sale.fecha > endDateStr) continue
-      const current = ventasPorSku.get(sale.producto_sku) || { shopify: 0, whatsapp: 0, tiendas: 0 }
+      const current = ventasPorSku.get(sale.producto_sku) || { shopify: 0, whatsapp: 0, tiendas: 0, ferias: 0 }
       current.tiendas += Math.max(0, Number(sale.cantidad) || 0)
       ventasPorSku.set(sale.producto_sku, current)
     }
@@ -354,7 +363,11 @@ export async function GET(request: Request) {
       ? uniqueInvoices.reduce((min, inv) => monthKey(inv.date) < min ? monthKey(inv.date) : min, monthKey(uniqueInvoices[0].date))
       : monthKey(startDateStr)
     const monthCursor = new Date(`${firstInvoiceMonth}-01T12:00:00`)
-    const lastHistoryMonth = monthKey(endDateStr)
+    const endDay = endDate.getDate()
+    const lastDayOfCurrentMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate()
+    const completedHistoryDate = new Date(endDate)
+    if (endDay < lastDayOfCurrentMonth) completedHistoryDate.setMonth(completedHistoryDate.getMonth() - 1)
+    const lastHistoryMonth = monthKey(completedHistoryDate.toISOString())
     while (monthKey(monthCursor.toISOString()) <= lastHistoryMonth) {
       monthSequence.push(monthKey(monthCursor.toISOString()))
       monthCursor.setMonth(monthCursor.getMonth() + 1)
@@ -373,7 +386,8 @@ export async function GET(request: Request) {
     for (const inv of uniqueInvoices) {
       const index = monthIndex.get(monthKey(inv.date))
       if (index == null) continue
-      const invoiceStore = identificationKeys(inv.customer_identification).map(nit => storeByNit.get(nit)).find(Boolean)
+      const matchedStore = identificationKeys(inv.customer_identification).map(nit => storeByNit.get(nit)).find(Boolean)
+      const invoiceStore = inv.assigned_feria_id || (!matchedStore && isFeriaDate(inv.date)) ? undefined : matchedStore
       for (const it of inv.items || []) {
         if (!it.code || it.code === 'ENVIO' || !stockBySku.has(it.code)) continue
         if (invoiceStore && realStoreSalesBySkuMonth.has(`${invoiceStore.id}|${it.code}|${monthKey(inv.date)}`)) continue
@@ -486,9 +500,18 @@ export async function GET(request: Request) {
       for (let monthOffset = 0; monthOffset < monthsNeeded; monthOffset++) {
         const factor = monthOffset < wholeMonths ? 1 : monthOffset === wholeMonths ? partial : 0
         const quantity = Math.max(0, Math.round((directFuture[monthOffset] || 0) * factor))
-        const eventDate = new Date(endDate)
-        eventDate.setMonth(eventDate.getMonth() + monthOffset + 1)
-        for (const [sku, units] of allocateToSkus(skus, quantity, profile)) addTarget(sku, units, eventDate)
+        const periodStart = new Date(endDate)
+        periodStart.setMonth(periodStart.getMonth() + monthOffset)
+        const periodEnd = new Date(endDate)
+        periodEnd.setMonth(periodEnd.getMonth() + monthOffset + 1)
+        const intervalMs = periodEnd.getTime() - periodStart.getTime()
+        for (const [sku, units] of allocateToSkus(skus, quantity, profile)) {
+          const weekly = largestRemainder(units, [1, 2, 3, 4].map(key => ({ key: String(key), share: 1 })))
+          for (let quarter = 1; quarter <= 4; quarter++) {
+            const eventDate = new Date(periodStart.getTime() + intervalMs * quarter / 4)
+            addTarget(sku, weekly.get(String(quarter)) || 0, eventDate)
+          }
+        }
       }
       const directExpected = directFuture.slice(0, wholeMonths).reduce((sum, value) => sum + value, 0)
         + (partial > 0 ? (directFuture[wholeMonths] || 0) * partial : 0)
@@ -596,12 +619,16 @@ export async function GET(request: Request) {
     {
       const { data: pendingOrders } = await supabase
         .from('production_orders')
-        .select('id, fecha_entrega')
+        .select('id, fecha_creacion, fecha_entrega')
         .eq('estado', 'pendiente')
         .range(0, 999)
-      const typedOrders = (pendingOrders || []) as Array<{ id: string; fecha_entrega: string | null }>
+      const typedOrders = (pendingOrders || []) as Array<{ id: string; fecha_creacion: string | null; fecha_entrega: string | null }>
       const orderIds = typedOrders.map(o => o.id)
-      const arrivalByOrder = new Map(typedOrders.map(o => [o.id, o.fecha_entrega || endDateStr]))
+      const arrivalByOrder = new Map(typedOrders.map(o => {
+        if (o.fecha_entrega) return [o.id, o.fecha_entrega]
+        const placed = o.fecha_creacion ? new Date(`${o.fecha_creacion}T12:00:00`) : endDate
+        return [o.id, addBusinessDays(placed, PRODUCTION_LEAD_BUSINESS_DAYS).toISOString().slice(0, 10)]
+      }))
       if (orderIds.length > 0) {
         const { data: items } = await supabase
           .from('production_order_items')
@@ -632,14 +659,14 @@ export async function GET(request: Request) {
 
     for (const sku of allSkus) {
       const stockInfo = stockBySku.get(sku) || { product_name: '', stockBodega: 0, stockConsignado: 0 }
-      const ventas = ventasPorSku.get(sku) || { shopify: 0, whatsapp: 0, tiendas: 0 }
+      const ventas = ventasPorSku.get(sku) || { shopify: 0, whatsapp: 0, tiendas: 0, ferias: 0 }
       const ventasPeriodoEstacional = ventasEstacionalesPorSku.get(sku) || 0
 
       // Only include SKUs that exist in product cache (i.e. are real products, not raw mat)
       // If a SKU has sales but no stock entry, it might be a raw material item we don't want.
       if (!stockBySku.has(sku)) continue
 
-      const ventasTotal = ventas.shopify + ventas.whatsapp + ventas.tiendas
+      const ventasTotal = ventas.shopify + ventas.whatsapp + ventas.tiendas + ventas.ferias
       // Store inventory was already netted location-by-location when producing
       // replenishment needs. It must not be subtracted again as a pooled asset.
       const stockTotal = stockInfo.stockBodega
@@ -720,6 +747,7 @@ export async function GET(request: Request) {
         ventasShopify: ventas.shopify,
         ventasWhatsApp: ventas.whatsapp,
         ventasTiendas: ventas.tiendas,
+        ventasFerias: ventas.ferias,
         ventasTotal,
         ventasPeriodoEstacional,
         velocidadDiariaReciente: Math.round(velocidadDiariaReciente * 100) / 100,
@@ -812,6 +840,7 @@ export async function GET(request: Request) {
       totalVentasOnline: forecast.reduce((sum, f) => sum + f.ventasShopify, 0),
       totalVentasWhatsApp: forecast.reduce((sum, f) => sum + f.ventasWhatsApp, 0),
       totalVentasTiendas: forecast.reduce((sum, f) => sum + f.ventasTiendas, 0),
+      totalVentasFerias: forecast.reduce((sum, f) => sum + f.ventasFerias, 0),
       totalVentasPeriodoEstacional: forecast.reduce((sum, f) => sum + f.ventasPeriodoEstacional, 0),
       skusConAjusteEstacional: forecast.filter(f => f.demandaFuente === 'estacional').length,
       totalStockBodega: forecast.reduce((sum, f) => sum + f.stockBodega, 0),

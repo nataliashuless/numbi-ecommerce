@@ -31,7 +31,11 @@ const referenceBySku = new Map(stock.filter(row => row.product_code).map(row => 
 const valid = [...new Map(invoices.map(invoice => [invoice.id, invoice])).values()]
   .filter(invoice => (Number(invoice.credited_amount) || 0) < (Number(invoice.total) || 0))
 const firstMonth = valid.reduce((min, invoice) => invoice.date.slice(0, 7) < min ? invoice.date.slice(0, 7) : min, valid[0].date.slice(0, 7))
-const lastMonth = valid.reduce((max, invoice) => invoice.date.slice(0, 7) > max ? invoice.date.slice(0, 7) : max, valid[0].date.slice(0, 7))
+const latestDate = valid.reduce((max, invoice) => invoice.date > max ? invoice.date : max, valid[0].date)
+const latest = new Date(`${latestDate}T12:00:00`)
+const latestMonthLastDay = new Date(latest.getFullYear(), latest.getMonth() + 1, 0).getDate()
+if (latest.getDate() < latestMonthLastDay) latest.setMonth(latest.getMonth() - 1)
+const lastMonth = latest.toISOString().slice(0, 7)
 const months = []
 const cursor = new Date(`${firstMonth}-01T12:00:00`)
 while (cursor.toISOString().slice(0, 7) <= lastMonth) {

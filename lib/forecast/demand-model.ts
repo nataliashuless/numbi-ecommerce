@@ -130,7 +130,11 @@ export function safetyStock(selected: SelectedModel, protectionMonths: number, e
   // 80% one-sided service level balances availability with excess inventory.
   // Error scales with sqrt(time); cap at 50% of expected demand so sparse data
   // cannot create an unreasonable buffer.
-  return Math.min(expectedDemand * 0.5, 0.84 * Math.sqrt(variance) * Math.sqrt(protectionMonths))
+  const variabilityReserve = 0.84 * Math.sqrt(variance) * Math.sqrt(protectionMonths)
+  // residual = actual - forecast, so a positive mean is systematic
+  // underforecasting. Preserve that risk instead of centering it away.
+  const biasReserve = Math.max(0, residualMean) * protectionMonths
+  return Math.min(expectedDemand * 0.5, variabilityReserve + biasReserve)
 }
 
 export function largestRemainder(total: number, shares: Array<{ key: string; share: number }>): Map<string, number> {

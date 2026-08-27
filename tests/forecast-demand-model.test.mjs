@@ -48,6 +48,12 @@ test('safety stock is driven by historical error and capped', () => {
   assert.ok(stock > 0 && stock <= 50)
 })
 
+test('systematic underforecast bias increases safety stock', () => {
+  const unbiased = { name: 'ma3', metrics: { wape: 0.2, bias: 0, mase: 1, observations: 4 }, residuals: [-4, 4, -4, 4] }
+  const underforecast = { ...unbiased, residuals: [4, 12, 4, 12] }
+  assert.ok(safetyStock(underforecast, 2, 100) > safetyStock(unbiased, 2, 100))
+})
+
 test('store stock only offsets that same store replenishment', () => {
   const storeA = monthlyStoreReplenishments([7], 2, 4)
   const storeB = monthlyStoreReplenishments([3], 1, 20)
