@@ -11,6 +11,7 @@ import {
   safetyStock,
   selectDemandModel,
   stabilizedStoreSizeProfile,
+  variabilityAdjustedSizeProfile,
 } from '@/lib/forecast/demand-model'
 
 interface VariantForecast {
@@ -471,7 +472,7 @@ export async function GET(request: Request) {
       list.push(sku)
       skusByReference.set(reference, list)
     }
-    const needEventsBySku = new Map<string, Array<{ date: string; quantity: number }>>()
+    const needEventsBySku = new Map<string, Array<{ date: string; quantity: number; recoverableSafety?: number }>>()
     const forecastDemandBySku = new Map<string, number>()
     const modelByReference = new Map<string, ReturnType<typeof selectDemandModel>>()
     const comparableMonthlyLevels = [...skusByReference.values()]
@@ -493,10 +494,10 @@ export async function GET(request: Request) {
     let baselineAbsError = 0
     let selectedAbsError = 0
     let backtestActual = 0
-    const addTarget = (sku: string, quantity: number, date: Date) => {
+    const addTarget = (sku: string, quantity: number, date: Date, recoverableSafety = 0) => {
       if (quantity <= 0) return
       const events = needEventsBySku.get(sku) || []
-      events.push({ date: date.toISOString().slice(0, 10), quantity })
+      events.push({ date: date.toISOString().slice(0, 10), quantity, recoverableSafety: Math.min(quantity, recoverableSafety) })
       needEventsBySku.set(sku, events)
     }
     const addForecastDemand = (sku: string, quantity: number) => {
@@ -586,7 +587,16 @@ export async function GET(request: Request) {
       const directExpected = directFuture.slice(0, wholeMonths).reduce((sum, value) => sum + value, 0)
         + (partial > 0 ? (directFuture[wholeMonths] || 0) * partial : 0)
       const directSafety = Math.round(safetyStock(directModel, protectionMonths, directExpected))
-      for (const [sku, units] of allocateToSkus(skus, directSafety, profile)) addTarget(sku, units, protectionEnd)
+      const directSizeSeries = new Map<string, number[]>()
+      for (const sku of skus) {
+        const size = parseProductName(stockBySku.get(sku)?.product_name || '').size || sku
+        const existing = directSizeSeries.get(size) || Array(monthSequence.length).fill(0)
+        const values = directSkuMonthly.get(sku) || []
+        for (let i = 0; i < existing.length; i++) existing[i] += values[i] || 0
+        directSizeSeries.set(size, existing)
+      }
+      const directSafetyProfile = variabilityAdjustedSizeProfile(directSizeSeries, profile)
+      for (const [sku, units] of allocateToSkus(skus, directSafety, directSafetyProfile)) addTarget(sku, units, protectionEnd)
 
       // Store demand: each location owns its stock and receives one independent
       // replenishment per month. A store with sparse history inherits the same
@@ -651,7 +661,8 @@ export async function GET(request: Request) {
         // If a store has demand but no warehouse link, do not silently drop its
         // replenishment. Its observable stock is unknown, so use zero rather
         // than inventing inventory that may not exist.
-        const safetyAllocation = allocateToSkus(skus, storeBuffer, storeProfile)
+        const storeSafetyProfile = variabilityAdjustedSizeProfile(storeSizeSeries, storeProfile)
+        const safetyAllocation = allocateToSkus(skus, storeBuffer, storeSafetyProfile)
         const demandBySku = new Map(skus.map(sku => [sku, [] as number[]]))
         for (let monthOffset = 0; monthOffset < monthsNeeded; monthOffset++) {
           const factor = monthOffset < wholeMonths ? 1 : monthOffset === wholeMonths ? partial : 0
@@ -670,10 +681,13 @@ export async function GET(request: Request) {
             safetyAllocation.get(sku) || 0,
             initialStock,
           )
+          const firstDemand = demandBySku.get(sku)?.[0] || 0
+          const safetyUnits = safetyAllocation.get(sku) || 0
+          const safetyShortfallAfterDemand = Math.max(0, safetyUnits - Math.max(0, initialStock - firstDemand))
           replenishments.forEach((quantity, monthOffset) => {
             const reviewDate = new Date(endDate)
             reviewDate.setMonth(reviewDate.getMonth() + monthOffset)
-            addTarget(sku, quantity, reviewDate)
+            addTarget(sku, quantity, reviewDate, monthOffset === 0 ? safetyShortfallAfterDemand : 0)
           })
         }
       }

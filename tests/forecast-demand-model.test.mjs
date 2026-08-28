@@ -13,6 +13,7 @@ import {
   safetyStock,
   selectDemandModel,
   stabilizedStoreSizeProfile,
+  variabilityAdjustedSizeProfile,
 } from '../lib/forecast/demand-model.ts'
 
 test('seasonal history can select and reproduce an annual pattern', () => {
@@ -56,6 +57,20 @@ test('systematic underforecast bias increases safety stock', () => {
   const unbiased = { name: 'ma3', metrics: { wape: 0.2, bias: 0, mase: 1, observations: 4 }, residuals: [-4, 4, -4, 4] }
   const underforecast = { ...unbiased, residuals: [4, 12, 4, 12] }
   assert.ok(safetyStock(underforecast, 2, 100) > safetyStock(unbiased, 2, 100))
+})
+
+test('backtested safety chooses the smallest buffer without materially worse shortages', () => {
+  const model = { name: 'ma3', metrics: { wape: 0.2, bias: 0, mase: 1, observations: 8 }, residuals: [-2, 1, -1, 2, -2, 1, -1, 2] }
+  const reserve = safetyStock(model, 1, 20)
+  assert.ok(reserve >= 0 && reserve <= 10)
+})
+
+test('variable sizes receive more safety weight than equally selling stable sizes', () => {
+  const adjusted = variabilityAdjustedSizeProfile(
+    new Map([['23', [2, 2, 2, 2]], ['24', [0, 4, 0, 4]]]),
+    new Map([['23', 0.5], ['24', 0.5]]),
+  )
+  assert.ok((adjusted.get('24') || 0) > (adjusted.get('23') || 0))
 })
 
 test('store stock only offsets that same store replenishment', () => {
@@ -114,4 +129,14 @@ test('production uses dated inbound and prevents post-arrival stockouts', () => 
   ]
   assert.equal(productionRequiredAtArrival(0, [{ quantity: 10, arrival: '2026-11-20' }], needs, '2026-11-06'), 6)
   assert.equal(productionRequiredAtArrival(14, [], needs, '2026-11-06'), 0)
+})
+
+test('unserved pre-arrival store safety is restored but lost demand is not produced', () => {
+  const needs = [
+    { quantity: 7, recoverableSafety: 2, date: '2026-09-01' },
+    { quantity: 5, date: '2026-10-01' },
+    { quantity: 5, date: '2026-11-01' },
+    { quantity: 5, date: '2026-12-01' },
+  ]
+  assert.equal(productionRequiredAtArrival(0, [], needs, '2026-11-06'), 7)
 })

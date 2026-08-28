@@ -139,14 +139,45 @@ export function safetyStock(selected: SelectedModel, protectionMonths: number, e
   if (!selected.residuals.length || expectedDemand <= 0) return 0
   const residualMean = mean(selected.residuals)
   const variance = mean(selected.residuals.map(x => (x - residualMean) ** 2))
-  // 80% one-sided service level balances availability with excess inventory.
-  // Error scales with sqrt(time); cap at 50% of expected demand so sparse data
-  // cannot create an unreasonable buffer.
+  // Start from the previous 80% service policy, then backtest smaller reserves.
+  // Select the least inventory that does not increase either historical break
+  // frequency or shortage units materially. This protects service while freeing
+  // capital whenever the observed errors support a leaner buffer.
   const variabilityReserve = 0.84 * Math.sqrt(variance) * Math.sqrt(protectionMonths)
-  // residual = actual - forecast, so a positive mean is systematic
-  // underforecasting. Preserve that risk instead of centering it away.
   const biasReserve = Math.max(0, residualMean) * protectionMonths
-  return Math.min(expectedDemand * 0.5, variabilityReserve + biasReserve)
+  const cap = expectedDemand * 0.5
+  const baseline = Math.min(cap, variabilityReserve + biasReserve)
+  const scaledErrors = selected.residuals.map(error => Math.max(0, error) * Math.sqrt(protectionMonths))
+  const breakCount = (reserve: number) => scaledErrors.filter(error => error > reserve).length
+  const shortageUnits = (reserve: number) => scaledErrors.reduce((sum, error) => sum + Math.max(0, error - reserve), 0)
+  const baselineBreaks = breakCount(baseline)
+  const baselineShortage = shortageUnits(baseline)
+  const materialTolerance = Math.max(1, scaledErrors.reduce((sum, error) => sum + error, 0) * 0.02)
+  const candidates = [...new Set([0, baseline, ...scaledErrors.map(error => Math.min(cap, error))])]
+    .sort((a, b) => a - b)
+  return candidates.find(reserve =>
+    breakCount(reserve) <= baselineBreaks
+    && shortageUnits(reserve) <= baselineShortage + materialTolerance
+  ) ?? baseline
+}
+
+export function variabilityAdjustedSizeProfile(
+  sizeSeries: Map<string, number[]>,
+  baseProfile: Map<string, number>,
+): Map<string, number> {
+  const weighted = new Map<string, number>()
+  for (const [size, share] of baseProfile) {
+    const values = (sizeSeries.get(size) || []).map(value => Math.max(0, value))
+    const avg = mean(values)
+    const variance = mean(values.map(value => (value - avg) ** 2))
+    const coefficientOfVariation = avg > 0 ? Math.min(2, Math.sqrt(variance) / avg) : 0
+    weighted.set(size, Math.max(0, share) * (1 + coefficientOfVariation * 0.5))
+  }
+  const total = [...weighted.values()].reduce((sum, value) => sum + value, 0)
+  if (total > 0) {
+    for (const [size, value] of weighted) weighted.set(size, value / total)
+  }
+  return weighted
 }
 
 export function largestRemainder(total: number, shares: Array<{ key: string; share: number }>): Map<string, number> {
@@ -275,15 +306,21 @@ export function pendingEligibleAfterArrival(
 export function productionRequiredAtArrival(
   initialStock: number,
   inbound: Array<{ quantity: number; arrival: string }>,
-  needs: Array<{ quantity: number; date: string }>,
+  needs: Array<{ quantity: number; date: string; recoverableSafety?: number }>,
   productionArrival: string,
 ): number {
   let projectedStock = Math.max(0, initialStock)
   const arrivals = inbound
     .map(line => ({ quantity: Math.max(0, line.quantity), arrival: line.arrival }))
     .sort((a, b) => a.arrival.localeCompare(b.arrival))
-  const demand = needs
-    .map(need => ({ quantity: Math.max(0, need.quantity), date: need.date }))
+  const demandByDate = new Map<string, { quantity: number; recoverableSafety: number }>()
+  for (const need of needs) {
+    const row = demandByDate.get(need.date) || { quantity: 0, recoverableSafety: 0 }
+    row.quantity += Math.max(0, need.quantity)
+    row.recoverableSafety += Math.max(0, need.recoverableSafety || 0)
+    demandByDate.set(need.date, row)
+  }
+  const demand = [...demandByDate].map(([date, row]) => ({ date, ...row }))
     .sort((a, b) => a.date.localeCompare(b.date))
   let arrivalIndex = 0
 
@@ -297,15 +334,19 @@ export function productionRequiredAtArrival(
   // Demand before today's production can arrive must be served by inventory
   // already available or prior orders. A shortage here is a lost sale, not a
   // quantity that should be manufactured late and left as excess inventory.
+  let deferredSafety = 0
   for (const need of demand.filter(item => item.date < productionArrival)) {
     receiveThrough(need.date)
+    const shortage = Math.max(0, need.quantity - projectedStock)
+    deferredSafety += Math.min(shortage, need.recoverableSafety)
     projectedStock = Math.max(0, projectedStock - need.quantity)
   }
   receiveThrough(productionArrival)
 
   // Find the smallest quantity arriving on the lead-time date that prevents a
   // shortage through the next review arrival, respecting later inbound dates.
-  let production = 0
+  let production = Math.max(0, deferredSafety - projectedStock)
+  projectedStock = Math.max(0, projectedStock + production - deferredSafety)
   for (const need of demand.filter(item => item.date >= productionArrival)) {
     receiveThrough(need.date)
     if (projectedStock < need.quantity) {
