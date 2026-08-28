@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -75,6 +76,12 @@ interface SiigoInvoice {
   items: SiigoItem[]
 }
 
+interface SiigoWarehouse {
+  id: number
+  name: string
+  active: boolean
+}
+
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('es-CO', {
     style: 'currency',
@@ -94,6 +101,7 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
+  const [warehouses, setWarehouses] = useState<SiigoWarehouse[]>([])
 
   useEffect(() => {
     setDateRange({ from: subDays(new Date(), 90), to: new Date() })
@@ -104,6 +112,7 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
     nombre: '',
     nombre_corto: '',
     siigo_customer_identification: '',
+    siigo_warehouse_id: '',
   })
   const [saving, setSaving] = useState(false)
 
@@ -138,6 +147,17 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
     }
   }
 
+  async function fetchWarehouses() {
+    try {
+      const res = await fetch('/api/siigo/warehouses')
+      if (!res.ok) return
+      const data = await res.json()
+      setWarehouses((data.warehouses || []).filter((warehouse: SiigoWarehouse) => warehouse.active))
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
   async function syncStockIfStale(force = false) {
     try {
       if (!force) {
@@ -167,7 +187,7 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
 
   useEffect(() => {
     setLoading(true)
-    Promise.all([fetchTienda(), fetchInvoices()])
+    Promise.all([fetchTienda(), fetchInvoices(), fetchWarehouses()])
       .finally(() => setLoading(false))
       .then(async () => {
         if (await syncStockIfStale()) await fetchTienda()
@@ -181,6 +201,7 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
       nombre: tienda.nombre,
       nombre_corto: tienda.nombre_corto || '',
       siigo_customer_identification: tienda.siigo_customer_identification || '',
+      siigo_warehouse_id: tienda.siigo_warehouse_id ? String(tienda.siigo_warehouse_id) : '',
     })
     setEditOpen(true)
   }
@@ -551,6 +572,28 @@ export default function TiendaDetailPage({ params }: { params: Promise<{ id: str
                   value={editForm.siigo_customer_identification}
                   onChange={e => setEditForm({ ...editForm, siigo_customer_identification: e.target.value })}
                 />
+              </div>
+              <div>
+                <Label htmlFor="edit-warehouse">Bodega de esta tienda en Siigo</Label>
+                <Select
+                  value={editForm.siigo_warehouse_id || 'none'}
+                  onValueChange={value => setEditForm({
+                    ...editForm,
+                    siigo_warehouse_id: value === 'none' ? '' : value,
+                  })}
+                >
+                  <SelectTrigger id="edit-warehouse">
+                    <SelectValue placeholder="Seleccionar bodega" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin bodega vinculada</SelectItem>
+                    {warehouses.map(warehouse => (
+                      <SelectItem key={warehouse.id} value={String(warehouse.id)}>
+                        {warehouse.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setEditOpen(false)} disabled={saving}>Cancelar</Button>

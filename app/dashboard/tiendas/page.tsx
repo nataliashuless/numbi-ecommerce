@@ -70,6 +70,7 @@ interface TiendaConStats {
   notas: string | null
   activa: boolean
   siigo_customer_identification: string | null
+  siigo_warehouse_id: number | null
   inventarioActual: number
   ventasPendientes: number
   montoPendiente: number
@@ -98,6 +99,12 @@ interface TiendaSalesStat {
   total: number
   unidades: number
   facturas: number
+}
+
+interface SiigoWarehouse {
+  id: number
+  name: string
+  active: boolean
 }
 
 function formatCurrency(value: number): string {
@@ -142,6 +149,7 @@ export default function TiendasPage() {
   const [stats, setStats] = useState<Stats>({ totalTiendas: 0, tiendasActivas: 0, inventarioTotal: 0, montoPendienteTotal: 0 })
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [warehouses, setWarehouses] = useState<SiigoWarehouse[]>([])
 
   // Chart state
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
@@ -168,6 +176,7 @@ export default function TiendasPage() {
     comision_fijo: '',
     notas: '',
     siigo_customer_identification: '',
+    siigo_warehouse_id: '',
   })
   const [siigoLookup, setSiigoLookup] = useState<{ loading: boolean; found: string | null; error: string | null }>({
     loading: false,
@@ -220,6 +229,17 @@ export default function TiendasPage() {
       console.error('Error fetching data:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function fetchWarehouses() {
+    try {
+      const res = await fetch('/api/siigo/warehouses')
+      if (!res.ok) return
+      const data = await res.json()
+      setWarehouses((data.warehouses || []).filter((warehouse: SiigoWarehouse) => warehouse.active))
+    } catch (error) {
+      console.error('Error fetching Siigo warehouses:', error)
     }
   }
 
@@ -310,6 +330,7 @@ export default function TiendasPage() {
 
   useEffect(() => {
     fetchData()
+    fetchWarehouses()
   }, [])
 
   useEffect(() => {
@@ -344,6 +365,7 @@ export default function TiendasPage() {
           comision_fijo: '',
           notas: '',
           siigo_customer_identification: '',
+          siigo_warehouse_id: '',
         })
         setSiigoLookup({ loading: false, found: null, error: null })
         fetchData()
@@ -537,6 +559,32 @@ export default function TiendasPage() {
                     onChange={e => setFormData({ ...formData, direccion: e.target.value })}
                     placeholder="Direccion de la tienda"
                   />
+                </div>
+
+                <div>
+                  <Label htmlFor="siigo_warehouse">Bodega de esta tienda en Siigo</Label>
+                  <p className="text-xs text-[#545454] mb-2">
+                    Permite usar únicamente el inventario consignado de esta tienda al calcular su reposición.
+                  </p>
+                  <Select
+                    value={formData.siigo_warehouse_id || 'none'}
+                    onValueChange={value => setFormData({
+                      ...formData,
+                      siigo_warehouse_id: value === 'none' ? '' : value,
+                    })}
+                  >
+                    <SelectTrigger id="siigo_warehouse">
+                      <SelectValue placeholder="Seleccionar bodega" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin bodega vinculada</SelectItem>
+                      {warehouses.map(warehouse => (
+                        <SelectItem key={warehouse.id} value={String(warehouse.id)}>
+                          {warehouse.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="border-t pt-4">

@@ -90,6 +90,7 @@ export async function POST(request: Request) {
       notas: body.notas || null,
       activa: true,
       siigo_customer_identification: body.siigo_customer_identification || null,
+      siigo_warehouse_id: body.siigo_warehouse_id ? Number(body.siigo_warehouse_id) : null,
     }])
     .select()
     .single()
@@ -124,6 +125,7 @@ export async function PUT(request: Request) {
 
   if ('nombre_corto' in body) updateData.nombre_corto = body.nombre_corto || null
   if ('siigo_customer_identification' in body) updateData.siigo_customer_identification = body.siigo_customer_identification || null
+  if ('siigo_warehouse_id' in body) updateData.siigo_warehouse_id = body.siigo_warehouse_id ? Number(body.siigo_warehouse_id) : null
   if ('siigo_cost_center_id' in body) updateData.siigo_cost_center_id = body.siigo_cost_center_id
   if ('siigo_cost_center_name' in body) updateData.siigo_cost_center_name = body.siigo_cost_center_name
   if ('siigo_seller_id' in body) updateData.siigo_seller_id = body.siigo_seller_id

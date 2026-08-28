@@ -170,6 +170,7 @@ export async function PATCH(
     'notas',
     'activa',
     'siigo_customer_identification',
+    'siigo_warehouse_id',
     'siigo_cost_center_id',
     'siigo_cost_center_name',
     'siigo_seller_id',
@@ -181,6 +182,9 @@ export async function PATCH(
   const update: Record<string, unknown> = {}
   for (const key of ALLOWED) {
     if (key in body) update[key] = body[key] ?? null
+  }
+  if ('siigo_warehouse_id' in body) {
+    update.siigo_warehouse_id = body.siigo_warehouse_id ? Number(body.siigo_warehouse_id) : null
   }
   update.updated_at = new Date().toISOString()
 
