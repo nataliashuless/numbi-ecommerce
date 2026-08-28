@@ -89,8 +89,16 @@ function designMatchesNorm(a: string, b: string): boolean {
 
 const PRINCIPAL_WAREHOUSE_ID = 27
 const PRODUCT_ACCOUNT_GROUP_ID = 339 // solo productos terminados
-const PRODUCTION_LEAD_BUSINESS_DAYS = 50
+const DEFAULT_PRODUCTION_LEAD_BUSINESS_DAYS = 52
 const REVIEW_PERIOD_MONTHS = 1
+const BLACK_FRIDAY_UPLIFT = 0.10
+const SCHOOL_SEASON_UPLIFT = 0.10
+
+function commercialSeasonFactor(date: Date): number {
+  if (date.getMonth() === 10) return 1 + BLACK_FRIDAY_UPLIFT
+  if (date.getMonth() === 0) return 1 + SCHOOL_SEASON_UPLIFT
+  return 1
+}
 
 function parseProductName(desc: string): { reference: string; size: string | null } {
   const trimmed = (desc || '').trim()
@@ -128,7 +136,10 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const diasAnalisis = parseInt(searchParams.get('dias') || '60')
-  const leadTimeDias = parseInt(searchParams.get('lead_time') || '14')
+  const requestedLeadTime = Number.parseInt(searchParams.get('lead_time') || '', 10)
+  const leadTimeDias = Number.isFinite(requestedLeadTime)
+    ? Math.min(365, Math.max(1, requestedLeadTime))
+    : DEFAULT_PRODUCTION_LEAD_BUSINESS_DAYS
   const stockSeguridad = parseInt(searchParams.get('stock_seguridad') || '7')
 
   const supabase = getAdminClient()
@@ -139,7 +150,7 @@ export async function GET(request: Request) {
     startDate.setDate(startDate.getDate() - diasAnalisis)
     const startDateStr = startDate.toISOString().slice(0, 10)
     const endDateStr = endDate.toISOString().slice(0, 10)
-    const leadTimeEnd = addBusinessDays(endDate, PRODUCTION_LEAD_BUSINESS_DAYS)
+    const leadTimeEnd = addBusinessDays(endDate, leadTimeDias)
     const protectionEnd = new Date(leadTimeEnd)
     protectionEnd.setMonth(protectionEnd.getMonth() + REVIEW_PERIOD_MONTHS)
     const protectionDays = Math.max(1, Math.ceil((protectionEnd.getTime() - endDate.getTime()) / 86_400_000))
@@ -569,12 +580,17 @@ export async function GET(request: Request) {
       const partial = protectionMonths - wholeMonths
       for (let monthOffset = 0; monthOffset < monthsNeeded; monthOffset++) {
         const factor = monthOffset < wholeMonths ? 1 : monthOffset === wholeMonths ? partial : 0
-        const quantity = Math.max(0, Math.round((directFuture[monthOffset] || 0) * factor))
         const periodStart = new Date(endDate)
         periodStart.setMonth(periodStart.getMonth() + monthOffset)
         const periodEnd = new Date(endDate)
         periodEnd.setMonth(periodEnd.getMonth() + monthOffset + 1)
         const intervalMs = periodEnd.getTime() - periodStart.getTime()
+        const periodMidpoint = new Date(periodStart.getTime() + intervalMs / 2)
+        // Apply the commercial allowance before allocating integer pairs to
+        // sizes; applying it SKU by SKU would round away most of a 10% uplift.
+        const quantity = Math.max(0, Math.round(
+          (directFuture[monthOffset] || 0) * factor * commercialSeasonFactor(periodMidpoint),
+        ))
         for (const [sku, units] of allocateToSkus(skus, quantity, profile)) {
           addForecastDemand(sku, units)
           const weekly = largestRemainder(units, [1, 2, 3, 4].map(key => ({ key: String(key), share: 1 })))
@@ -667,7 +683,12 @@ export async function GET(request: Request) {
         for (let monthOffset = 0; monthOffset < monthsNeeded; monthOffset++) {
           const factor = monthOffset < wholeMonths ? 1 : monthOffset === wholeMonths ? partial : 0
           if (factor <= 0) continue
-          const demandAllocation = allocateToSkus(skus, Math.max(0, Math.round((storeFuture[monthOffset] || 0) * factor)), storeProfile)
+          const reviewDate = new Date(endDate)
+          reviewDate.setMonth(reviewDate.getMonth() + monthOffset)
+          const seasonalDemand = Math.max(0, Math.round(
+            (storeFuture[monthOffset] || 0) * factor * commercialSeasonFactor(reviewDate),
+          ))
+          const demandAllocation = allocateToSkus(skus, seasonalDemand, storeProfile)
           for (const sku of skus) {
             const units = demandAllocation.get(sku) || 0
             demandBySku.get(sku)!.push(units)
@@ -722,7 +743,7 @@ export async function GET(request: Request) {
       const arrivalByOrder = new Map(typedOrders.map(o => {
         if (o.fecha_entrega) return [o.id, o.fecha_entrega]
         const placed = o.fecha_creacion ? new Date(`${o.fecha_creacion}T12:00:00`) : endDate
-        return [o.id, addBusinessDays(placed, PRODUCTION_LEAD_BUSINESS_DAYS).toISOString().slice(0, 10)]
+        return [o.id, addBusinessDays(placed, leadTimeDias).toISOString().slice(0, 10)]
       }))
       if (orderIds.length > 0) {
         const { data: items } = await supabase
@@ -981,7 +1002,9 @@ export async function GET(request: Request) {
       },
       // Internal diagnostics; the current view does not render these fields.
       metodologia: {
-        leadTimeBusinessDays: PRODUCTION_LEAD_BUSINESS_DAYS,
+        leadTimeBusinessDays: leadTimeDias,
+        blackFridayUplift: BLACK_FRIDAY_UPLIFT,
+        schoolSeasonUplift: SCHOOL_SEASON_UPLIFT,
         reviewPeriodMonths: REVIEW_PERIOD_MONTHS,
         protectionDays,
         historyStart: firstInvoiceMonth,

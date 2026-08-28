@@ -1141,14 +1141,14 @@ export default function InventarioPage() {
                         </Select>
                       </div>
                       <div className="flex-1">
-                        <Label htmlFor="leadtime">Lead time produccion (dias)</Label>
+                        <Label htmlFor="leadtime">Lead time producción (días hábiles)</Label>
                         <Input
                           id="leadtime"
                           type="number"
                           min="1"
                           value={leadTime}
                           onChange={(e) => setLeadTime(e.target.value)}
-                          placeholder="14"
+                          placeholder="52"
                         />
                       </div>
                       <div className="flex-1">
