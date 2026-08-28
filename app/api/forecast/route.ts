@@ -738,13 +738,20 @@ export async function GET(request: Request) {
       const sep = key.lastIndexOf('|')
       const pendingDesign = key.slice(0, sep)
       const pendingSize = key.slice(sep + 1)
-      const candidates = [...allSkus].filter(sku => {
+      const sizeCandidates = [...allSkus].filter(sku => {
         const stock = stockBySku.get(sku)
         if (!stock) return false
         const parsed = parseProductName(stock.product_name)
-        if ((parsed.size != null ? String(parsed.size).trim() : '') !== pendingSize) return false
-        return designMatchesNorm(pendingDesign, normName(parsed.reference))
+        return (parsed.size != null ? String(parsed.size).trim() : '') === pendingSize
       })
+      const exactCandidates = sizeCandidates.filter(sku =>
+        normName(parseProductName(stockBySku.get(sku)?.product_name || '').reference) === pendingDesign
+      )
+      const candidates = exactCandidates.length > 0
+        ? exactCandidates
+        : sizeCandidates.filter(sku =>
+          designMatchesNorm(pendingDesign, normName(parseProductName(stockBySku.get(sku)?.product_name || '').reference))
+        )
       // Ambiguous aliases are deliberately left unmatched. Discounting the
       // wrong product creates both a hidden shortage and a duplicate order.
       if (candidates.length === 1) {
@@ -929,11 +936,10 @@ export async function GET(request: Request) {
     // (design/size naming differs between the order and Siigo). These units are
     // NOT being discounted from the suggestion.
     const enCaminoSinMatch: Array<{ label: string; unidades: number }> = []
-    let enCaminoMatchedUnits = 0
+    const enCaminoDiscountedUnits = variantsForecast.reduce((sum, variant) => sum + variant.enCamino, 0)
     for (const [key, lines] of enCaminoByKey) {
       const qty = lines.reduce((sum, line) => sum + line.quantity, 0)
-      if (enCaminoMatchedKeys.has(key)) enCaminoMatchedUnits += qty
-      else enCaminoSinMatch.push({ label: enCaminoLabelByKey.get(key) || key, unidades: qty })
+      if (!enCaminoMatchedKeys.has(key)) enCaminoSinMatch.push({ label: enCaminoLabelByKey.get(key) || key, unidades: qty })
     }
     enCaminoSinMatch.sort((a, b) => b.unidades - a.unidades)
 
@@ -943,7 +949,7 @@ export async function GET(request: Request) {
       resumen,
       enCamino: {
         totalUnidades: enCaminoTotalUnits,
-        matchUnidades: enCaminoMatchedUnits,
+        matchUnidades: enCaminoDiscountedUnits,
         sinMatch: enCaminoSinMatch,
       },
       bodegas: Array.from(warehouseDiag.entries())

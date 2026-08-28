@@ -1092,7 +1092,7 @@ export default function InventarioPage() {
                         <div className="flex-1">
                           <p className="text-sm text-[#1A2238]">
                             <b>{forecastData.enCamino.matchUnidades}</b> de <b>{forecastData.enCamino.totalUnidades}</b> pares
-                            en camino se están descontando del forecast.
+                            en camino reducen la producción sugerida hoy.
                           </p>
                           {forecastData.enCamino.sinMatch.length > 0 ? (
                             <div className="mt-2 bg-[#FEF3C7] border border-[#F59E0B]/30 rounded-md p-3">
