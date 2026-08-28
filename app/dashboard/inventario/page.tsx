@@ -251,34 +251,21 @@ export default function InventarioPage() {
   const [lastStockSync, setLastStockSync] = useState<string | null>(null)
   const [syncingStock, setSyncingStock] = useState(false)
 
-  // KPI values recomputed with the SAME logic the forecast table uses
-  // (respects the consignado toggle + units en camino), so the cards always
-  // match the table. Covers ALL products (ignores search/filter). Priority is
-  // derived from days-of-stock over the chosen stock base — exactly like the
-  // per-row recalc — so counts stay consistent with the visible priorities.
+  // Backend is the single source of truth for production, coverage and priority.
   const forecastKpis = useMemo(() => {
     const empty = { totalProducir: 0, criticos: 0, altos: 0, medios: 0 }
     if (!forecastData) return empty
-    const leadDays = parseInt(leadTime) || 14
-    const safetyDays = parseInt(stockSeguridad) || 7
     const out = { ...empty }
     for (const r of forecastData.referencias) {
       for (const v of r.variants) {
-        if (v.velocidadDiaria <= 0) continue
-        const stockBase = incluirConsignado ? v.stockBodega + v.stockConsignado : v.stockBodega
-        const stockNecesario = Math.ceil(v.velocidadDiaria * (leadDays + safetyDays))
-        out.totalProducir += Math.max(0, stockNecesario - stockBase - (v.enCamino || 0))
-        // Days of stock → priority (same thresholds as recalcVariant)
-        let dias: number | null = null
-        if (stockBase > 0) dias = Math.round(stockBase / v.velocidadDiaria)
-        else dias = 0
-        if (dias <= 7) out.criticos += 1
-        else if (dias <= 14) out.altos += 1
-        else if (dias <= 30) out.medios += 1
+        out.totalProducir += v.sugerenciaProduccion
+        if (v.prioridad === 'critica') out.criticos += 1
+        else if (v.prioridad === 'alta') out.altos += 1
+        else if (v.prioridad === 'media') out.medios += 1
       }
     }
     return out
-  }, [forecastData, incluirConsignado, leadTime, stockSeguridad])
+  }, [forecastData])
   const totalProducirToggle = forecastKpis.totalProducir
 
   async function fetchInventario() {
@@ -361,16 +348,7 @@ export default function InventarioPage() {
       media: 'Media (≤30 días)',
       baja: 'Baja',
     }
-    // Recompute suggestion with the same logic as the on-screen table
-    // (respects the consignado toggle + units en camino) so the file matches.
-    const leadDays = parseInt(leadTime) || 14
-    const safetyDays = parseInt(stockSeguridad) || 7
-    const suggestFor = (f: ForecastItem): number => {
-      if (f.velocidadDiaria <= 0) return 0
-      const stockBase = incluirConsignado ? f.stockBodega + f.stockConsignado : f.stockBodega
-      const stockNecesario = Math.ceil(f.velocidadDiaria * (leadDays + safetyDays))
-      return Math.max(0, stockNecesario - stockBase - (f.enCamino || 0))
-    }
+    const suggestFor = (f: ForecastItem): number => f.sugerenciaProduccion
 
     // The downloaded workbook is an actionable production order: omit SKUs
     // that do not need units and sort references alphabetically.
@@ -1270,38 +1248,7 @@ export default function InventarioPage() {
                     {(() => {
                       const allRefs = forecastData.referencias || []
                       const searchLowerF = forecastSearchTerm.toLowerCase()
-                      const leadDays = parseInt(leadTime) || 14
-                      const safetyDays = parseInt(stockSeguridad) || 7
-
-                      // Recalc per variant based on the toggle: stock for production decision.
-                      // Also discount units already on order (en camino).
-                      const recalcVariant = (v: ForecastItem): ForecastItem => {
-                        const stockBase = incluirConsignado
-                          ? v.stockBodega + v.stockConsignado
-                          : v.stockBodega
-                        const stockNecesario = Math.ceil(v.velocidadDiaria * (leadDays + safetyDays))
-                        const sugerencia = v.velocidadDiaria > 0
-                          ? Math.max(0, stockNecesario - stockBase - (v.enCamino || 0))
-                          : 0
-                        let dias: number | null = null
-                        if (v.velocidadDiaria > 0 && stockBase > 0) {
-                          dias = Math.round(stockBase / v.velocidadDiaria)
-                        } else if (v.velocidadDiaria > 0 && stockBase === 0) {
-                          dias = 0
-                        }
-                        let prioridad: ForecastItem['prioridad'] = 'baja'
-                        if (dias !== null) {
-                          if (dias <= 7) prioridad = 'critica'
-                          else if (dias <= 14) prioridad = 'alta'
-                          else if (dias <= 30) prioridad = 'media'
-                        }
-                        return {
-                          ...v,
-                          sugerenciaProduccion: sugerencia,
-                          diasHastaAgotamiento: dias,
-                          prioridad,
-                        }
-                      }
+                      const recalcVariant = (v: ForecastItem): ForecastItem => v
 
                       const filteredRefs: ForecastReference[] = allRefs
                         .map(r => {
@@ -1373,8 +1320,14 @@ export default function InventarioPage() {
                                   filteredRefs.map(r => {
                                     const isExpanded = expandedForecastRefs.has(r.reference)
                                     const rowBg = r.prioridad === 'critica' ? 'bg-red-50' : r.prioridad === 'alta' ? 'bg-orange-50' : ''
-                                    const stockBaseParent = incluirConsignado ? r.stockTotal : r.stockBodega
-                                    const diasParent = r.velocidadDiaria > 0 ? Math.round(stockBaseParent / r.velocidadDiaria) : null
+                                    const variantDays = r.variants
+                                      .map(v => v.diasHastaAgotamiento)
+                                      .filter((days): days is number => days !== null)
+                                    // Reference priority inherits the most urgent
+                                    // size, so its displayed coverage must do the
+                                    // same instead of hiding a missing size behind
+                                    // excess stock in other sizes.
+                                    const diasParent = variantDays.length ? Math.min(...variantDays) : null
                                     return (
                                       <Fragment key={r.reference}>
                                         <TableRow

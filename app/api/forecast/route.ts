@@ -7,8 +7,7 @@ import {
   largestRemainder,
   monthlyStoreReplenishments,
   partialMonthContinuousDelta,
-  pendingEligibleAfterArrival,
-  productionWithIncrementalReviewCoverage,
+  productionRequiredAtArrival,
   safetyStock,
   selectDemandModel,
   stabilizedStoreSizeProfile,
@@ -221,7 +220,7 @@ export async function GET(request: Request) {
       const own = isOwnWarehouse(row.warehouse_id, row.warehouse_name)
       if (own) {
         // Own warehouses accumulate (principal + Ekho + any other own)
-        b.stockBodega += qty
+        b.stockBodega += Math.max(0, qty)
       } else if (qty > 0) {
         b.stockConsignado += qty
       }
@@ -472,8 +471,8 @@ export async function GET(request: Request) {
       list.push(sku)
       skusByReference.set(reference, list)
     }
-    const targetBySku = new Map<string, number>()
     const needEventsBySku = new Map<string, Array<{ date: string; quantity: number }>>()
+    const forecastDemandBySku = new Map<string, number>()
     const modelByReference = new Map<string, ReturnType<typeof selectDemandModel>>()
     const comparableMonthlyLevels = [...skusByReference.values()]
       .map(skus => {
@@ -496,10 +495,12 @@ export async function GET(request: Request) {
     let backtestActual = 0
     const addTarget = (sku: string, quantity: number, date: Date) => {
       if (quantity <= 0) return
-      targetBySku.set(sku, (targetBySku.get(sku) || 0) + quantity)
       const events = needEventsBySku.get(sku) || []
       events.push({ date: date.toISOString().slice(0, 10), quantity })
       needEventsBySku.set(sku, events)
+    }
+    const addForecastDemand = (sku: string, quantity: number) => {
+      if (quantity > 0) forecastDemandBySku.set(sku, (forecastDemandBySku.get(sku) || 0) + quantity)
     }
     const allocateToSkus = (skus: string[], total: number, profile: Map<string, number>) => {
       const bySize = largestRemainder(total, [...profile].map(([key, share]) => ({ key, share })))
@@ -521,9 +522,15 @@ export async function GET(request: Request) {
       // Exclude structural pre-launch zeros; zeros after first demand remain and
       // are meaningful observations at reference level.
       const firstPositive = referenceSeries.findIndex(value => value > 0)
+      const hasLaunchInventory = skus.some(sku => {
+        const item = stockBySku.get(sku)
+        return item != null && item.stockBodega + item.stockConsignado > 0
+      })
       const training = firstPositive >= 0
         ? referenceSeries.slice(firstPositive)
-        : [newReferenceFallback, newReferenceFallback, newReferenceFallback]
+        : hasLaunchInventory
+          ? [newReferenceFallback, newReferenceFallback, newReferenceFallback]
+          : [0, 0, 0]
       const selected = selectDemandModel(training)
       modelByReference.set(reference, selected)
       const monthsNeeded = Math.max(1, Math.ceil(protectionMonths))
@@ -537,6 +544,11 @@ export async function GET(request: Request) {
       }
       const profile = correctedSizeProfile(sizeSeries, referenceSeries)
 
+      const aggregateStoreSeries = monthSequence.map((_, i) => stores.reduce((sum, store) =>
+        sum + skus.reduce((skuSum, sku) => skuSum + (storeSkuMonthly.get(store.id)?.get(sku)?.[i] || 0), 0), 0
+      ))
+      const aggregateFirst = aggregateStoreSeries.findIndex(value => value > 0)
+
       // Direct Online/WhatsApp demand: forecast at reference level. Its error
       // buffer is the only warehouse safety stock; store uncertainty is handled
       // separately below and is never buffered again at warehouse level.
@@ -544,7 +556,12 @@ export async function GET(request: Request) {
         skus.reduce((sum, sku) => sum + (directSkuMonthly.get(sku)?.[i] || 0), 0)
       )
       const directFirst = directSeries.findIndex(value => value > 0)
-      const directTraining = directFirst >= 0 ? directSeries.slice(directFirst) : training
+      // Never inherit store demand as direct demand. For a completely new
+      // reference, the conservative portfolio fallback belongs to direct only;
+      // stores require their own observed history and linked inventory.
+      const directTraining = directFirst >= 0
+        ? directSeries.slice(directFirst)
+        : aggregateFirst >= 0 ? [0, 0, 0] : training
       const directModel = selectDemandModel(directTraining)
       const directFuture = forecastMonths(directTraining, directModel.name, monthsNeeded)
       const wholeMonths = Math.floor(protectionMonths)
@@ -558,6 +575,7 @@ export async function GET(request: Request) {
         periodEnd.setMonth(periodEnd.getMonth() + monthOffset + 1)
         const intervalMs = periodEnd.getTime() - periodStart.getTime()
         for (const [sku, units] of allocateToSkus(skus, quantity, profile)) {
+          addForecastDemand(sku, units)
           const weekly = largestRemainder(units, [1, 2, 3, 4].map(key => ({ key: String(key), share: 1 })))
           for (let quarter = 1; quarter <= 4; quarter++) {
             const eventDate = new Date(periodStart.getTime() + intervalMs * quarter / 4)
@@ -573,15 +591,11 @@ export async function GET(request: Request) {
       // Store demand: each location owns its stock and receives one independent
       // replenishment per month. A store with sparse history inherits the same
       // reference aggregated across stores, scaled by its stable recent share.
-      const aggregateStoreSeries = monthSequence.map((_, i) => stores.reduce((sum, store) =>
-        sum + skus.reduce((skuSum, sku) => skuSum + (storeSkuMonthly.get(store.id)?.get(sku)?.[i] || 0), 0), 0
-      ))
-      const aggregateFirst = aggregateStoreSeries.findIndex(value => value > 0)
-      const aggregateTraining = aggregateFirst >= 0 ? aggregateStoreSeries.slice(aggregateFirst) : training
+      const aggregateTraining = aggregateFirst >= 0 ? aggregateStoreSeries.slice(aggregateFirst) : [0, 0, 0]
       const aggregateModel = selectDemandModel(aggregateTraining)
       const aggregateFuture = forecastMonths(aggregateTraining, aggregateModel.name, monthsNeeded)
-      const eligibleStores = stores.filter(store => skus.some(sku =>
-        (store.siigo_warehouse_id != null && (stockByWarehouseSku.get(`${store.siigo_warehouse_id}|${sku}`) || 0) > 0)
+      const eligibleStores = stores.filter(store => store.siigo_warehouse_id != null && skus.some(sku =>
+        (stockByWarehouseSku.get(`${store.siigo_warehouse_id}|${sku}`) || 0) > 0
         || (storeSkuMonthly.get(store.id)?.get(sku) || []).some(value => value > 0)
       ))
       const aggregateRecent = aggregateStoreSeries.slice(-6).reduce((sum, value) => sum + value, 0)
@@ -644,13 +658,13 @@ export async function GET(request: Request) {
           if (factor <= 0) continue
           const demandAllocation = allocateToSkus(skus, Math.max(0, Math.round((storeFuture[monthOffset] || 0) * factor)), storeProfile)
           for (const sku of skus) {
-            demandBySku.get(sku)!.push(demandAllocation.get(sku) || 0)
+            const units = demandAllocation.get(sku) || 0
+            demandBySku.get(sku)!.push(units)
+            addForecastDemand(sku, units)
           }
         }
         for (const sku of skus) {
-          const initialStock = store.siigo_warehouse_id == null
-            ? 0
-            : stockByWarehouseSku.get(`${store.siigo_warehouse_id}|${sku}`) || 0
+          const initialStock = stockByWarehouseSku.get(`${store.siigo_warehouse_id}|${sku}`) || 0
           const replenishments = monthlyStoreReplenishments(
             demandBySku.get(sku) || [],
             safetyAllocation.get(sku) || 0,
@@ -717,11 +731,28 @@ export async function GET(request: Request) {
     }
     // Track which keys actually matched a forecast variant.
     const enCaminoMatchedKeys = new Set<string>()
-    const eligiblePending = (sku: string, lines: PendingLine[]) =>
-      pendingEligibleAfterArrival(lines, needEventsBySku.get(sku) || [])
-
     // 5. Build variant forecasts
     const allSkus = new Set<string>([...stockBySku.keys(), ...ventasPorSku.keys()])
+    const pendingKeysBySku = new Map<string, string[]>()
+    for (const key of enCaminoByKey.keys()) {
+      const sep = key.lastIndexOf('|')
+      const pendingDesign = key.slice(0, sep)
+      const pendingSize = key.slice(sep + 1)
+      const candidates = [...allSkus].filter(sku => {
+        const stock = stockBySku.get(sku)
+        if (!stock) return false
+        const parsed = parseProductName(stock.product_name)
+        if ((parsed.size != null ? String(parsed.size).trim() : '') !== pendingSize) return false
+        return designMatchesNorm(pendingDesign, normName(parsed.reference))
+      })
+      // Ambiguous aliases are deliberately left unmatched. Discounting the
+      // wrong product creates both a hidden shortage and a duplicate order.
+      if (candidates.length === 1) {
+        const list = pendingKeysBySku.get(candidates[0]) || []
+        list.push(key)
+        pendingKeysBySku.set(candidates[0], list)
+      }
+    }
     const variantsForecast: VariantForecast[] = []
 
     for (const sku of allSkus) {
@@ -744,18 +775,8 @@ export async function GET(request: Request) {
       const selectedModel = modelByReference.get(reference)
       const demandaFuente: VariantForecast['demandaFuente'] =
         selectedModel?.name.startsWith('seasonal') ? 'estacional' : 'reciente'
-      // The current view derives production as rate × its visible parameter
-      // denominator. Encode the backend inventory target as a compatible rate,
-      // so the view stays byte-for-byte unchanged while all planning logic lives
-      // here. The tiny epsilon prevents floating point ceil from adding a pair.
-      const viewDenominator = Math.max(1, leadTimeDias + stockSeguridad)
-      const targetInventory = targetBySku.get(sku) || 0
       const datedNeeds = needEventsBySku.get(sku) || []
-      const leadTimeTarget = datedNeeds
-        .filter(need => need.date <= leadTimeEnd.toISOString().slice(0, 10))
-        .reduce((sum, need) => sum + need.quantity, 0)
-      const reviewPeriodTarget = Math.max(0, targetInventory - leadTimeTarget)
-      const velocidadDiaria = targetInventory > 0 ? (targetInventory - 1e-9) / viewDenominator : 0
+      const velocidadDiaria = (forecastDemandBySku.get(sku) || 0) / protectionDays
       const velocidadSemanal = velocidadDiaria * 7
 
       let diasHastaAgotamiento: number | null = null
@@ -768,45 +789,23 @@ export async function GET(request: Request) {
       // Units already on order (in transit) for this design + size.
       // Try exact key first, then a tolerant word-level design match (same size),
       // consuming each order key once so it can't discount two variants.
-      const refNorm = normName(reference)
-      const sizePart = size != null ? String(size).trim() : ''
-      const exactK = `${refNorm}|${sizePart}`
       const matchingPendingLines: PendingLine[] = []
-      if (enCaminoByKey.has(exactK) && !enCaminoMatchedKeys.has(exactK)) {
-        matchingPendingLines.push(...(enCaminoByKey.get(exactK) || []))
-        enCaminoMatchedKeys.add(exactK)
+      for (const key of pendingKeysBySku.get(sku) || []) {
+        matchingPendingLines.push(...(enCaminoByKey.get(key) || []))
+        enCaminoMatchedKeys.add(key)
       }
-      // More than one pending order may use an alias for the same Siigo
-      // product (e.g. "Niño 21" and "Básico Niño 21"). Combine every
-      // compatible key before applying it to dated needs, instead of stopping
-      // after the exact name and falsely reporting the alias as unmatched.
-      for (const [k, lines] of enCaminoByKey) {
-        if (enCaminoMatchedKeys.has(k)) continue
-        const sep = k.lastIndexOf('|')
-        const kDesign = k.slice(0, sep)
-        const kSize = k.slice(sep + 1)
-        if (kSize !== sizePart) continue
-        if (designMatchesNorm(kDesign, refNorm)) {
-          matchingPendingLines.push(...lines)
-          enCaminoMatchedKeys.add(k)
-        }
-      }
-      const enCamino = eligiblePending(sku, matchingPendingLines)
-
-      // The monthly review is incremental coverage, not an automatic full
-      // extra month. Stock and eligible inbound first cover the lead-time
-      // target; any projected surplus then covers the review-period target.
-      let sugerenciaProduccion = 0
-      if (velocidadDiaria > 0) {
-        sugerenciaProduccion = productionWithIncrementalReviewCoverage(
-          leadTimeTarget,
-          reviewPeriodTarget,
-          stockTotal + enCamino,
-        )
-      }
+      const productionArrival = leadTimeEnd.toISOString().slice(0, 10)
+      const withoutInbound = productionRequiredAtArrival(stockTotal, [], datedNeeds, productionArrival)
+      const sugerenciaProduccion = productionRequiredAtArrival(
+        stockTotal,
+        matchingPendingLines,
+        datedNeeds,
+        productionArrival,
+      )
+      const enCamino = Math.max(0, withoutInbound - sugerenciaProduccion)
 
       let prioridad: VariantForecast['prioridad'] = 'baja'
-      if (diasHastaAgotamiento !== null) {
+      if (sugerenciaProduccion > 0 && diasHastaAgotamiento !== null) {
         if (diasHastaAgotamiento <= 7) prioridad = 'critica'
         else if (diasHastaAgotamiento <= 14) prioridad = 'alta'
         else if (diasHastaAgotamiento <= 30) prioridad = 'media'

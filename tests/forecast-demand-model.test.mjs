@@ -8,7 +8,7 @@ import {
   monthlyStoreReplenishments,
   partialMonthContinuousDelta,
   pendingEligibleAfterArrival,
-  productionWithIncrementalReviewCoverage,
+  productionRequiredAtArrival,
   proratePartialMonth,
   safetyStock,
   selectDemandModel,
@@ -99,8 +99,19 @@ test('monthly store replenishment stays fixed while continuous sales are prorate
   assert.equal(monthlyStoreProxy, 10)
 })
 
-test('review period adds only the shortfall not covered after lead time', () => {
-  assert.equal(productionWithIncrementalReviewCoverage(60, 20, 75), 5)
-  assert.equal(productionWithIncrementalReviewCoverage(60, 20, 80), 0)
-  assert.equal(productionWithIncrementalReviewCoverage(60, 20, 40), 40)
+test('production arriving after lead time does not replace already lost demand', () => {
+  const needs = [
+    { quantity: 60, date: '2026-09-30' },
+    { quantity: 20, date: '2026-11-15' },
+  ]
+  assert.equal(productionRequiredAtArrival(40, [], needs, '2026-11-06'), 20)
+})
+
+test('production uses dated inbound and prevents post-arrival stockouts', () => {
+  const needs = [
+    { quantity: 6, date: '2026-11-10' },
+    { quantity: 8, date: '2026-12-01' },
+  ]
+  assert.equal(productionRequiredAtArrival(0, [{ quantity: 10, arrival: '2026-11-20' }], needs, '2026-11-06'), 6)
+  assert.equal(productionRequiredAtArrival(14, [], needs, '2026-11-06'), 0)
 })

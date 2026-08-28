@@ -272,22 +272,50 @@ export function pendingEligibleAfterArrival(
   return eligible
 }
 
-export function productionWithIncrementalReviewCoverage(
-  leadTimeTarget: number,
-  reviewPeriodTarget: number,
-  inventoryPosition: number,
+export function productionRequiredAtArrival(
+  initialStock: number,
+  inbound: Array<{ quantity: number; arrival: string }>,
+  needs: Array<{ quantity: number; date: string }>,
+  productionArrival: string,
 ): number {
-  const leadNeed = Math.max(0, leadTimeTarget)
-  const reviewNeed = Math.max(0, reviewPeriodTarget)
-  const available = Math.max(0, inventoryPosition)
+  let projectedStock = Math.max(0, initialStock)
+  const arrivals = inbound
+    .map(line => ({ quantity: Math.max(0, line.quantity), arrival: line.arrival }))
+    .sort((a, b) => a.arrival.localeCompare(b.arrival))
+  const demand = needs
+    .map(need => ({ quantity: Math.max(0, need.quantity), date: need.date }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+  let arrivalIndex = 0
 
-  // The review month is not an automatic extra month of production. Inventory
-  // remaining after lead-time coverage offsets it first; only its net shortfall
-  // is added to today's order.
-  const leadShortfall = Math.max(0, leadNeed - available)
-  const surplusAfterLead = Math.max(0, available - leadNeed)
-  const incrementalReview = Math.max(0, reviewNeed - surplusAfterLead)
-  return Math.round(leadShortfall + incrementalReview)
+  const receiveThrough = (date: string) => {
+    while (arrivalIndex < arrivals.length && arrivals[arrivalIndex].arrival <= date) {
+      projectedStock += arrivals[arrivalIndex].quantity
+      arrivalIndex += 1
+    }
+  }
+
+  // Demand before today's production can arrive must be served by inventory
+  // already available or prior orders. A shortage here is a lost sale, not a
+  // quantity that should be manufactured late and left as excess inventory.
+  for (const need of demand.filter(item => item.date < productionArrival)) {
+    receiveThrough(need.date)
+    projectedStock = Math.max(0, projectedStock - need.quantity)
+  }
+  receiveThrough(productionArrival)
+
+  // Find the smallest quantity arriving on the lead-time date that prevents a
+  // shortage through the next review arrival, respecting later inbound dates.
+  let production = 0
+  for (const need of demand.filter(item => item.date >= productionArrival)) {
+    receiveThrough(need.date)
+    if (projectedStock < need.quantity) {
+      const shortfall = need.quantity - projectedStock
+      production += shortfall
+      projectedStock += shortfall
+    }
+    projectedStock -= need.quantity
+  }
+  return Math.max(0, Math.round(production))
 }
 
 function easterSunday(year: number): Date {
