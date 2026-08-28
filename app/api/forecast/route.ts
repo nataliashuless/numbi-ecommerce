@@ -91,14 +91,6 @@ const PRINCIPAL_WAREHOUSE_ID = 27
 const PRODUCT_ACCOUNT_GROUP_ID = 339 // solo productos terminados
 const DEFAULT_PRODUCTION_LEAD_BUSINESS_DAYS = 52
 const REVIEW_PERIOD_MONTHS = 1
-const BLACK_FRIDAY_UPLIFT = 0.10
-const SCHOOL_SEASON_UPLIFT = 0.10
-
-function commercialSeasonFactor(date: Date): number {
-  if (date.getMonth() === 10) return 1 + BLACK_FRIDAY_UPLIFT
-  if (date.getMonth() === 0) return 1 + SCHOOL_SEASON_UPLIFT
-  return 1
-}
 
 function parseProductName(desc: string): { reference: string; size: string | null } {
   const trimmed = (desc || '').trim()
@@ -585,12 +577,7 @@ export async function GET(request: Request) {
         const periodEnd = new Date(endDate)
         periodEnd.setMonth(periodEnd.getMonth() + monthOffset + 1)
         const intervalMs = periodEnd.getTime() - periodStart.getTime()
-        const periodMidpoint = new Date(periodStart.getTime() + intervalMs / 2)
-        // Apply the commercial allowance before allocating integer pairs to
-        // sizes; applying it SKU by SKU would round away most of a 10% uplift.
-        const quantity = Math.max(0, Math.round(
-          (directFuture[monthOffset] || 0) * factor * commercialSeasonFactor(periodMidpoint),
-        ))
+        const quantity = Math.max(0, Math.round((directFuture[monthOffset] || 0) * factor))
         for (const [sku, units] of allocateToSkus(skus, quantity, profile)) {
           addForecastDemand(sku, units)
           const weekly = largestRemainder(units, [1, 2, 3, 4].map(key => ({ key: String(key), share: 1 })))
@@ -683,12 +670,7 @@ export async function GET(request: Request) {
         for (let monthOffset = 0; monthOffset < monthsNeeded; monthOffset++) {
           const factor = monthOffset < wholeMonths ? 1 : monthOffset === wholeMonths ? partial : 0
           if (factor <= 0) continue
-          const reviewDate = new Date(endDate)
-          reviewDate.setMonth(reviewDate.getMonth() + monthOffset)
-          const seasonalDemand = Math.max(0, Math.round(
-            (storeFuture[monthOffset] || 0) * factor * commercialSeasonFactor(reviewDate),
-          ))
-          const demandAllocation = allocateToSkus(skus, seasonalDemand, storeProfile)
+          const demandAllocation = allocateToSkus(skus, Math.max(0, Math.round((storeFuture[monthOffset] || 0) * factor)), storeProfile)
           for (const sku of skus) {
             const units = demandAllocation.get(sku) || 0
             demandBySku.get(sku)!.push(units)
@@ -1003,8 +985,7 @@ export async function GET(request: Request) {
       // Internal diagnostics; the current view does not render these fields.
       metodologia: {
         leadTimeBusinessDays: leadTimeDias,
-        blackFridayUplift: BLACK_FRIDAY_UPLIFT,
-        schoolSeasonUplift: SCHOOL_SEASON_UPLIFT,
+        commercialSeasonality: 'same_month_last_year_scaled_by_recent_yoy_growth_when_backtest_wins',
         reviewPeriodMonths: REVIEW_PERIOD_MONTHS,
         protectionDays,
         historyStart: firstInvoiceMonth,

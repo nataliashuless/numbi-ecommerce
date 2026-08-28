@@ -60,8 +60,17 @@ function predict(name: ModelName, history: number[]): number | null {
   }
   if (name === 'seasonal') return h.length >= 12 ? h[h.length - 12] : null
   if (name === 'seasonal_blend') {
-    if (h.length < 12) return null
-    return (h[h.length - 12] + mean(h.slice(-3))) / 2
+    if (h.length < 15) return null
+    const seasonalBase = h[h.length - 12]
+    const recent = mean(h.slice(-3))
+    const comparablePrior = mean(h.slice(-15, -12))
+    // Preserve last year's month-specific seasonality (Black Friday, school
+    // season, etc.) while scaling it by the business's observed year-over-year
+    // growth. Caps prevent a weak comparison period from exploding purchases.
+    const growthFactor = comparablePrior > 0
+      ? Math.min(1.5, Math.max(0.75, recent / comparablePrior))
+      : 1
+    return seasonalBase * growthFactor
   }
   return null
 }
@@ -111,10 +120,10 @@ export function selectDemandModel(values: number[]): SelectedModel {
     }
   }
   // Avoid per-reference model-selection overfit. A more complex model must
-  // improve WAPE by at least 75% and cannot introduce materially worse bias;
+  // improve WAPE by at least 10% and cannot introduce materially worse bias;
   // otherwise retain the simple recent moving average.
   if (best && baseline && best.name !== 'ma3') {
-    const materiallyBetter = best.metrics.wape <= baseline.metrics.wape * 0.25
+    const materiallyBetter = best.metrics.wape <= baseline.metrics.wape * 0.90
     const stableBias = Math.abs(best.metrics.bias) <= Math.abs(baseline.metrics.bias) + 0.05
     if (!materiallyBetter || !stableBias) return baseline
   }

@@ -24,6 +24,12 @@ test('seasonal history can select and reproduce an annual pattern', () => {
   assert.ok(selected.metrics.observations > 0)
 })
 
+test('seasonal blend keeps the prior-year month and applies recent growth', () => {
+  const history = [10, 10, 10, 10, 10, 10, 10, 10, 10, 40, 20, 10, 12, 12, 12]
+  const next = forecastMonths(history, 'seasonal_blend', 1)[0]
+  assert.equal(next, 12)
+})
+
 test('largest remainder reconciles every integer pair', () => {
   const allocation = largestRemainder(100, [
     { key: '19', share: 0.1 }, { key: '20', share: 0.17 }, { key: '21', share: 0.24 },
