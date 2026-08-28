@@ -1141,7 +1141,7 @@ export default function InventarioPage() {
                         </Select>
                       </div>
                       <div className="flex-1">
-                        <Label htmlFor="leadtime">Lead time producción (días hábiles)</Label>
+                        <Label htmlFor="leadtime">Lead time producción (días calendario)</Label>
                         <Input
                           id="leadtime"
                           type="number"

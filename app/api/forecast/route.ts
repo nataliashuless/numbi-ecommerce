@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 import {
-  addBusinessDays,
   correctedSizeProfile,
   forecastMonths,
   largestRemainder,
@@ -89,8 +88,14 @@ function designMatchesNorm(a: string, b: string): boolean {
 
 const PRINCIPAL_WAREHOUSE_ID = 27
 const PRODUCT_ACCOUNT_GROUP_ID = 339 // solo productos terminados
-const DEFAULT_PRODUCTION_LEAD_BUSINESS_DAYS = 52
+const DEFAULT_PRODUCTION_LEAD_CALENDAR_DAYS = 52
 const REVIEW_PERIOD_MONTHS = 1
+
+function addCalendarDays(start: Date, days: number): Date {
+  const date = new Date(start)
+  date.setDate(date.getDate() + days)
+  return date
+}
 
 function parseProductName(desc: string): { reference: string; size: string | null } {
   const trimmed = (desc || '').trim()
@@ -131,7 +136,7 @@ export async function GET(request: Request) {
   const requestedLeadTime = Number.parseInt(searchParams.get('lead_time') || '', 10)
   const leadTimeDias = Number.isFinite(requestedLeadTime)
     ? Math.min(365, Math.max(1, requestedLeadTime))
-    : DEFAULT_PRODUCTION_LEAD_BUSINESS_DAYS
+    : DEFAULT_PRODUCTION_LEAD_CALENDAR_DAYS
   const stockSeguridad = parseInt(searchParams.get('stock_seguridad') || '7')
 
   const supabase = getAdminClient()
@@ -142,7 +147,7 @@ export async function GET(request: Request) {
     startDate.setDate(startDate.getDate() - diasAnalisis)
     const startDateStr = startDate.toISOString().slice(0, 10)
     const endDateStr = endDate.toISOString().slice(0, 10)
-    const leadTimeEnd = addBusinessDays(endDate, leadTimeDias)
+    const leadTimeEnd = addCalendarDays(endDate, leadTimeDias)
     const protectionEnd = new Date(leadTimeEnd)
     protectionEnd.setMonth(protectionEnd.getMonth() + REVIEW_PERIOD_MONTHS)
     const protectionDays = Math.max(1, Math.ceil((protectionEnd.getTime() - endDate.getTime()) / 86_400_000))
@@ -725,7 +730,7 @@ export async function GET(request: Request) {
       const arrivalByOrder = new Map(typedOrders.map(o => {
         if (o.fecha_entrega) return [o.id, o.fecha_entrega]
         const placed = o.fecha_creacion ? new Date(`${o.fecha_creacion}T12:00:00`) : endDate
-        return [o.id, addBusinessDays(placed, leadTimeDias).toISOString().slice(0, 10)]
+        return [o.id, addCalendarDays(placed, leadTimeDias).toISOString().slice(0, 10)]
       }))
       if (orderIds.length > 0) {
         const { data: items } = await supabase
@@ -984,7 +989,7 @@ export async function GET(request: Request) {
       },
       // Internal diagnostics; the current view does not render these fields.
       metodologia: {
-        leadTimeBusinessDays: leadTimeDias,
+        leadTimeCalendarDays: leadTimeDias,
         commercialSeasonality: 'same_month_last_year_scaled_by_recent_yoy_growth_when_backtest_wins',
         reviewPeriodMonths: REVIEW_PERIOD_MONTHS,
         protectionDays,
