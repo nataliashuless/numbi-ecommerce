@@ -15,7 +15,7 @@ import {
 import {
   Loader2, LogOut, ArrowLeft, ShoppingCart, Package, Boxes, BarChart3,
   MessageCircle, Settings, FileText, Store, TrendingUp, Tent, Megaphone,
-  Plus, Trash2, Truck, Check,
+  Plus, Trash2, Truck, Check, CalendarDays,
 } from 'lucide-react'
 
 interface OrderItem { diseno: string; talla: string | null; cantidad: number }
@@ -67,6 +67,11 @@ export default function OrdenesProduccionPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [editingDateId, setEditingDateId] = useState<string | null>(null)
+  const [editedDate, setEditedDate] = useState('')
+  const [savingDate, setSavingDate] = useState(false)
+  const [dateError, setDateError] = useState('')
+  const [dateMessage, setDateMessage] = useState('')
 
   const [numero, setNumero] = useState('')
   const [proveedor, setProveedor] = useState('')
@@ -115,6 +120,34 @@ export default function OrdenesProduccionPage() {
       }
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function saveReceptionDate(e: React.FormEvent, order: Order) {
+    e.preventDefault()
+    if (savingDate || !editedDate) return
+    setSavingDate(true)
+    setDateError('')
+    try {
+      const res = await fetch('/api/produccion/ordenes', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: order.id, fecha_entrega: editedDate }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'No se pudo guardar la fecha de recepción.')
+      if (data.orden?.id !== order.id || data.orden.fecha_entrega !== editedDate) {
+        throw new Error('No se pudo confirmar la fecha guardada. Actualiza la página para verificarla.')
+      }
+      setOrders(current => current.map(o => o.id === order.id
+        ? { ...o, fecha_entrega: data.orden.fecha_entrega }
+        : o).sort((a, b) => (a.fecha_entrega || '9999-12-31').localeCompare(b.fecha_entrega || '9999-12-31')))
+      setEditingDateId(null)
+      setDateMessage(`Fecha de recepción de la orden ${order.numero || 'sin número'} actualizada.`)
+    } catch (error) {
+      setDateError(error instanceof Error ? error.message : 'No se pudo guardar la fecha. Intenta nuevamente.')
+    } finally {
+      setSavingDate(false)
     }
   }
 
@@ -244,6 +277,8 @@ export default function OrdenesProduccionPage() {
           </Card>
         )}
 
+        {dateMessage && <p role="status" className="mb-4 text-sm text-green-700">{dateMessage}</p>}
+
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-8 w-8 animate-spin text-[#1A2238]" />
@@ -263,7 +298,7 @@ export default function OrdenesProduccionPage() {
             {orders.map(o => (
               <Card key={o.id}>
                 <CardHeader>
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
                     <div>
                       <CardTitle className="text-lg flex items-center gap-2">
                         Orden {o.numero || '—'}
@@ -275,24 +310,57 @@ export default function OrdenesProduccionPage() {
                         {' · '}<b className="text-[#1A2238]">{o.totalPares} pares</b>
                       </p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {o.estado === 'pendiente' && (
-                        <Button size="sm" variant="outline" onClick={() => setEstado(o.id, 'recibida')} className="text-green-700 border-green-300 hover:bg-green-50">
+                        <Button size="sm" variant="outline" disabled={savingDate}
+                          onClick={() => {
+                            setEditingDateId(o.id)
+                            setEditedDate(o.fecha_entrega || '')
+                            setDateError('')
+                            setDateMessage('')
+                          }}>
+                          <CalendarDays className="h-3 w-3 mr-1" />Cambiar fecha de recepción
+                        </Button>
+                      )}
+                      {o.estado === 'pendiente' && (
+                        <Button size="sm" variant="outline" disabled={editingDateId !== null} onClick={() => setEstado(o.id, 'recibida')} className="text-green-700 border-green-300 hover:bg-green-50">
                           <Check className="h-3 w-3 mr-1" />Marcar recibida
                         </Button>
                       )}
                       {o.estado === 'recibida' && (
-                        <Button size="sm" variant="outline" onClick={() => setEstado(o.id, 'pendiente')}>
+                        <Button size="sm" variant="outline" disabled={editingDateId !== null} onClick={() => setEstado(o.id, 'pendiente')}>
                           Reabrir
                         </Button>
                       )}
-                      <Button size="sm" variant="ghost" onClick={() => deleteOrder(o.id)} className="text-red-600 hover:bg-red-50">
+                      <Button size="sm" variant="ghost" disabled={editingDateId !== null} onClick={() => deleteOrder(o.id)} className="text-red-600 hover:bg-red-50">
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
+                  {editingDateId === o.id && o.estado === 'pendiente' && (
+                    <form onSubmit={e => saveReceptionDate(e, o)} className="mb-4 rounded-md border bg-gray-50 p-4 space-y-3">
+                      <div className="max-w-xs">
+                        <Label htmlFor={`fecha-recepcion-${o.id}`}>Fecha de recepción prevista</Label>
+                        <Input id={`fecha-recepcion-${o.id}`} type="date" required
+                          value={editedDate} disabled={savingDate} autoFocus
+                          aria-describedby={dateError ? `fecha-error-${o.id}` : undefined}
+                          aria-invalid={dateError ? true : undefined}
+                          onChange={e => { setEditedDate(e.target.value); setDateError('') }} />
+                      </div>
+                      {dateError && <p id={`fecha-error-${o.id}`} role="alert" className="text-sm text-red-600">{dateError}</p>}
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="submit" size="sm" disabled={savingDate || !editedDate || editedDate === o.fecha_entrega}
+                          className="bg-[#1DA9EF] hover:bg-[#0073D1] text-white">
+                          {savingDate && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                          {savingDate ? 'Guardando...' : 'Guardar fecha'}
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" disabled={savingDate}
+                          onClick={() => { setEditingDateId(null); setDateError('') }}>Cancelar</Button>
+                      </div>
+                    </form>
+                  )}
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
