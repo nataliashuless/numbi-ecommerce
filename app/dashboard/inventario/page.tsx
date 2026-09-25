@@ -412,7 +412,7 @@ export default function InventarioPage() {
     // Sheet 3: Parámetros usados
     const parametros = [
       { Parámetro: 'Período de análisis (días)', Valor: diasAnalisis },
-      { Parámetro: 'Lead time producción (días)', Valor: leadTime },
+      { Parámetro: 'Lead time producción (días hábiles)', Valor: leadTime },
       { Parámetro: 'Stock de seguridad (días)', Valor: stockSeguridad },
       { Parámetro: 'Stock a descontar', Valor: incluirConsignado ? 'Bodega + Consignado' : 'Solo bodega' },
       { Parámetro: 'Total a producir sugerido', Valor: detalle.reduce((s, d) => s + (d['Sugerencia producción'] || 0), 0) },
@@ -1141,7 +1141,7 @@ export default function InventarioPage() {
                         </Select>
                       </div>
                       <div className="flex-1">
-                        <Label htmlFor="leadtime">Lead time producción (días calendario)</Label>
+                        <Label htmlFor="leadtime">Lead time producción (días hábiles)</Label>
                         <Input
                           id="leadtime"
                           type="number"
@@ -1150,6 +1150,7 @@ export default function InventarioPage() {
                           onChange={(e) => setLeadTime(e.target.value)}
                           placeholder="52"
                         />
+                        <p className="mt-1 text-xs text-[#545454]">Excluye fines de semana y festivos nacionales de Colombia.</p>
                       </div>
                       <div className="flex-1">
                         <Label htmlFor="seguridad">Stock de seguridad (dias)</Label>
@@ -1478,7 +1479,7 @@ export default function InventarioPage() {
                             <div className="mt-4 pt-4 border-t">
                               <div className="flex justify-between items-center text-sm">
                                 <div className="text-[#545454]">
-                                  Producir = (Lead Time + Stock Seguridad) × Vel. Diaria − Stock − En camino
+                                  Recomendación conservadora hasta enero: demanda mensual estacional + seguridad − bodega − órdenes en camino
                                 </div>
                                 <div>
                                   <span className="text-[#545454]">Total a producir: </span>

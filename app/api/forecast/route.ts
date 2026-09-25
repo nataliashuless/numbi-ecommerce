@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 import {
+  addBusinessDays,
   correctedSizeProfile,
   forecastMonths,
   largestRemainder,
@@ -88,13 +89,75 @@ function designMatchesNorm(a: string, b: string): boolean {
 
 const PRINCIPAL_WAREHOUSE_ID = 27
 const PRODUCT_ACCOUNT_GROUP_ID = 339 // solo productos terminados
-const DEFAULT_PRODUCTION_LEAD_CALENDAR_DAYS = 52
-const REVIEW_PERIOD_MONTHS = 1
+const DEFAULT_PRODUCTION_LEAD_BUSINESS_DAYS = 52
 
-function addCalendarDays(start: Date, days: number): Date {
-  const date = new Date(start)
-  date.setDate(date.getDate() + days)
-  return date
+type PlanningPeriod = {
+  month: string
+  demandDate: Date
+  fraction: number
+  futureIndex: number | null
+}
+
+function buildSchoolSeasonPeriods(today: Date): { periods: PlanningPeriod[]; planningEnd: Date } {
+  let planningEnd = new Date(today.getFullYear(), 0, 31, 12)
+  if (today > planningEnd) planningEnd = new Date(today.getFullYear() + 1, 0, 31, 12)
+
+  const periods: PlanningPeriod[] = []
+  const currentMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 12)
+  const daysInCurrentMonth = currentMonthEnd.getDate()
+  const remainingDays = Math.max(0, daysInCurrentMonth - today.getDate() + 1)
+  periods.push({
+    month: today.toISOString().slice(0, 7),
+    demandDate: currentMonthEnd,
+    fraction: remainingDays / daysInCurrentMonth,
+    futureIndex: null,
+  })
+
+  let cursor = new Date(today.getFullYear(), today.getMonth() + 1, 1, 12)
+  let futureIndex = 0
+  while (cursor <= planningEnd) {
+    periods.push({
+      month: cursor.toISOString().slice(0, 7),
+      demandDate: new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 12),
+      fraction: 1,
+      futureIndex,
+    })
+    cursor.setMonth(cursor.getMonth() + 1)
+    futureIndex += 1
+  }
+  return { periods, planningEnd }
+}
+
+function seasonallyAdjustedFuture(
+  base: number[],
+  history: number[],
+  historyMonths: string[],
+  targetMonths: string[],
+): number[] {
+  const recent = history.slice(-3)
+  const priorComparable = history.slice(-15, -12)
+  const recentAverage = recent.reduce((sum, value) => sum + value, 0) / Math.max(1, recent.length)
+  const priorAverage = priorComparable.reduce((sum, value) => sum + value, 0) / Math.max(1, priorComparable.length)
+  const growth = priorAverage > 0 ? Math.min(1.5, Math.max(0.75, recentAverage / priorAverage)) : 1
+
+  return targetMonths.map((target, index) => {
+    const monthNumber = target.slice(5, 7)
+    const comparable = historyMonths
+      .map((month, historyIndex) => ({ month, value: history[historyIndex] || 0 }))
+      .filter(row => row.month.slice(5, 7) === monthNumber && row.month < target)
+      .slice(-2)
+    if (!comparable.length) return Math.max(0, base[index] || 0)
+    const seasonalBase = comparable.length === 1
+      ? comparable[0].value
+      : comparable[0].value * 0.35 + comparable[1].value * 0.65
+    const seasonal = seasonalBase * growth
+    const model = Math.max(0, base[index] || 0)
+    const blended = model * 0.5 + seasonal * 0.5
+    // November/December are consistently the strongest commercial months in
+    // Shuless history. Do not let a short recent moving average erase that
+    // observed peak, but retain a 50% blend to avoid copying one year blindly.
+    return ['11', '12'].includes(monthNumber) ? Math.max(model, blended) : blended
+  })
 }
 
 function parseProductName(desc: string): { reference: string; size: string | null } {
@@ -134,9 +197,9 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const diasAnalisis = parseInt(searchParams.get('dias') || '60')
   const requestedLeadTime = Number.parseInt(searchParams.get('lead_time') || '', 10)
-  const leadTimeDias = Number.isFinite(requestedLeadTime)
+  const leadTimeBusinessDays = Number.isFinite(requestedLeadTime)
     ? Math.min(365, Math.max(1, requestedLeadTime))
-    : DEFAULT_PRODUCTION_LEAD_CALENDAR_DAYS
+    : DEFAULT_PRODUCTION_LEAD_BUSINESS_DAYS
   const stockSeguridad = parseInt(searchParams.get('stock_seguridad') || '7')
 
   const supabase = getAdminClient()
@@ -147,9 +210,8 @@ export async function GET(request: Request) {
     startDate.setDate(startDate.getDate() - diasAnalisis)
     const startDateStr = startDate.toISOString().slice(0, 10)
     const endDateStr = endDate.toISOString().slice(0, 10)
-    const leadTimeEnd = addCalendarDays(endDate, leadTimeDias)
-    const protectionEnd = new Date(leadTimeEnd)
-    protectionEnd.setMonth(protectionEnd.getMonth() + REVIEW_PERIOD_MONTHS)
+    const leadTimeEnd = addBusinessDays(endDate, leadTimeBusinessDays)
+    const { periods: planningPeriods, planningEnd: protectionEnd } = buildSchoolSeasonPeriods(endDate)
     const protectionDays = Math.max(1, Math.ceil((protectionEnd.getTime() - endDate.getTime()) / 86_400_000))
     const protectionMonths = protectionDays / 30.4375
     const horizonteDias = protectionDays
@@ -542,7 +604,7 @@ export async function GET(request: Request) {
           : [0, 0, 0]
       const selected = selectDemandModel(training)
       modelByReference.set(reference, selected)
-      const monthsNeeded = Math.max(1, Math.ceil(protectionMonths))
+      const futureMonthsNeeded = planningPeriods.filter(period => period.futureIndex != null).length
       const sizeSeries = new Map<string, number[]>()
       for (const sku of skus) {
         const size = parseProductName(stockBySku.get(sku)?.product_name || '').size || sku
@@ -572,29 +634,31 @@ export async function GET(request: Request) {
         ? directSeries.slice(directFirst)
         : aggregateFirst >= 0 ? [0, 0, 0] : training
       const directModel = selectDemandModel(directTraining)
-      const directFuture = forecastMonths(directTraining, directModel.name, monthsNeeded)
-      const wholeMonths = Math.floor(protectionMonths)
-      const partial = protectionMonths - wholeMonths
-      for (let monthOffset = 0; monthOffset < monthsNeeded; monthOffset++) {
-        const factor = monthOffset < wholeMonths ? 1 : monthOffset === wholeMonths ? partial : 0
-        const periodStart = new Date(endDate)
-        periodStart.setMonth(periodStart.getMonth() + monthOffset)
-        const periodEnd = new Date(endDate)
-        periodEnd.setMonth(periodEnd.getMonth() + monthOffset + 1)
-        const intervalMs = periodEnd.getTime() - periodStart.getTime()
-        const quantity = Math.max(0, Math.round((directFuture[monthOffset] || 0) * factor))
+      const futureMonthKeys = planningPeriods
+        .filter(period => period.futureIndex != null)
+        .map(period => period.month)
+      const directFuture = seasonallyAdjustedFuture(
+        forecastMonths(directTraining, directModel.name, futureMonthsNeeded),
+        directSeries,
+        monthSequence,
+        futureMonthKeys,
+      )
+      const directCurrentMonth = directTraining[directTraining.length - 1] || 0
+      const directPeriodDemand = planningPeriods.map(period => Math.max(0, Math.round(
+        (period.futureIndex == null ? directCurrentMonth : (directFuture[period.futureIndex] || 0)) * period.fraction,
+      )))
+      for (let periodIndex = 0; periodIndex < planningPeriods.length; periodIndex++) {
+        const period = planningPeriods[periodIndex]
+        const quantity = directPeriodDemand[periodIndex]
         for (const [sku, units] of allocateToSkus(skus, quantity, profile)) {
           addForecastDemand(sku, units)
-          const weekly = largestRemainder(units, [1, 2, 3, 4].map(key => ({ key: String(key), share: 1 })))
-          for (let quarter = 1; quarter <= 4; quarter++) {
-            const eventDate = new Date(periodStart.getTime() + intervalMs * quarter / 4)
-            addTarget(sku, weekly.get(String(quarter)) || 0, eventDate)
-          }
+          addTarget(sku, units, period.demandDate)
         }
       }
-      const directExpected = directFuture.slice(0, wholeMonths).reduce((sum, value) => sum + value, 0)
-        + (partial > 0 ? (directFuture[wholeMonths] || 0) * partial : 0)
-      const directSafety = Math.round(safetyStock(directModel, protectionMonths, directExpected))
+      const directExpected = directPeriodDemand.reduce((sum, value) => sum + value, 0)
+      const statisticalSafety = safetyStock(directModel, protectionMonths, directExpected)
+      const manualSafety = directExpected / Math.max(1, protectionDays) * Math.max(0, stockSeguridad)
+      const directSafety = Math.round(Math.max(statisticalSafety, manualSafety))
       const directSizeSeries = new Map<string, number[]>()
       for (const sku of skus) {
         const size = parseProductName(stockBySku.get(sku)?.product_name || '').size || sku
@@ -611,7 +675,12 @@ export async function GET(request: Request) {
       // reference aggregated across stores, scaled by its stable recent share.
       const aggregateTraining = aggregateFirst >= 0 ? aggregateStoreSeries.slice(aggregateFirst) : [0, 0, 0]
       const aggregateModel = selectDemandModel(aggregateTraining)
-      const aggregateFuture = forecastMonths(aggregateTraining, aggregateModel.name, monthsNeeded)
+      const aggregateFuture = seasonallyAdjustedFuture(
+        forecastMonths(aggregateTraining, aggregateModel.name, futureMonthsNeeded),
+        aggregateStoreSeries,
+        monthSequence,
+        futureMonthKeys,
+      )
       const eligibleStores = stores.filter(store => store.siigo_warehouse_id != null && skus.some(sku =>
         (stockByWarehouseSku.get(`${store.siigo_warehouse_id}|${sku}`) || 0) > 0
         || (storeSkuMonthly.get(store.id)?.get(sku) || []).some(value => value > 0)
@@ -634,9 +703,20 @@ export async function GET(request: Request) {
           : equalShare
         const storeModel = enoughHistory ? selectDemandModel(storeTraining) : aggregateModel
         const storeFuture = enoughHistory
-          ? forecastMonths(storeTraining, storeModel.name, monthsNeeded)
+          ? seasonallyAdjustedFuture(
+            forecastMonths(storeTraining, storeModel.name, futureMonthsNeeded),
+            storeSeries,
+            monthSequence,
+            futureMonthKeys,
+          )
           : aggregateFuture.map(value => value * share)
-        const monthlyExpected = storeFuture[0] || 0
+        const storeCurrentMonth = enoughHistory
+          ? (storeTraining[storeTraining.length - 1] || 0)
+          : (aggregateTraining[aggregateTraining.length - 1] || 0) * share
+        const storePeriodDemand = planningPeriods.map(period => Math.max(0, Math.round(
+          (period.futureIndex == null ? storeCurrentMonth : (storeFuture[period.futureIndex] || 0)) * period.fraction,
+        )))
+        const monthlyExpected = storeFuture[0] || storeCurrentMonth
         const storeBuffer = Math.round(enoughHistory
           ? safetyStock(storeModel, 1, monthlyExpected)
           : safetyStock(aggregateModel, 1, aggregateFuture[0] || 0) * share)
@@ -672,10 +752,8 @@ export async function GET(request: Request) {
         const storeSafetyProfile = variabilityAdjustedSizeProfile(storeSizeSeries, storeProfile)
         const safetyAllocation = allocateToSkus(skus, storeBuffer, storeSafetyProfile)
         const demandBySku = new Map(skus.map(sku => [sku, [] as number[]]))
-        for (let monthOffset = 0; monthOffset < monthsNeeded; monthOffset++) {
-          const factor = monthOffset < wholeMonths ? 1 : monthOffset === wholeMonths ? partial : 0
-          if (factor <= 0) continue
-          const demandAllocation = allocateToSkus(skus, Math.max(0, Math.round((storeFuture[monthOffset] || 0) * factor)), storeProfile)
+        for (let periodIndex = 0; periodIndex < planningPeriods.length; periodIndex++) {
+          const demandAllocation = allocateToSkus(skus, storePeriodDemand[periodIndex], storeProfile)
           for (const sku of skus) {
             const units = demandAllocation.get(sku) || 0
             demandBySku.get(sku)!.push(units)
@@ -692,10 +770,9 @@ export async function GET(request: Request) {
           const firstDemand = demandBySku.get(sku)?.[0] || 0
           const safetyUnits = safetyAllocation.get(sku) || 0
           const safetyShortfallAfterDemand = Math.max(0, safetyUnits - Math.max(0, initialStock - firstDemand))
-          replenishments.forEach((quantity, monthOffset) => {
-            const reviewDate = new Date(endDate)
-            reviewDate.setMonth(reviewDate.getMonth() + monthOffset)
-            addTarget(sku, quantity, reviewDate, monthOffset === 0 ? safetyShortfallAfterDemand : 0)
+          replenishments.forEach((quantity, periodIndex) => {
+            const reviewDate = planningPeriods[periodIndex]?.demandDate || protectionEnd
+            addTarget(sku, quantity, reviewDate, periodIndex === 0 ? safetyShortfallAfterDemand : 0)
           })
         }
       }
@@ -713,38 +790,62 @@ export async function GET(request: Request) {
     }
 
     // 4b. Pending production orders (zapatos en camino) → units by (diseño, talla)
-    type PendingLine = { quantity: number; arrival: string }
+    type PendingLine = { quantity: number; arrival: string; inTransit: boolean }
     const enCaminoByKey = new Map<string, PendingLine[]>()
     // Keep the original label per key so diagnostics can show "Oso 23", not the
     // normalized key.
     const enCaminoLabelByKey = new Map<string, string>()
     let enCaminoTotalUnits = 0
     {
-      const { data: pendingOrders } = await supabase
+      const { data: orderRows } = await supabase
         .from('production_orders')
-        .select('id, fecha_creacion, fecha_entrega')
-        .eq('estado', 'pendiente')
+        .select('id, numero, fecha_creacion, fecha_entrega, estado')
+        .in('estado', ['pendiente', 'recibida'])
         .range(0, 999)
-      const typedOrders = (pendingOrders || []) as Array<{ id: string; fecha_creacion: string | null; fecha_entrega: string | null }>
+      type OrderRow = { id: string; numero: string | null; fecha_creacion: string | null; fecha_entrega: string | null; estado: string }
+      const typedOrders = ((orderRows || []) as OrderRow[]).filter(order =>
+        order.estado === 'pendiente' || /^(orden\s+)?0*30$/i.test((order.numero || '').trim()),
+      )
       const orderIds = typedOrders.map(o => o.id)
       const arrivalByOrder = new Map(typedOrders.map(o => {
+        // OC30 is the explicitly reported partial receipt: 30/100 are already
+        // physically in our warehouse but not yet in Siigo; the other 70 use
+        // the confirmed 52-business-day planning date from 2026-08-31.
+        if (/^(orden\s+)?0*30$/i.test((o.numero || '').trim())) {
+          return [o.id, addBusinessDays(new Date('2026-08-31T12:00:00'), leadTimeBusinessDays).toISOString().slice(0, 10)]
+        }
         if (o.fecha_entrega) return [o.id, o.fecha_entrega]
         const placed = o.fecha_creacion ? new Date(`${o.fecha_creacion}T12:00:00`) : endDate
-        return [o.id, addCalendarDays(placed, leadTimeDias).toISOString().slice(0, 10)]
+        return [o.id, addBusinessDays(placed, leadTimeBusinessDays).toISOString().slice(0, 10)]
       }))
       if (orderIds.length > 0) {
         const { data: items } = await supabase
           .from('production_order_items')
-          .select('order_id, diseno, talla, cantidad')
+          .select('id, order_id, diseno, talla, cantidad')
           .in('order_id', orderIds)
           .range(0, 9999)
-        for (const it of (items || []) as Array<{ order_id: string; diseno: string; talla: string | null; cantidad: number }>) {
+        type OrderItem = { id: string; order_id: string; diseno: string; talla: string | null; cantidad: number }
+        const typedItems = (items || []) as OrderItem[]
+        const oc30 = typedOrders.find(order => /^(orden\s+)?0*30$/i.test((order.numero || '').trim()))
+        const oc30Items = typedItems.filter(item => item.order_id === oc30?.id)
+        const receivedAllocation = largestRemainder(30, oc30Items.map(item => ({
+          key: item.id,
+          share: Math.max(0, Number(item.cantidad) || 0),
+        })))
+        for (const it of typedItems) {
           const key = enCaminoKey(it.diseno, it.talla)
           const qty = Number(it.cantidad) || 0
           const lines = enCaminoByKey.get(key) || []
-          lines.push({ quantity: qty, arrival: arrivalByOrder.get(it.order_id) || endDateStr })
+          const received = it.order_id === oc30?.id ? Math.min(qty, receivedAllocation.get(it.id) || 0) : 0
+          const remaining = Math.max(0, qty - received)
+          if (received > 0) lines.push({ quantity: received, arrival: endDateStr, inTransit: false })
+          if (remaining > 0) lines.push({
+            quantity: remaining,
+            arrival: arrivalByOrder.get(it.order_id) || endDateStr,
+            inTransit: true,
+          })
           enCaminoByKey.set(key, lines)
-          enCaminoTotalUnits += qty
+          enCaminoTotalUnits += remaining
           if (!enCaminoLabelByKey.has(key)) {
             enCaminoLabelByKey.set(key, `${it.diseno}${it.talla ? ` ${it.talla}` : ''}`)
           }
@@ -793,10 +894,25 @@ export async function GET(request: Request) {
       // If a SKU has sales but no stock entry, it might be a raw material item we don't want.
       if (!stockBySku.has(sku)) continue
 
+      // Match confirmed supply before calculating coverage. OC30 includes 30
+      // pairs physically received outside Siigo, so those units are current
+      // warehouse inventory for planning even though the accounting cache has
+      // not caught up yet.
+      const matchingPendingLines: PendingLine[] = []
+      for (const key of pendingKeysBySku.get(sku) || []) {
+        matchingPendingLines.push(...(enCaminoByKey.get(key) || []))
+        enCaminoMatchedKeys.add(key)
+      }
+      const receivedOutsideSiigo = matchingPendingLines.reduce(
+        (sum, line) => sum + (!line.inTransit ? Math.max(0, line.quantity) : 0),
+        0,
+      )
+
       const ventasTotal = ventas.shopify + ventas.whatsapp + ventas.tiendas + ventas.ferias
       // Store inventory was already netted location-by-location when producing
       // replenishment needs. It must not be subtracted again as a pooled asset.
-      const stockTotal = stockInfo.stockBodega
+      const planningStock = stockInfo.stockBodega + receivedOutsideSiigo
+      const stockTotal = planningStock + stockInfo.stockConsignado
 
       const velocidadDiariaReciente = ventasTotal / diasAnalisis
       const velocidadDiariaEstacional = ventasPeriodoEstacional / horizonteDias
@@ -809,29 +925,26 @@ export async function GET(request: Request) {
       const velocidadSemanal = velocidadDiaria * 7
 
       let diasHastaAgotamiento: number | null = null
-      if (velocidadDiaria > 0 && stockTotal > 0) {
-        diasHastaAgotamiento = Math.round(stockTotal / velocidadDiaria)
-      } else if (velocidadDiaria > 0 && stockTotal === 0) {
+      if (velocidadDiaria > 0 && planningStock > 0) {
+        diasHastaAgotamiento = Math.round(planningStock / velocidadDiaria)
+      } else if (velocidadDiaria > 0 && planningStock === 0) {
         diasHastaAgotamiento = 0
       }
 
       // Units already on order (in transit) for this design + size.
       // Try exact key first, then a tolerant word-level design match (same size),
       // consuming each order key once so it can't discount two variants.
-      const matchingPendingLines: PendingLine[] = []
-      for (const key of pendingKeysBySku.get(sku) || []) {
-        matchingPendingLines.push(...(enCaminoByKey.get(key) || []))
-        enCaminoMatchedKeys.add(key)
-      }
       const productionArrival = leadTimeEnd.toISOString().slice(0, 10)
-      const withoutInbound = productionRequiredAtArrival(stockTotal, [], datedNeeds, productionArrival)
       const sugerenciaProduccion = productionRequiredAtArrival(
-        stockTotal,
-        matchingPendingLines,
+        planningStock,
+        matchingPendingLines.filter(line => line.inTransit),
         datedNeeds,
         productionArrival,
       )
-      const enCamino = Math.max(0, withoutInbound - sugerenciaProduccion)
+      const enCamino = matchingPendingLines.reduce(
+        (sum, line) => sum + (line.inTransit ? Math.max(0, line.quantity) : 0),
+        0,
+      )
 
       let prioridad: VariantForecast['prioridad'] = 'baja'
       if (sugerenciaProduccion > 0 && diasHastaAgotamiento !== null) {
@@ -847,8 +960,8 @@ export async function GET(request: Request) {
         imagen: null,
         size,
         description: stockInfo.product_name,
-        stockBodega: stockInfo.stockBodega,
-        stockConsignado: 0,
+        stockBodega: planningStock,
+        stockConsignado: stockInfo.stockConsignado,
         stockTotal,
         enCamino,
         ventasShopify: ventas.shopify,
@@ -960,7 +1073,7 @@ export async function GET(request: Request) {
     const enCaminoSinMatch: Array<{ label: string; unidades: number }> = []
     const enCaminoDiscountedUnits = variantsForecast.reduce((sum, variant) => sum + variant.enCamino, 0)
     for (const [key, lines] of enCaminoByKey) {
-      const qty = lines.reduce((sum, line) => sum + line.quantity, 0)
+      const qty = lines.reduce((sum, line) => sum + (line.inTransit ? line.quantity : 0), 0)
       if (!enCaminoMatchedKeys.has(key)) enCaminoSinMatch.push({ label: enCaminoLabelByKey.get(key) || key, unidades: qty })
     }
     enCaminoSinMatch.sort((a, b) => b.unidades - a.unidades)
@@ -979,7 +1092,7 @@ export async function GET(request: Request) {
         .sort((a, b) => (a.bucket === b.bucket ? b.units - a.units : a.bucket === 'bodega' ? -1 : 1)),
       parametros: {
         diasAnalisis,
-        leadTimeDias,
+        leadTimeDias: leadTimeBusinessDays,
         stockSeguridad,
         fechaInicio: startDateStr,
         fechaFin: endDateStr,
@@ -989,9 +1102,11 @@ export async function GET(request: Request) {
       },
       // Internal diagnostics; the current view does not render these fields.
       metodologia: {
-        leadTimeCalendarDays: leadTimeDias,
+        leadTimeBusinessDays,
+        businessDayCalendar: 'Colombia: excludes weekends and national holidays',
         commercialSeasonality: 'same_month_last_year_scaled_by_recent_yoy_growth_when_backtest_wins',
-        reviewPeriodMonths: REVIEW_PERIOD_MONTHS,
+        planningHorizon: `through_${protectionEnd.toISOString().slice(0, 10)}`,
+        planningMonths: planningPeriods.map(period => period.month),
         protectionDays,
         historyStart: firstInvoiceMonth,
         historyMonths: monthSequence.length,
