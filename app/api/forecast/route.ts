@@ -14,6 +14,15 @@ import {
   variabilityAdjustedSizeProfile,
 } from '@/lib/forecast/demand-model'
 
+interface StoreDispatch {
+  tiendaId: string
+  nombre: string
+  stockTienda: number
+  demandaMes: number
+  seguridad: number
+  cantidad: number
+}
+
 interface VariantForecast {
   sku: string
   // For backward compat with existing UI:
@@ -39,6 +48,8 @@ interface VariantForecast {
   velocidadDiaria: number
   velocidadSemanal: number
   diasHastaAgotamiento: number | null
+  enviarTiendas: number
+  enviosTiendas: StoreDispatch[]
   sugerenciaProduccion: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
 }
@@ -54,6 +65,7 @@ interface ReferenceForecast {
   ventasTiendas: number
   ventasPeriodoEstacional: number
   velocidadDiaria: number
+  enviarTiendas: number
   sugerenciaProduccion: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
   variants: VariantForecast[]
@@ -308,11 +320,12 @@ export async function GET(request: Request) {
     }
 
     // 3. Sales in last N days: from Siigo invoice cache, items × quantity, classifying by channel
-    type Store = { id: string; siigo_customer_identification: string | null; siigo_warehouse_id: number | null }
-    const { data: tiendaNitsRaw } = await supabase
+    type Store = { id: string; nombre: string; siigo_customer_identification: string | null; siigo_warehouse_id: number | null }
+    const { data: tiendaNitsRaw, error: tiendasError } = await supabase
       .from('tiendas_terceros')
-      .select('id, siigo_customer_identification, siigo_warehouse_id')
+      .select('id, nombre, siigo_customer_identification, siigo_warehouse_id')
       .eq('activa', true)
+    if (tiendasError) throw tiendasError
     const stores = (tiendaNitsRaw || []) as Store[]
     const storeByNit = new Map<string, Store>()
     for (const store of stores) {
@@ -543,6 +556,7 @@ export async function GET(request: Request) {
       skusByReference.set(reference, list)
     }
     const needEventsBySku = new Map<string, Array<{ date: string; quantity: number; recoverableSafety?: number }>>()
+    const dispatchesBySku = new Map<string, StoreDispatch[]>()
     const forecastDemandBySku = new Map<string, number>()
     const modelByReference = new Map<string, ReturnType<typeof selectDemandModel>>()
     const comparableMonthlyLevels = [...skusByReference.values()]
@@ -751,6 +765,21 @@ export async function GET(request: Request) {
         // than inventing inventory that may not exist.
         const storeSafetyProfile = variabilityAdjustedSizeProfile(storeSizeSeries, storeProfile)
         const safetyAllocation = allocateToSkus(skus, storeBuffer, storeSafetyProfile)
+        // One monthly shipment target, separate from production through January.
+        // Do not net warehouse stock or inbound orders here: this is what the
+        // store needs to receive, not additional manufacturing demand.
+        const shipmentDemand = allocateToSkus(skus, Math.max(0, Math.round(storeFuture[0] ?? storeCurrentMonth)), storeProfile)
+        for (const sku of skus) {
+          const stockTienda = Math.max(0, stockByWarehouseSku.get(`${store.siigo_warehouse_id}|${sku}`) || 0)
+          const demandaMes = shipmentDemand.get(sku) || 0
+          const seguridad = safetyAllocation.get(sku) || 0
+          const cantidad = monthlyStoreReplenishments([demandaMes], seguridad, stockTienda)[0]
+          if (cantidad > 0) {
+            const dispatches = dispatchesBySku.get(sku) || []
+            dispatches.push({ tiendaId: store.id, nombre: store.nombre, stockTienda, demandaMes, seguridad, cantidad })
+            dispatchesBySku.set(sku, dispatches)
+          }
+        }
         const demandBySku = new Map(skus.map(sku => [sku, [] as number[]]))
         for (let periodIndex = 0; periodIndex < planningPeriods.length; periodIndex++) {
           const demandAllocation = allocateToSkus(skus, storePeriodDemand[periodIndex], storeProfile)
@@ -976,6 +1005,8 @@ export async function GET(request: Request) {
         velocidadDiaria,
         velocidadSemanal,
         diasHastaAgotamiento,
+        enviarTiendas: (dispatchesBySku.get(sku) || []).reduce((sum, store) => sum + store.cantidad, 0),
+        enviosTiendas: dispatchesBySku.get(sku) || [],
         sugerenciaProduccion,
         prioridad,
       })
@@ -998,6 +1029,7 @@ export async function GET(request: Request) {
           ventasTiendas: 0,
           ventasPeriodoEstacional: 0,
           velocidadDiaria: 0,
+          enviarTiendas: 0,
           sugerenciaProduccion: 0,
           prioridad: 'baja',
           variants: [],
@@ -1014,6 +1046,7 @@ export async function GET(request: Request) {
       r.ventasTiendas += v.ventasTiendas
       r.ventasPeriodoEstacional += v.ventasPeriodoEstacional
       r.velocidadDiaria += v.velocidadDiaria
+      r.enviarTiendas += v.enviarTiendas
       r.sugerenciaProduccion += v.sugerenciaProduccion
       // Inherit worst priority of any variant
       const order = { critica: 0, alta: 1, media: 2, baja: 3 }
@@ -1079,6 +1112,10 @@ export async function GET(request: Request) {
     enCaminoSinMatch.sort((a, b) => b.unidades - a.unidades)
 
     return NextResponse.json({
+      reposicionTiendas: {
+        mes: planningPeriods.find(period => period.futureIndex === 0)?.month || endDateStr.slice(0, 7),
+        tiendasSinBodega: stores.filter(store => store.siigo_warehouse_id == null).length,
+      },
       forecast,
       referencias,
       resumen,

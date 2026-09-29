@@ -97,6 +97,15 @@ interface InventarioData {
   }
 }
 
+interface StoreDispatch {
+  tiendaId: string
+  nombre: string
+  stockTienda: number
+  demandaMes: number
+  seguridad: number
+  cantidad: number
+}
+
 interface ForecastItem {
   sku: string
   producto: string
@@ -119,6 +128,8 @@ interface ForecastItem {
   velocidadDiaria: number
   velocidadSemanal: number
   diasHastaAgotamiento: number | null
+  enviarTiendas?: number
+  enviosTiendas?: StoreDispatch[]
   sugerenciaProduccion: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
 }
@@ -134,12 +145,14 @@ interface ForecastReference {
   ventasTiendas: number
   ventasPeriodoEstacional: number
   velocidadDiaria: number
+  enviarTiendas?: number
   sugerenciaProduccion: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
   variants: ForecastItem[]
 }
 
 interface ForecastData {
+  reposicionTiendas?: { mes: string; tiendasSinBodega: number }
   forecast: ForecastItem[]
   referencias: ForecastReference[]
   enCamino?: {
@@ -197,6 +210,39 @@ function getPriorityBadge(prioridad: string) {
     default:
       return <Badge variant="secondary">Baja</Badge>
   }
+}
+
+function StoreDispatchCell({ variants }: { variants: ForecastItem[] }) {
+  const stores = new Map<string, { nombre: string; cantidad: number }>()
+  let total = 0
+  let faltante = 0
+  for (const variant of variants) {
+    const quantity = variant.enviarTiendas || 0
+    total += quantity
+    // Compare per SKU: excess in one size cannot cover another size.
+    faltante += Math.max(0, quantity - Math.max(0, variant.stockBodega))
+    for (const store of variant.enviosTiendas || []) {
+      const item = stores.get(store.tiendaId) || { nombre: store.nombre, cantidad: 0 }
+      item.cantidad += store.cantidad
+      stores.set(store.tiendaId, item)
+    }
+  }
+  if (variants.some(v => v.enviarTiendas === undefined)) return <span className="text-xs text-[#545454]">Recalcular</span>
+  if (total === 0) return <span className="text-[#545454]">0</span>
+  return (
+    <div onClick={e => e.stopPropagation()}>
+      <span className="font-bold text-purple-700">{total}</span>
+      {faltante > 0 && <div className="text-xs text-amber-700">Faltan {faltante} en bodega</div>}
+      <details className="mt-1 text-xs text-left">
+        <summary className="cursor-pointer text-purple-700 text-center">Ver tiendas</summary>
+        <ul className="mt-2 space-y-1 min-w-40">
+          {[...stores].sort((a, b) => a[1].nombre.localeCompare(b[1].nombre, 'es')).map(([id, store]) => (
+            <li key={id} className="flex justify-between gap-3"><span>{store.nombre}</span><b>{store.cantidad}</b></li>
+          ))}
+        </ul>
+      </details>
+    </div>
+  )
 }
 
 export default function InventarioPage() {
@@ -370,6 +416,7 @@ export default function InventarioPage() {
       'Stock consignado': f.stockConsignado,
       'Stock total': f.stockTotal,
       'En camino': f.enCamino,
+      'Enviar a tiendas': f.enviarTiendas ?? '',
       'Ventas Shopify': f.ventasShopify,
       'Ventas WhatsApp': f.ventasWhatsApp,
       'Ventas Tiendas': f.ventasTiendas,
@@ -400,6 +447,7 @@ export default function InventarioPage() {
       'Stock consignado': r.stockConsignado,
       'Stock total': r.stockTotal,
       'En camino': r.enCamino,
+      'Enviar a tiendas': r.enviarTiendas ?? '',
       'Ventas totales': r.ventasTotal,
       'Ventas tiendas': r.ventasTiendas,
       'Ventas período estacional año anterior': r.ventasPeriodoEstacional,
@@ -425,10 +473,25 @@ export default function InventarioPage() {
       { Parámetro: 'Generado', Valor: new Date().toLocaleString('es-CO') },
     ]
 
+    // Includes store replenishment even when no new production is required.
+    const envios = forecastData.forecast.flatMap(v => (v.enviosTiendas || []).map(store => ({
+      'Tienda': store.nombre,
+      'Referencia': v.producto,
+      'Talla': v.size || '',
+      'SKU': v.sku,
+      'Mes de cobertura': forecastData.reposicionTiendas?.mes || '',
+      'Stock en tienda': store.stockTienda,
+      'Demanda mensual prevista': store.demandaMes,
+      'Stock de seguridad': store.seguridad,
+      'Enviar a tienda': store.cantidad,
+    }))).sort((a, b) => a.Tienda.localeCompare(b.Tienda, 'es')
+      || a.Referencia.localeCompare(b.Referencia, 'es') || a.Talla.localeCompare(b.Talla, 'es', { numeric: true }))
+
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumen), 'Por referencia')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle), 'Detalle por SKU')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(parametros), 'Parámetros')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(envios), 'Enviar a tiendas')
 
     const today = new Date()
     const stamp = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`
@@ -1189,6 +1252,16 @@ export default function InventarioPage() {
                       <p className="mt-1 text-xs text-[#545454]">
                         El inventario de cada tienda cubre únicamente esa tienda. También se descuentan la bodega propia y las órdenes en camino aplicables.
                       </p>
+                      <p className="mt-2 text-sm text-purple-800">
+                        Enviar a tiendas: reposición para {forecastData.reposicionTiendas?.mes || 'un mes'} = demanda mensual prevista + seguridad − stock de cada tienda.
+                        Abre una referencia para ver las tallas y “Ver tiendas” para ver el destino.
+                      </p>
+                      <p className="mt-1 text-xs text-[#545454]">
+                        Es una necesidad de reposición; no reserva inventario ni registra envíos. Si falta una talla en bodega, se indica el faltante. Las órdenes en camino aún no están disponibles para enviar.
+                      </p>
+                      {!!forecastData.reposicionTiendas?.tiendasSinBodega && (
+                        <p className="mt-1 text-xs text-amber-700">{forecastData.reposicionTiendas.tiendasSinBodega} tiendas sin bodega vinculada no se incluyen en la sugerencia.</p>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -1283,6 +1356,7 @@ export default function InventarioPage() {
                             ventasTiendas: variants.reduce((s, v) => s + v.ventasTiendas, 0),
                             ventasPeriodoEstacional: variants.reduce((s, v) => s + v.ventasPeriodoEstacional, 0),
                             velocidadDiaria: Math.round(variants.reduce((s, v) => s + v.velocidadDiaria, 0) * 100) / 100,
+                            enviarTiendas: variants.reduce((s, v) => s + (v.enviarTiendas || 0), 0),
                             sugerenciaProduccion: variants.reduce((s, v) => s + v.sugerenciaProduccion, 0),
                             prioridad: worst,
                             variants,
@@ -1307,13 +1381,14 @@ export default function InventarioPage() {
                                   <TableHead className="text-center">Vel. Semanal</TableHead>
                                   <TableHead className="text-center">Días Restantes</TableHead>
                                   <TableHead className="text-center">Prioridad</TableHead>
+                                  <TableHead className="text-center bg-purple-50 min-w-40">Enviar a tiendas</TableHead>
                                   <TableHead className="text-center bg-green-50">Producir</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {filteredRefs.length === 0 ? (
                                   <TableRow>
-                                    <TableCell colSpan={11} className="text-center py-8 text-[#545454]">
+                                    <TableCell colSpan={12} className="text-center py-8 text-[#545454]">
                                       No hay productos que mostrar
                                     </TableCell>
                                   </TableRow>
@@ -1388,6 +1463,7 @@ export default function InventarioPage() {
                                           <TableCell className="text-center">
                                             {getPriorityBadge(r.prioridad)}
                                           </TableCell>
+                                          <TableCell className="text-center bg-purple-50/40"><StoreDispatchCell variants={r.variants} /></TableCell>
                                           <TableCell className="text-center bg-green-50/50">
                                             {r.sugerenciaProduccion > 0 ? (
                                               <span className="font-bold text-green-700">{r.sugerenciaProduccion}</span>
@@ -1457,6 +1533,7 @@ export default function InventarioPage() {
                                               <TableCell className="text-center">
                                                 {getPriorityBadge(v.prioridad)}
                                               </TableCell>
+                                              <TableCell className="text-center bg-purple-50/30"><StoreDispatchCell variants={[v]} /></TableCell>
                                               <TableCell className="text-center bg-green-50/30">
                                                 {v.sugerenciaProduccion > 0 ? (
                                                   <span className="font-bold text-green-700 text-sm">{v.sugerenciaProduccion}</span>
