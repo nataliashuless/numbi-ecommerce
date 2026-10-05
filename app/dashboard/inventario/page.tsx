@@ -1263,6 +1263,9 @@ export default function InventarioPage() {
                         Cálculo automático: cubre ventas Online + WhatsApp y la reposición necesaria de cada tienda.
                       </p>
                       <p className="mt-1 text-xs text-[#545454]">
+                        Mes en curso: se estima el mes completo con el historial de meses cerrados y se descuentan las ventas ya registradas. El stock de Siigo ya refleja esas ventas.
+                      </p>
+                      <p className="mt-1 text-xs text-[#545454]">
                         El inventario de cada tienda cubre únicamente esa tienda. También se descuentan la bodega propia y las órdenes en camino aplicables.
                       </p>
                       {!!forecastData.reposicionTiendas?.tiendasSinBodega && (

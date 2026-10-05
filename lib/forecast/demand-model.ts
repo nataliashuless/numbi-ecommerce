@@ -15,6 +15,12 @@ export interface SelectedModel {
 
 const mean = (values: number[]) => values.length ? values.reduce((s, x) => s + x, 0) / values.length : 0
 
+// Siigo stock is already net of recorded sales. Remove actual sales from the
+// month's demand target only; never deduct them from current stock again.
+export function remainingMonthDemand(fullMonthForecast: number, soldToDate: number): number {
+  return Math.max(0, Math.max(0, fullMonthForecast) - Math.max(0, soldToDate))
+}
+
 export function proratePartialMonth(units: number, observedDays: number, daysInMonth: number): number {
   if (units <= 0 || observedDays <= 0 || daysInMonth <= 0 || observedDays >= daysInMonth) return Math.max(0, units)
   // Require at least one week before extrapolating; earlier data is too noisy

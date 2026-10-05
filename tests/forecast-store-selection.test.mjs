@@ -7,7 +7,10 @@ import * as demandModel from '../lib/forecast/demand-model.ts'
 
 // Exercise the actual endpoint with isolated database records. Excluded store
 // invoices must never become direct demand when their NIT is still recognized.
-const date = new Date().toISOString().slice(0, 10)
+const date = '2026-10-05'
+class AuditDate extends Date {
+  constructor(...args) { super(...(args.length ? args : ['2026-10-05T12:00:00Z'])) }
+}
 const stores = [
   { id: 'a', nombre: 'A', siigo_customer_identification: '111', siigo_warehouse_id: 30 },
   { id: 'b', nombre: 'B', siigo_customer_identification: '222', siigo_warehouse_id: 31 },
@@ -37,7 +40,7 @@ tables.siigo_invoices[1].items.push({ code: 'EX20', quantity: 100 })
 const exports = {}
 const source = fs.readFileSync(new URL('../app/api/forecast/route.ts', import.meta.url), 'utf8')
 vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
-  exports, URL, console, require(name) {
+  exports, URL, console, Date: AuditDate, require(name) {
     if (name === 'next/server') return { NextResponse: { json: value => value } }
     if (name === '@/lib/auth-helpers') return { requireAuth: async () => ({}), getAdminClient: () => db }
     if (name === '@/lib/forecast/demand-model') return demandModel
@@ -63,4 +66,28 @@ test('store selection excludes invoices and sell-through without reclassifying d
   assert.equal(none.forecast.find(row => row.sku === 'EX20').velocidadDiaria, 0)
   assert.equal(none.tiendasForecast.every(store => !store.incluida), true)
   assert.equal(onlyB.forecast.find(row => row.sku === 'P20').enviosTiendas.every(store => store.tiendaId === 'b'), true)
+})
+
+
+test('open month subtracts actual sales once and does not depress future completed-month forecasts', async () => {
+  const original = { ...tables }
+  try {
+    tables.tiendas_terceros = []
+    tables.ventas_terceros = []
+    tables.siigo_product_stock = [{ product_code: 'P20', product_name: 'Prueba Talla 20', warehouse_id: 27, warehouse_name: 'Principal', quantity: 80 }]
+    tables.siigo_invoices = Array.from({ length: 24 }, (_, i) => ({
+      ...invoice(`history-${i}`, '333', 100),
+      date: new Date(Date.UTC(2024, 9 + i, 15)).toISOString().slice(0, 10),
+    }))
+    tables.siigo_invoices.push(invoice('current', '333', 20))
+    const result = await calculate('')
+    const variant = result.forecast[0]
+    // October 100 - 20, plus November/December/January 100 each.
+    assert.equal(Math.round(variant.velocidadDiaria * result.metodologia.protectionDays), 380)
+    assert.equal(variant.stockBodega, 80)
+    tables.siigo_invoices.at(-1).items[0].quantity = 120
+    const overTarget = await calculate('')
+    assert.equal(Math.round(overTarget.forecast[0].velocidadDiaria * overTarget.metodologia.protectionDays), 300)
+    assert.equal(overTarget.forecast[0].stockBodega, 80)
+  } finally { Object.assign(tables, original) }
 })

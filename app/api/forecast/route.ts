@@ -6,7 +6,7 @@ import {
   forecastMonths,
   largestRemainder,
   monthlyStoreReplenishments,
-  partialMonthContinuousDelta,
+  remainingMonthDemand,
   productionRequiredAtArrival,
   safetyStock,
   selectDemandModel,
@@ -517,46 +517,21 @@ export async function GET(request: Request) {
       if (realSeries) realSeries[index] += qty
     }
 
-    // Include the open month as a current-demand signal. Forecasting models
-    // receive a run-rate estimate to avoid treating a partial month as a full
-    // low month; visible sales remain the actual, unscaled quantities above.
-    const latestObservedDate = uniqueInvoices.reduce(
-      (latest, invoice) => invoice.date > latest ? invoice.date : latest,
-      `${lastHistoryMonth}-01`,
-    )
-    const latestObserved = new Date(`${latestObservedDate}T12:00:00`)
-    if (monthKey(latestObservedDate) === lastHistoryMonth) {
-      const currentIndex = monthIndex.get(lastHistoryMonth)
-      const observedDays = latestObserved.getDate()
-      const daysInMonth = new Date(latestObserved.getFullYear(), latestObserved.getMonth() + 1, 0).getDate()
-      if (currentIndex != null && observedDays < daysInMonth) {
-        const scaleSeries = (series: number[]) => {
-          const previous = series[currentIndex]
-          const delta = partialMonthContinuousDelta(previous, observedDays, daysInMonth)
-          series[currentIndex] = previous + delta
-          return delta
-        }
-        // Direct sales occur continuously, so their open-month run rate can be
-        // extrapolated. Store invoices are one monthly replenishment and must
-        // never be multiplied by the day of month. Only real store sell-through
-        // is continuous enough to prorate.
-        for (const [sku, series] of directSkuMonthly) {
-          const delta = scaleSeries(series)
-          const totalSeries = skuMonthly.get(sku)
-          if (totalSeries) totalSeries[currentIndex] += delta
-        }
-        for (const [storeId, storeMap] of realStoreSkuMonthly) {
-          for (const [sku, realSeries] of storeMap) {
-            const delta = scaleSeries(realSeries)
-            if (delta === 0) continue
-            const totalSeries = skuMonthly.get(sku)
-            if (totalSeries) totalSeries[currentIndex] += delta
-            const combinedStoreSeries = storeSkuMonthly.get(storeId)?.get(sku)
-            if (combinedStoreSeries) combinedStoreSeries[currentIndex] += delta
-          }
-        }
-      }
-    }
+    // Train only on completed months. Actual month-to-date sales are kept
+    // separately and subtracted from this month's forecast, never from stock.
+    const directMonthActual = new Map([...directSkuMonthly].map(([sku, series]) => [sku, series.at(-1) || 0]))
+    const realStoreMonthActual = new Map([...realStoreSkuMonthly].map(([id, rows]) =>
+      [id, new Map([...rows].map(([sku, series]) => [sku, series.at(-1) || 0]))],
+    ))
+    const currentStoreObserved = new Map([...storeSkuMonthly].map(([id, rows]) =>
+      [id, new Map([...rows].map(([sku, series]) => [sku, series.at(-1) || 0]))],
+    ))
+    monthSequence.pop()
+    for (const rows of [skuMonthly, directSkuMonthly]) for (const series of rows.values()) series.pop()
+    for (const rows of storeSkuMonthly.values()) for (const series of rows.values()) series.pop()
+    for (const rows of realStoreSkuMonthly.values()) for (const series of rows.values()) series.pop()
+    const elapsedDays = Number(endDateStr.slice(8, 10))
+    const calendarDays = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate()
 
     // Forecast the reference first, then allocate the inventory target through
     // a stockout-corrected historical size curve. This keeps every integer pair
@@ -661,18 +636,20 @@ export async function GET(request: Request) {
         ? directSeries.slice(directFirst)
         : aggregateFirst >= 0 || skus.some(sku => excludedSalesSkus.has(sku)) ? [0, 0, 0] : training
       const directModel = selectDemandModel(directTraining)
-      const futureMonthKeys = planningPeriods
-        .filter(period => period.futureIndex != null)
-        .map(period => period.month)
-      const directFuture = seasonallyAdjustedFuture(
-        forecastMonths(directTraining, directModel.name, futureMonthsNeeded),
+      const futureMonthKeys = planningPeriods.map(period => period.month)
+      const directProjection = seasonallyAdjustedFuture(
+        forecastMonths(directTraining, directModel.name, futureMonthsNeeded + 1),
         directSeries,
         monthSequence,
         futureMonthKeys,
       )
-      const directCurrentMonth = directTraining[directTraining.length - 1] || 0
+      const directActual = skus.reduce((sum, sku) => sum + (directMonthActual.get(sku) || 0), 0)
+      const directCurrentMonth = directFirst < 0 && directActual > 0
+        ? directActual * calendarDays / elapsedDays
+        : directProjection[0] || 0
+      const directFuture = directProjection.slice(1)
       const directPeriodDemand = planningPeriods.map(period => Math.max(0, Math.round(
-        (period.futureIndex == null ? directCurrentMonth : (directFuture[period.futureIndex] || 0)) * period.fraction,
+        (period.futureIndex == null ? remainingMonthDemand(directCurrentMonth, directActual) : (directFuture[period.futureIndex] || 0)),
       )))
       for (let periodIndex = 0; periodIndex < planningPeriods.length; periodIndex++) {
         const period = planningPeriods[periodIndex]
@@ -702,15 +679,17 @@ export async function GET(request: Request) {
       // reference aggregated across stores, scaled by its stable recent share.
       const aggregateTraining = aggregateFirst >= 0 ? aggregateStoreSeries.slice(aggregateFirst) : [0, 0, 0]
       const aggregateModel = selectDemandModel(aggregateTraining)
-      const aggregateFuture = seasonallyAdjustedFuture(
-        forecastMonths(aggregateTraining, aggregateModel.name, futureMonthsNeeded),
+      const aggregateProjection = seasonallyAdjustedFuture(
+        forecastMonths(aggregateTraining, aggregateModel.name, futureMonthsNeeded + 1),
         aggregateStoreSeries,
         monthSequence,
         futureMonthKeys,
       )
+      const aggregateFuture = aggregateProjection.slice(1)
       const eligibleStores = stores.filter(store => store.siigo_warehouse_id != null && skus.some(sku =>
         (stockByWarehouseSku.get(`${store.siigo_warehouse_id}|${sku}`) || 0) > 0
         || (storeSkuMonthly.get(store.id)?.get(sku) || []).some(value => value > 0)
+        || (currentStoreObserved.get(store.id)?.get(sku) || 0) > 0
       ))
       const aggregateRecent = aggregateStoreSeries.slice(-6).reduce((sum, value) => sum + value, 0)
       for (const store of eligibleStores) {
@@ -729,19 +708,26 @@ export async function GET(request: Request) {
           ? (storeRecent + aggregateRecent * equalShare * 0.25) / (aggregateRecent * 1.25)
           : equalShare
         const storeModel = enoughHistory ? selectDemandModel(storeTraining) : aggregateModel
-        const storeFuture = enoughHistory
+        const storeProjection = enoughHistory
           ? seasonallyAdjustedFuture(
-            forecastMonths(storeTraining, storeModel.name, futureMonthsNeeded),
+            forecastMonths(storeTraining, storeModel.name, futureMonthsNeeded + 1),
             storeSeries,
             monthSequence,
             futureMonthKeys,
           )
-          : aggregateFuture.map(value => value * share)
-        const storeCurrentMonth = enoughHistory
-          ? (storeTraining[storeTraining.length - 1] || 0)
-          : (aggregateTraining[aggregateTraining.length - 1] || 0) * share
+          : aggregateProjection.map(value => value * share)
+        const storeFuture = storeProjection.slice(1)
+        const storeActual = skus.reduce((sum, sku) => sum + (realStoreMonthActual.get(store.id)?.get(sku) || 0), 0)
+        const hasRealMonth = realStoreSales.some(sale => sale.tienda_id === store.id && sale.fecha.startsWith(lastHistoryMonth) && skus.includes(sale.producto_sku || ''))
+        const storeCurrentMonth = storeFirst < 0 && storeActual > 0
+          ? storeActual * calendarDays / elapsedDays
+          : storeProjection[0] || 0
+        // Store shipment invoices are a replenishment proxy, not actual sales.
+        // Only recorded sell-through can be subtracted as month-to-date sales.
         const storePeriodDemand = planningPeriods.map(period => Math.max(0, Math.round(
-          (period.futureIndex == null ? storeCurrentMonth : (storeFuture[period.futureIndex] || 0)) * period.fraction,
+          period.futureIndex == null
+            ? hasRealMonth ? remainingMonthDemand(storeCurrentMonth, storeActual) : storeCurrentMonth * period.fraction
+            : storeFuture[period.futureIndex] || 0,
         )))
         const monthlyExpected = storeFuture[0] || storeCurrentMonth
         const storeBuffer = Math.round(enoughHistory
