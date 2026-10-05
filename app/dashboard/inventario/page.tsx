@@ -288,6 +288,9 @@ export default function InventarioPage() {
   const [filter, setFilter] = useState<'all' | 'low' | 'out'>('all')
   const [forecastFilter, setForecastFilter] = useState<'all' | 'critica' | 'alta' | 'media'>('all')
   const [activeTab, setActiveTab] = useState('inventario')
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('tab') === 'forecast') setActiveTab('forecast')
+  }, [])
 
   // Forecast parameters
   const [diasAnalisis, setDiasAnalisis] = useState('90')
@@ -1078,6 +1081,30 @@ export default function InventarioPage() {
               </div>
             ) : forecastData ? (
               <>
+                <Card className="mb-6">
+                  <CardHeader><CardTitle>Tiendas incluidas en el forecast</CardTitle></CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-[#545454] mb-3">Marca las tiendas que quieres incluir en producción y en “Enviar a tiendas”. La selección se guarda en este navegador. El inventario físico seguirá visible.</p>
+                    <div className="flex gap-2 mb-3">
+                      <Button variant="outline" onClick={() => setExcludedStoreIds([])}>Seleccionar todas</Button>
+                      <Button variant="outline" onClick={() => setExcludedStoreIds((forecastData.tiendasForecast || []).map(store => store.id))}>Desmarcar todas</Button>
+                    </div>
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {(forecastData.tiendasForecast || []).map(store => (
+                        <label key={store.id} className="flex items-start gap-2 p-3 rounded border cursor-pointer">
+                          <input type="checkbox" className="mt-1" checked={!excludedStoreIds.includes(store.id)} onChange={event => setExcludedStoreIds(previous => event.target.checked ? previous.filter(id => id !== store.id) : [...previous, store.id])} />
+                          <span>{store.nombre}{!store.tieneBodega && <span className="block text-xs text-amber-700">Sin bodega vinculada: no se calcula su reposición.</span>}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 mt-4">
+                      <Button onClick={applyStoreSelection}>Guardar selección y recalcular</Button>
+                      <span className="text-sm text-[#545454]">Resultado actual: {(forecastData.tiendasForecast || []).filter(store => store.incluida).length} tiendas incluidas.</span>
+                      {(forecastData.tiendasForecast || []).some(store => store.incluida === excludedStoreIds.includes(store.id)) && <span className="text-sm text-amber-700">Cambios pendientes de aplicar</span>}
+                    </div>
+                  </CardContent>
+                </Card>
+
                 {/* Forecast KPIs */}
                 <div className="grid gap-4 md:grid-cols-5 mb-8">
                   <Card className="border-red-200 bg-red-50">
@@ -1202,30 +1229,6 @@ export default function InventarioPage() {
                     </CardContent>
                   </Card>
                 )}
-
-                <Card className="mb-6">
-                  <CardHeader><CardTitle>Tiendas incluidas en el forecast</CardTitle></CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-[#545454] mb-3">Marca las tiendas que quieres incluir en producción y en “Enviar a tiendas”. La selección se guarda en este navegador. El inventario físico seguirá visible.</p>
-                    <div className="flex gap-2 mb-3">
-                      <Button variant="outline" onClick={() => setExcludedStoreIds([])}>Seleccionar todas</Button>
-                      <Button variant="outline" onClick={() => setExcludedStoreIds((forecastData.tiendasForecast || []).map(store => store.id))}>Desmarcar todas</Button>
-                    </div>
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {(forecastData.tiendasForecast || []).map(store => (
-                        <label key={store.id} className="flex items-start gap-2 p-3 rounded border cursor-pointer">
-                          <input type="checkbox" className="mt-1" checked={!excludedStoreIds.includes(store.id)} onChange={event => setExcludedStoreIds(previous => event.target.checked ? previous.filter(id => id !== store.id) : [...previous, store.id])} />
-                          <span>{store.nombre}{!store.tieneBodega && <span className="block text-xs text-amber-700">Sin bodega vinculada: no se calcula su reposición.</span>}</span>
-                        </label>
-                      ))}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3 mt-4">
-                      <Button onClick={applyStoreSelection}>Guardar selección y recalcular</Button>
-                      <span className="text-sm text-[#545454]">Resultado actual: {(forecastData.tiendasForecast || []).filter(store => store.incluida).length} tiendas incluidas.</span>
-                      {(forecastData.tiendasForecast || []).some(store => store.incluida === excludedStoreIds.includes(store.id)) && <span className="text-sm text-amber-700">Cambios pendientes de aplicar</span>}
-                    </div>
-                  </CardContent>
-                </Card>
 
                 {/* Forecast Parameters */}
                 <Card className="mb-6">
