@@ -326,14 +326,17 @@ export async function GET(request: Request) {
       .select('id, nombre, siigo_customer_identification, siigo_warehouse_id')
       .eq('activa', true)
     if (tiendasError) throw tiendasError
-    const stores = (tiendaNitsRaw || []) as Store[]
+    const availableStores = (tiendaNitsRaw || []) as Store[]
+    const excludedStoreIds = new Set((searchParams.get('excluir_tiendas') || '').split(',').filter(Boolean))
+    const stores = availableStores.filter(store => !excludedStoreIds.has(store.id))
     const storeByNit = new Map<string, Store>()
-    for (const store of stores) {
+    for (const store of availableStores) {
       for (const nit of identificationKeys(store.siigo_customer_identification)) storeByNit.set(nit, store)
     }
 
     type StoreSale = { tienda_id: string; fecha: string; producto_sku: string | null; cantidad: number }
     const realStoreSales: StoreSale[] = []
+    const excludedSalesSkus = new Set<string>()
     for (let pageStart = 0; pageStart < 50_000; pageStart += 1000) {
       const { data: page, error: storeSalesError } = await supabase
         .from('ventas_terceros')
@@ -341,7 +344,10 @@ export async function GET(request: Request) {
         .range(pageStart, pageStart + 999)
       if (storeSalesError) throw new Error(storeSalesError.message)
       if (!page?.length) break
-      realStoreSales.push(...(page as StoreSale[]))
+      for (const sale of page as StoreSale[]) {
+        if (excludedStoreIds.has(sale.tienda_id) && sale.producto_sku) excludedSalesSkus.add(sale.producto_sku)
+      }
+      realStoreSales.push(...(page as StoreSale[]).filter(sale => stores.some(store => store.id === sale.tienda_id)))
       if (page.length < 1000) break
     }
     const realStoreSalesBySkuMonth = new Map<string, number>()
@@ -406,6 +412,7 @@ export async function GET(request: Request) {
 
     for (const inv of invoices) {
       const invoiceStore = identificationKeys(inv.customer_identification).map(nit => storeByNit.get(nit)).find(Boolean)
+      if (invoiceStore && excludedStoreIds.has(invoiceStore.id)) continue
       const isFeria = inv.assigned_feria_id != null || (!invoiceStore && isFeriaDate(inv.date))
       const isTienda = invoiceStore != null && !isFeria
       const orderNum = extractOrderNum(inv.observations)
@@ -434,6 +441,8 @@ export async function GET(request: Request) {
     }
 
     for (const inv of seasonalInvoices) {
+      const store = identificationKeys(inv.customer_identification).map(nit => storeByNit.get(nit)).find(Boolean)
+      if (store && excludedStoreIds.has(store.id)) continue
       for (const it of inv.items || []) {
         if (!it.code || it.code === 'ENVIO') continue
         ventasEstacionalesPorSku.set(
@@ -475,6 +484,10 @@ export async function GET(request: Request) {
       const index = monthIndex.get(monthKey(inv.date))
       if (index == null) continue
       const matchedStore = identificationKeys(inv.customer_identification).map(nit => storeByNit.get(nit)).find(Boolean)
+      if (matchedStore && excludedStoreIds.has(matchedStore.id)) {
+        for (const item of inv.items || []) if (item.code) excludedSalesSkus.add(item.code)
+        continue
+      }
       const isFeriaInvoice = inv.assigned_feria_id != null || (!matchedStore && isFeriaDate(inv.date))
       // Ferias are event demand, not recurring Online/WhatsApp demand and not
       // a monthly store replenishment proxy.
@@ -646,7 +659,7 @@ export async function GET(request: Request) {
       // stores require their own observed history and linked inventory.
       const directTraining = directFirst >= 0
         ? directSeries.slice(directFirst)
-        : aggregateFirst >= 0 ? [0, 0, 0] : training
+        : aggregateFirst >= 0 || skus.some(sku => excludedSalesSkus.has(sku)) ? [0, 0, 0] : training
       const directModel = selectDemandModel(directTraining)
       const futureMonthKeys = planningPeriods
         .filter(period => period.futureIndex != null)
@@ -1112,6 +1125,7 @@ export async function GET(request: Request) {
     enCaminoSinMatch.sort((a, b) => b.unidades - a.unidades)
 
     return NextResponse.json({
+      tiendasForecast: availableStores.map(store => ({ id: store.id, nombre: store.nombre, incluida: !excludedStoreIds.has(store.id), tieneBodega: store.siigo_warehouse_id != null })),
       reposicionTiendas: {
         mes: planningPeriods.find(period => period.futureIndex === 0)?.month || endDateStr.slice(0, 7),
         tiendasSinBodega: stores.filter(store => store.siigo_warehouse_id == null).length,
