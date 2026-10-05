@@ -7,7 +7,8 @@ import {
   largestRemainder,
   monthlyStoreReplenishments,
   remainingMonthDemand,
-  productionRequiredAtArrival,
+  coverageAtArrival,
+  dailyDemand,
   safetyStock,
   selectDemandModel,
   stabilizedStoreSizeProfile,
@@ -50,6 +51,8 @@ interface VariantForecast {
   diasHastaAgotamiento: number | null
   enviarTiendas: number
   enviosTiendas: StoreDispatch[]
+  faltanteAntesLlegada: number
+  primeraFechaFaltante?: string | null
   sugerenciaProduccion: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
 }
@@ -66,6 +69,8 @@ interface ReferenceForecast {
   ventasPeriodoEstacional: number
   velocidadDiaria: number
   enviarTiendas: number
+  faltanteAntesLlegada: number
+  primeraFechaFaltante?: string | null
   sugerenciaProduccion: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
   variants: VariantForecast[]
@@ -656,7 +661,11 @@ export async function GET(request: Request) {
         const quantity = directPeriodDemand[periodIndex]
         for (const [sku, units] of allocateToSkus(skus, quantity, profile)) {
           addForecastDemand(sku, units)
-          addTarget(sku, units, period.demandDate)
+          const periodEnd = period.demandDate.toISOString().slice(0, 10)
+          const periodStart = period.futureIndex == null ? endDateStr : `${period.month}-01`
+          for (const daily of dailyDemand(units, periodStart, periodEnd)) {
+            addTarget(sku, daily.quantity, new Date(`${daily.date}T12:00:00Z`))
+          }
         }
       }
       const directExpected = directPeriodDemand.reduce((sum, value) => sum + value, 0)
@@ -799,7 +808,10 @@ export async function GET(request: Request) {
           const safetyUnits = safetyAllocation.get(sku) || 0
           const safetyShortfallAfterDemand = Math.max(0, safetyUnits - Math.max(0, initialStock - firstDemand))
           replenishments.forEach((quantity, periodIndex) => {
-            const reviewDate = planningPeriods[periodIndex]?.demandDate || protectionEnd
+            const period = planningPeriods[periodIndex]
+            // Monthly store replenishment must be available at the START of
+            // its coverage period, not after that month's sales have occurred.
+            const reviewDate = new Date(`${periodIndex === 0 ? endDateStr : `${period.month}-01`}T12:00:00Z`)
             addTarget(sku, quantity, reviewDate, periodIndex === 0 ? safetyShortfallAfterDemand : 0)
           })
         }
@@ -963,22 +975,25 @@ export async function GET(request: Request) {
       // Try exact key first, then a tolerant word-level design match (same size),
       // consuming each order key once so it can't discount two variants.
       const productionArrival = leadTimeEnd.toISOString().slice(0, 10)
-      const sugerenciaProduccion = productionRequiredAtArrival(
+      const coverage = coverageAtArrival(
         planningStock,
         matchingPendingLines.filter(line => line.inTransit),
         datedNeeds,
         productionArrival,
       )
+      const sugerenciaProduccion = coverage.production
+      const faltanteAntesLlegada = coverage.shortageBeforeArrival
+      if (coverage.firstShortageDate) diasHastaAgotamiento = Math.max(0, Math.round((Date.parse(coverage.firstShortageDate) - Date.parse(endDateStr)) / 86400000))
       const enCamino = matchingPendingLines.reduce(
         (sum, line) => sum + (line.inTransit ? Math.max(0, line.quantity) : 0),
         0,
       )
 
       let prioridad: VariantForecast['prioridad'] = 'baja'
-      if (sugerenciaProduccion > 0 && diasHastaAgotamiento !== null) {
+      if ((sugerenciaProduccion > 0 || faltanteAntesLlegada > 0) && diasHastaAgotamiento !== null) {
         if (diasHastaAgotamiento <= 7) prioridad = 'critica'
         else if (diasHastaAgotamiento <= 14) prioridad = 'alta'
-        else if (diasHastaAgotamiento <= 30) prioridad = 'media'
+        else if (diasHastaAgotamiento <= 30 || faltanteAntesLlegada > 0) prioridad = 'media'
       }
 
       variantsForecast.push({
@@ -1006,6 +1021,8 @@ export async function GET(request: Request) {
         diasHastaAgotamiento,
         enviarTiendas: (dispatchesBySku.get(sku) || []).reduce((sum, store) => sum + store.cantidad, 0),
         enviosTiendas: dispatchesBySku.get(sku) || [],
+        faltanteAntesLlegada,
+        primeraFechaFaltante: coverage.firstShortageDate,
         sugerenciaProduccion,
         prioridad,
       })
@@ -1029,6 +1046,7 @@ export async function GET(request: Request) {
           ventasPeriodoEstacional: 0,
           velocidadDiaria: 0,
           enviarTiendas: 0,
+          faltanteAntesLlegada: 0,
           sugerenciaProduccion: 0,
           prioridad: 'baja',
           variants: [],
@@ -1046,6 +1064,7 @@ export async function GET(request: Request) {
       r.ventasPeriodoEstacional += v.ventasPeriodoEstacional
       r.velocidadDiaria += v.velocidadDiaria
       r.enviarTiendas += v.enviarTiendas
+      r.faltanteAntesLlegada += v.faltanteAntesLlegada
       r.sugerenciaProduccion += v.sugerenciaProduccion
       // Inherit worst priority of any variant
       const order = { critica: 0, alta: 1, media: 2, baja: 3 }
@@ -1111,6 +1130,11 @@ export async function GET(request: Request) {
     enCaminoSinMatch.sort((a, b) => b.unidades - a.unidades)
 
     return NextResponse.json({
+      cobertura: {
+        fechaLlegadaProduccion: leadTimeEnd.toISOString().slice(0, 10),
+        faltanteAntesLlegada: forecast.reduce((sum, row) => sum + row.faltanteAntesLlegada, 0),
+        distribucion: 'Demanda directa uniforme por día; reposición de tiendas al inicio de cada mes. No incluye tiempo de traslado a tiendas.',
+      },
       tiendasForecast: availableStores.map(store => ({ id: store.id, nombre: store.nombre, incluida: !excludedStoreIds.has(store.id), tieneBodega: store.siigo_warehouse_id != null })),
       reposicionTiendas: {
         mes: planningPeriods.find(period => period.futureIndex === 0)?.month || endDateStr.slice(0, 7),

@@ -318,12 +318,14 @@ export function pendingEligibleAfterArrival(
   return eligible
 }
 
-export function productionRequiredAtArrival(
+export function coverageAtArrival(
   initialStock: number,
   inbound: Array<{ quantity: number; arrival: string }>,
   needs: Array<{ quantity: number; date: string; recoverableSafety?: number }>,
   productionArrival: string,
-): number {
+) {
+  let shortageBeforeArrival = 0
+  let firstShortageDate: string | null = null
   let projectedStock = Math.max(0, initialStock)
   const arrivals = inbound
     .map(line => ({ quantity: Math.max(0, line.quantity), arrival: line.arrival }))
@@ -353,6 +355,9 @@ export function productionRequiredAtArrival(
   for (const need of demand.filter(item => item.date < productionArrival)) {
     receiveThrough(need.date)
     const shortage = Math.max(0, need.quantity - projectedStock)
+    const missingSales = Math.max(0, shortage - need.recoverableSafety)
+    shortageBeforeArrival += missingSales
+    if (missingSales > 1e-9 && !firstShortageDate) firstShortageDate = need.date
     deferredSafety += Math.min(shortage, need.recoverableSafety)
     projectedStock = Math.max(0, projectedStock - need.quantity)
   }
@@ -371,7 +376,24 @@ export function productionRequiredAtArrival(
     }
     projectedStock -= need.quantity
   }
-  return Math.max(0, Math.round(production))
+  return { production: Math.max(0, Math.ceil(production - 1e-9)), shortageBeforeArrival: Math.max(0, Math.ceil(shortageBeforeArrival - 1e-9)), firstShortageDate }
+}
+
+export function productionRequiredAtArrival(...args: Parameters<typeof coverageAtArrival>): number {
+  return coverageAtArrival(...args).production
+}
+
+// Uniform daily timing is an explicit planning assumption, not a campaign
+// uplift. Keep the original monthly total and consume only future days.
+export function dailyDemand(quantity: number, start: string, end: string) {
+  const startMs = Date.parse(`${start}T12:00:00Z`)
+  const endMs = Date.parse(`${end}T12:00:00Z`)
+  const count = Math.round((endMs - startMs) / 86400000) + 1
+  if (quantity <= 0 || count <= 0) return []
+  return Array.from({ length: count }, (_, index) => ({
+    date: new Date(startMs + index * 86400000).toISOString().slice(0, 10),
+    quantity: quantity / count,
+  }))
 }
 
 function easterSunday(year: number): Date {

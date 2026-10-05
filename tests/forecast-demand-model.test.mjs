@@ -2,6 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   addBusinessDays,
+  coverageAtArrival,
+  dailyDemand,
   correctedSizeProfile,
   forecastMonths,
   largestRemainder,
@@ -145,4 +147,27 @@ test('unserved pre-arrival store safety is restored but lost demand is not produ
     { quantity: 5, date: '2026-12-01' },
   ]
   assert.equal(productionRequiredAtArrival(0, [], needs, '2026-11-06'), 7)
+})
+
+
+test('late November inbound cannot erase earlier daily shortages', () => {
+  const needs = dailyDemand(30, '2026-11-01', '2026-11-30')
+  const coverage = coverageAtArrival(0, [{ quantity: 30, arrival: '2026-11-30' }], needs, '2026-12-22')
+  assert.equal(coverage.shortageBeforeArrival, 29)
+  assert.equal(coverage.firstShortageDate, '2026-11-01')
+  assert.equal(coverage.production, 0)
+  assert.equal(coverageAtArrival(0, [{ quantity: 30, arrival: '2026-11-01' }], needs, '2026-12-22').shortageBeforeArrival, 0)
+})
+
+test('separates December demand before and after production arrival', () => {
+  const coverage = coverageAtArrival(0, [], dailyDemand(31, '2026-12-01', '2026-12-31'), '2026-12-22')
+  assert.equal(coverage.shortageBeforeArrival, 21)
+  assert.equal(coverage.production, 10)
+})
+
+test('daily allocation preserves remaining-month total and receives same-day supply before demand', () => {
+  const needs = dailyDemand(80, '2026-10-05', '2026-10-31')
+  assert.equal(needs.length, 27)
+  assert.ok(Math.abs(needs.reduce((sum, row) => sum + row.quantity, 0) - 80) < 1e-9)
+  assert.equal(coverageAtArrival(0, [{ quantity: 80, arrival: '2026-10-05' }], needs, '2026-12-22').shortageBeforeArrival, 0)
 })

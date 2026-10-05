@@ -130,6 +130,8 @@ interface ForecastItem {
   diasHastaAgotamiento: number | null
   enviarTiendas?: number
   enviosTiendas?: StoreDispatch[]
+  faltanteAntesLlegada?: number
+  primeraFechaFaltante?: string | null
   sugerenciaProduccion: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
 }
@@ -146,12 +148,15 @@ interface ForecastReference {
   ventasPeriodoEstacional: number
   velocidadDiaria: number
   enviarTiendas?: number
+  faltanteAntesLlegada?: number
+  primeraFechaFaltante?: string | null
   sugerenciaProduccion: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
   variants: ForecastItem[]
 }
 
 interface ForecastData {
+  cobertura?: { fechaLlegadaProduccion: string; faltanteAntesLlegada: number; distribucion: string }
   tiendasForecast?: Array<{ id: string; nombre: string; incluida: boolean; tieneBodega: boolean }>
   reposicionTiendas?: { mes: string; tiendasSinBodega: number }
   forecast: ForecastItem[]
@@ -403,6 +408,8 @@ export default function InventarioPage() {
       'Stock consignado': f.stockConsignado,
       'Stock total': f.stockTotal,
       'En camino': f.enCamino,
+      'Faltante antes de llegada': f.faltanteAntesLlegada ?? 0,
+      'Primera fecha de faltante': f.primeraFechaFaltante || '',
       'Enviar a tiendas': f.enviarTiendas ?? '',
       'Ventas Shopify': f.ventasShopify,
       'Ventas WhatsApp': f.ventasWhatsApp,
@@ -479,6 +486,7 @@ export default function InventarioPage() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumen), 'Por referencia')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle), 'Detalle por SKU')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(parametros), 'Parámetros')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(forecastData.forecast.filter(v => (v.faltanteAntesLlegada || 0) > 0).map(v => ({ Referencia: v.producto, Talla: v.size, SKU: v.sku, Faltante: v.faltanteAntesLlegada, Desde: v.primeraFechaFaltante, 'Llegada producción nueva': forecastData.cobertura?.fechaLlegadaProduccion }))), 'Faltantes antes de llegada')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(envios), 'Enviar a tiendas')
 
     const today = new Date()
@@ -1072,6 +1080,11 @@ export default function InventarioPage() {
                   </CardContent>
                 </Card>
 
+                {forecastData.cobertura && <Card className="mb-6 border-amber-300 bg-amber-50"><CardContent className="pt-6">
+                  <p className="font-semibold">Faltantes antes de llegada: {forecastData.cobertura.faltanteAntesLlegada} pares</p>
+                  <p className="text-sm mt-1">Producción nueva: llegada estimada {forecastData.cobertura.fechaLlegadaProduccion}. Los faltantes anteriores requieren adelantar entregas o conseguir inventario; no están sumados a “Producir”. La reserva de seguridad puede requerir reposición adicional.</p>
+                  <p className="text-xs mt-2">Supuesto de fechas: {forecastData.cobertura.distribucion} Los picos dentro del mes pueden cambiar la cobertura.</p>
+                </CardContent></Card>}
                 {/* Forecast KPIs */}
                 <div className="grid gap-4 md:grid-cols-5 mb-8">
                   <Card className="border-red-200 bg-red-50">
@@ -1366,6 +1379,7 @@ export default function InventarioPage() {
                             ventasPeriodoEstacional: variants.reduce((s, v) => s + v.ventasPeriodoEstacional, 0),
                             velocidadDiaria: Math.round(variants.reduce((s, v) => s + v.velocidadDiaria, 0) * 100) / 100,
                             enviarTiendas: variants.reduce((s, v) => s + (v.enviarTiendas || 0), 0),
+                            faltanteAntesLlegada: variants.reduce((s, v) => s + (v.faltanteAntesLlegada || 0), 0),
                             sugerenciaProduccion: variants.reduce((s, v) => s + v.sugerenciaProduccion, 0),
                             prioridad: worst,
                             variants,
@@ -1390,13 +1404,14 @@ export default function InventarioPage() {
                                   <TableHead className="text-center">Vel. Semanal</TableHead>
                                   <TableHead className="text-center">Días Restantes</TableHead>
                                   <TableHead className="text-center">Prioridad</TableHead>
+                                  <TableHead className="text-center bg-amber-50">Falta antes de llegada</TableHead>
                                   <TableHead className="text-center bg-green-50">Producir</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {filteredRefs.length === 0 ? (
                                   <TableRow>
-                                    <TableCell colSpan={11} className="text-center py-8 text-[#545454]">
+                                    <TableCell colSpan={12} className="text-center py-8 text-[#545454]">
                                       No hay productos que mostrar
                                     </TableCell>
                                   </TableRow>
@@ -1471,6 +1486,7 @@ export default function InventarioPage() {
                                           <TableCell className="text-center">
                                             {getPriorityBadge(r.prioridad)}
                                           </TableCell>
+                                          <TableCell className="text-center text-amber-800 font-semibold">{r.faltanteAntesLlegada || 0}</TableCell>
                                           <TableCell className="text-center bg-green-50/50">
                                             {r.sugerenciaProduccion > 0 ? (
                                               <span className="font-bold text-green-700">{r.sugerenciaProduccion}</span>
@@ -1540,6 +1556,7 @@ export default function InventarioPage() {
                                               <TableCell className="text-center">
                                                 {getPriorityBadge(v.prioridad)}
                                               </TableCell>
+                                              <TableCell className="text-center text-amber-800"><b>{v.faltanteAntesLlegada || 0}</b>{v.primeraFechaFaltante && <div className="text-xs">Desde {v.primeraFechaFaltante}</div>}</TableCell>
                                               <TableCell className="text-center bg-green-50/30">
                                                 {v.sugerenciaProduccion > 0 ? (
                                                   <span className="font-bold text-green-700 text-sm">{v.sugerenciaProduccion}</span>
