@@ -437,3 +437,38 @@ function isColombiaHoliday(date: Date): boolean {
     holiday.getFullYear() === year && holiday.getMonth() === date.getMonth() && holiday.getDate() === date.getDate()
   )
 }
+
+export function seasonallyAdjustedFuture(
+  base: number[],
+  history: number[],
+  historyMonths: string[],
+  targetMonths: string[],
+): number[] {
+  // First recorded sale is our launch proxy. Later zero-sales months remain
+  // valid observations; months before any sales are not seasonal evidence.
+  const firstSale = history.findIndex(value => value > 0)
+  const recent = history.slice(-3)
+  const priorComparable = history.slice(-15, -12)
+  const recentAverage = recent.reduce((sum, value) => sum + value, 0) / Math.max(1, recent.length)
+  const priorAverage = priorComparable.reduce((sum, value) => sum + value, 0) / Math.max(1, priorComparable.length)
+  const growth = firstSale >= 0 && history.length - 15 >= firstSale && priorAverage > 0 ? Math.min(1.5, Math.max(0.75, recentAverage / priorAverage)) : 1
+
+  return targetMonths.map((target, index) => {
+    const monthNumber = target.slice(5, 7)
+    const comparable = historyMonths
+      .map((month, historyIndex) => ({ month, historyIndex, value: history[historyIndex] || 0 }))
+      .filter(row => firstSale >= 0 && row.historyIndex >= firstSale && row.month.slice(5, 7) === monthNumber && row.month < target)
+      .slice(-2)
+    if (!comparable.length) return Math.max(0, base[index] || 0)
+    const seasonalBase = comparable.length === 1
+      ? comparable[0].value
+      : comparable[0].value * 0.35 + comparable[1].value * 0.65
+    const seasonal = seasonalBase * growth
+    const model = Math.max(0, base[index] || 0)
+    const blended = model * 0.5 + seasonal * 0.5
+    // November/December are consistently the strongest commercial months in
+    // Shuless history. Do not let a short recent moving average erase that
+    // observed peak, but retain a 50% blend to avoid copying one year blindly.
+    return ['11', '12'].includes(monthNumber) ? Math.max(model, blended) : blended
+  })
+}

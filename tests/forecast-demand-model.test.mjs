@@ -14,6 +14,7 @@ import {
   proratePartialMonth,
   safetyStock,
   selectDemandModel,
+  seasonallyAdjustedFuture,
   stabilizedStoreSizeProfile,
   variabilityAdjustedSizeProfile,
 } from '../lib/forecast/demand-model.ts'
@@ -170,4 +171,18 @@ test('daily allocation preserves remaining-month total and receives same-day sup
   assert.equal(needs.length, 27)
   assert.ok(Math.abs(needs.reduce((sum, row) => sum + row.quantity, 0) - 80) < 1e-9)
   assert.equal(coverageAtArrival(0, [{ quantity: 80, arrival: '2026-10-05' }], needs, '2026-12-22').shortageBeforeArrival, 0)
+})
+
+const seasonalMonths = Array.from({ length: 24 }, (_, i) => new Date(Date.UTC(2024, 9 + i, 1)).toISOString().slice(0, 7))
+test('pre-launch zeros do not halve a new model seasonal forecast', () => {
+  assert.deepEqual(seasonallyAdjustedFuture([100, 100, 100, 100], [...Array(22).fill(0), 100, 100], seasonalMonths, ['2026-10', '2026-11', '2026-12', '2027-01']), [100, 100, 100, 100])
+  assert.deepEqual(seasonallyAdjustedFuture([100], Array(24).fill(0), seasonalMonths, ['2026-10']), [100])
+})
+test('seasonal adjustment preserves real zero months after launch and established weights', () => {
+  const history = Array(24).fill(100)
+  history[12] = 0
+  assert.deepEqual(seasonallyAdjustedFuture([100], history, seasonalMonths, ['2026-10']), [67.5])
+  history[0] = 200
+  history[12] = 300
+  assert.deepEqual(seasonallyAdjustedFuture([100], history, seasonalMonths, ['2026-10']), [182.5])
 })

@@ -17,6 +17,8 @@ const stores = [
 ]
 const invoice = (id, nit, quantity) => ({ id, date, customer_identification: nit, observations: '', items: [{ code: 'P20', quantity }], total: 100, credited_amount: 0, assigned_feria_id: null })
 const tables = {
+  ferias: [],
+  shopify_orders: [],
   tiendas_terceros: stores,
   siigo_product_stock: [{ product_code: 'P20', product_name: 'Prueba Talla 20', warehouse_id: 27, warehouse_name: 'Principal', quantity: 0 }],
   siigo_invoices: [invoice('direct', '333', 4), invoice('a', '111', 100), invoice('b', '222', 200)],
@@ -89,5 +91,30 @@ test('open month subtracts actual sales once and does not depress future complet
     const overTarget = await calculate('')
     assert.equal(Math.round(overTarget.forecast[0].velocidadDiaria * overTarget.metodologia.protectionDays), 300)
     assert.equal(overTarget.forecast[0].stockBodega, 80)
+  } finally { Object.assign(tables, original) }
+})
+
+test('Shopify history survives coincident fair dates, pagination, and explicit fair priority', async () => {
+  const original = { ...tables }
+  try {
+    tables.tiendas_terceros = []
+    tables.ventas_terceros = []
+    tables.siigo_product_stock = [original.siigo_product_stock[0]]
+    tables.shopify_orders = Array.from({ length: 1001 }, (_, i) => ({ id: i, order_number: i + 1 }))
+    tables.siigo_invoices = Array.from({ length: 24 }, (_, i) => ({
+      ...invoice(`history-${i}`, '333', 100), observations: '#1001',
+      date: new Date(Date.UTC(2024, 9 + i, 15)).toISOString().slice(0, 10),
+    }))
+    tables.siigo_invoices.push({ ...invoice('current', '333', 20), observations: '#1001' })
+    const baseline = await calculate('')
+    tables.ferias = [{ fecha_inicio: '2024-10-01', fecha_fin: date }]
+    const coincident = await calculate('')
+    assert.equal(coincident.forecast[0].velocidadDiaria, baseline.forecast[0].velocidadDiaria)
+    assert.equal(coincident.forecast[0].ventasShopify, baseline.forecast[0].ventasShopify)
+    assert.ok(coincident.forecast[0].ventasShopify > 0)
+    tables.siigo_invoices.at(-1).assigned_feria_id = 'explicit'
+    const explicit = await calculate('')
+    assert.equal(explicit.forecast[0].ventasShopify, baseline.forecast[0].ventasShopify - 20)
+    assert.equal(explicit.forecast[0].ventasFerias, 20)
   } finally { Object.assign(tables, original) }
 })

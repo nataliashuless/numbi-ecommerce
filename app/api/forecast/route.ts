@@ -11,6 +11,7 @@ import {
   dailyDemand,
   safetyStock,
   selectDemandModel,
+  seasonallyAdjustedFuture,
   stabilizedStoreSizeProfile,
   variabilityAdjustedSizeProfile,
 } from '@/lib/forecast/demand-model'
@@ -145,37 +146,6 @@ function buildSchoolSeasonPeriods(today: Date): { periods: PlanningPeriod[]; pla
   return { periods, planningEnd }
 }
 
-function seasonallyAdjustedFuture(
-  base: number[],
-  history: number[],
-  historyMonths: string[],
-  targetMonths: string[],
-): number[] {
-  const recent = history.slice(-3)
-  const priorComparable = history.slice(-15, -12)
-  const recentAverage = recent.reduce((sum, value) => sum + value, 0) / Math.max(1, recent.length)
-  const priorAverage = priorComparable.reduce((sum, value) => sum + value, 0) / Math.max(1, priorComparable.length)
-  const growth = priorAverage > 0 ? Math.min(1.5, Math.max(0.75, recentAverage / priorAverage)) : 1
-
-  return targetMonths.map((target, index) => {
-    const monthNumber = target.slice(5, 7)
-    const comparable = historyMonths
-      .map((month, historyIndex) => ({ month, value: history[historyIndex] || 0 }))
-      .filter(row => row.month.slice(5, 7) === monthNumber && row.month < target)
-      .slice(-2)
-    if (!comparable.length) return Math.max(0, base[index] || 0)
-    const seasonalBase = comparable.length === 1
-      ? comparable[0].value
-      : comparable[0].value * 0.35 + comparable[1].value * 0.65
-    const seasonal = seasonalBase * growth
-    const model = Math.max(0, base[index] || 0)
-    const blended = model * 0.5 + seasonal * 0.5
-    // November/December are consistently the strongest commercial months in
-    // Shuless history. Do not let a short recent moving average erase that
-    // observed peak, but retain a 50% blend to avoid copying one year blindly.
-    return ['11', '12'].includes(monthNumber) ? Math.max(model, blended) : blended
-  })
-}
 
 function parseProductName(desc: string): { reference: string; size: string | null } {
   const trimmed = (desc || '').trim()
@@ -362,15 +332,16 @@ export async function GET(request: Request) {
       realStoreSalesBySkuMonth.set(key, (realStoreSalesBySkuMonth.get(key) || 0) + Math.max(0, Number(sale.cantidad) || 0))
     }
 
-    const { data: shopOrdersRaw } = await supabase
-      .from('shopify_orders')
-      .select('order_number')
-      .gte('created_at', `${startDateStr}T00:00:00-05:00`)
-      .lte('created_at', `${endDateStr}T23:59:59-05:00`)
-      .range(0, 49999)
-    const shopOrderNumbers = new Set(
-      (shopOrdersRaw || []).map((o: { order_number: number }) => o.order_number)
-    )
+    // Classify the full invoice history, including Shopify orders older than
+    // the recent sales window. Supabase caps each response at 1,000 records.
+    const shopOrderNumbers = new Set<number>()
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await supabase.from('shopify_orders')
+        .select('order_number').order('id').range(offset, offset + 999)
+      if (error) throw error
+      for (const order of data || []) shopOrderNumbers.add(Number(order.order_number))
+      if (!data || data.length < 1000) break
+    }
 
     type Invoice = {
       id: string
@@ -418,10 +389,11 @@ export async function GET(request: Request) {
     for (const inv of invoices) {
       const invoiceStore = identificationKeys(inv.customer_identification).map(nit => storeByNit.get(nit)).find(Boolean)
       if (invoiceStore && excludedStoreIds.has(invoiceStore.id)) continue
-      const isFeria = inv.assigned_feria_id != null || (!invoiceStore && isFeriaDate(inv.date))
-      const isTienda = invoiceStore != null && !isFeria
       const orderNum = extractOrderNum(inv.observations)
-      const isShopify = !isFeria && !isTienda && orderNum !== null && shopOrderNumbers.has(orderNum)
+      const knownShopify = orderNum !== null && shopOrderNumbers.has(orderNum)
+      const isFeria = inv.assigned_feria_id != null || (!invoiceStore && !knownShopify && isFeriaDate(inv.date))
+      const isTienda = invoiceStore != null && !isFeria
+      const isShopify = !isFeria && !isTienda && knownShopify
       // Default: WhatsApp (direct sale)
       const channel: keyof Sales = isFeria ? 'ferias' : isTienda ? 'tiendas' : isShopify ? 'shopify' : 'whatsapp'
 
@@ -493,7 +465,9 @@ export async function GET(request: Request) {
         for (const item of inv.items || []) if (item.code) excludedSalesSkus.add(item.code)
         continue
       }
-      const isFeriaInvoice = inv.assigned_feria_id != null || (!matchedStore && isFeriaDate(inv.date))
+      const orderNum = extractOrderNum(inv.observations)
+      const knownShopify = orderNum !== null && shopOrderNumbers.has(orderNum)
+      const isFeriaInvoice = inv.assigned_feria_id != null || (!matchedStore && !knownShopify && isFeriaDate(inv.date))
       // Ferias are event demand, not recurring Online/WhatsApp demand and not
       // a monthly store replenishment proxy.
       if (isFeriaInvoice) continue
