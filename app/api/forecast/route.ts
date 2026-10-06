@@ -167,7 +167,7 @@ export async function GET(request: Request) {
     const endDateStr = endDate.toISOString().slice(0, 10)
     const leadTimeEnd = addBusinessDays(endDate, leadTimeBusinessDays)
     const { periods: planningPeriods, planningEnd: protectionEnd } = buildSchoolSeasonPeriods(endDate)
-    const protectionDays = Math.max(1, Math.ceil((protectionEnd.getTime() - endDate.getTime()) / 86_400_000))
+    const protectionDays = Math.max(1, Math.round((Date.UTC(protectionEnd.getFullYear(), protectionEnd.getMonth(), protectionEnd.getDate()) - Date.UTC(endDate.getFullYear(), endDate.getMonth(), endDate.getDate())) / 86_400_000) + 1)
     const horizonteDias = protectionDays
     const seasonalStart = new Date(endDate)
     seasonalStart.setFullYear(seasonalStart.getFullYear() - 1)
@@ -508,8 +508,20 @@ export async function GET(request: Request) {
       directo: { actual: 0, abs: 0, baselineAbs: 0, series: 0 },
       tiendas: { actual: 0, abs: 0, baselineAbs: 0, series: 0 },
     }
-    const validateSeries = (values: number[], channel: 'directo' | 'tiendas') => {
+    const checksByReference = new Map<string, { actual: number; error: number; baselineError: number; evaluated: number; missing: number }>()
+    const recordCheck = (reference: string, check?: ReturnType<typeof backtestDemandModel>) => {
+      const row = checksByReference.get(reference) || { actual: 0, error: 0, baselineError: 0, evaluated: 0, missing: 0 }
+      if (check && check.origins >= 3 && check.actualUnits > 0) {
+        row.actual += check.actualUnits
+        row.error += check.selectedAbsoluteError
+        row.baselineError += check.baselineAbsoluteError
+        row.evaluated++
+      } else row.missing++
+      checksByReference.set(reference, row)
+    }
+    const validateSeries = (values: number[], channel: 'directo' | 'tiendas', reference: string) => {
       const check = backtestDemandModel(values, 4, monthSequence.slice(-values.length))
+      recordCheck(reference, check)
       if (check.origins < 3) { validation.seriesSinEvaluar++; return }
       const channelTotal = validationByChannel[channel]
       channelTotal.actual += check.actualUnits
@@ -629,8 +641,8 @@ export async function GET(request: Request) {
         }
       }
       if (directModel.name.startsWith('seasonal')) seasonalReferences.add(reference)
-      if (directFirst >= 0) validateSeries(directTraining, 'directo')
-      else validation.seriesSinEvaluar++
+      if (directFirst >= 0) validateSeries(directTraining, 'directo', reference)
+      else { validation.seriesSinEvaluar++; recordCheck(reference) }
       const directExpected = directPeriodDemand.reduce((sum, value) => sum + value, 0)
       const manualSafety = directExpected / Math.max(1, protectionDays) * Math.max(0, stockSeguridad)
       // Configured days are a hard ceiling, never a floor for statistical inflation.
@@ -677,8 +689,8 @@ export async function GET(request: Request) {
         const storeProjection = storeAnnual.values
         if (storeAnnual.sources.includes('año anterior')) storeModel = lastYearSafetyModel(storeTraining, monthSequence.slice(-storeTraining.length), storeModel)
         if (storeModel.name.startsWith('seasonal')) seasonalReferences.add(reference)
-        if (enoughHistory) validateSeries(storeTraining, 'tiendas')
-        else validation.seriesSinEvaluar++
+        if (enoughHistory) validateSeries(storeTraining, 'tiendas', reference)
+        else { validation.seriesSinEvaluar++; recordCheck(reference) }
         const storeFuture = storeProjection.slice(1)
         const storeActual = skus.reduce((sum, sku) => sum + (currentStoreObserved.get(store.id)?.get(sku) || 0), 0)
         const storeCurrentMonth = storeFirst < 0 && storeActual > 0
@@ -1102,6 +1114,17 @@ export async function GET(request: Request) {
       validacion: {
         ...validation,
         horizonteMeses: 4,
+        revisionReferencias: referencias.map(row => {
+          const check = checksByReference.get(row.reference)
+          return {
+            referencia: row.reference,
+            produccion: row.sugerenciaProduccion,
+            error: check?.actual ? check.error / check.actual : null,
+            errorBase: check?.actual ? check.baselineError / check.actual : null,
+            canalesEvaluados: check?.evaluated || 0,
+            canalesSinEvaluar: check?.missing || 0,
+          }
+        }).sort((a, b) => b.produccion - a.produccion),
         porCanal: Object.entries(validationByChannel).map(([canal, row]) => ({ canal, series: row.series, error: row.actual > 0 ? row.abs / row.actual : null, errorBase: row.actual > 0 ? row.baselineAbs / row.actual : null })),
         errorModelo: validation.actualUnits > 0 ? validation.selectedAbsoluteError / validation.actualUnits : null,
         errorBase: validation.actualUnits > 0 ? validation.baselineAbsoluteError / validation.actualUnits : null,

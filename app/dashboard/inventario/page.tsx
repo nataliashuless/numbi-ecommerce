@@ -158,7 +158,7 @@ interface ForecastReference {
 }
 
 interface ForecastData {
-  validacion?: { porCanal?: Array<{ canal: string; series: number; error: number | null; errorBase: number | null }>; horizonteMeses: number; errorModelo: number | null; errorBase: number | null; seriesEvaluadas: number; seriesSinEvaluar: number; observations: number; alcance: string }
+  validacion?: { revisionReferencias?: Array<{ referencia: string; produccion: number; error: number | null; errorBase: number | null; canalesEvaluados: number; canalesSinEvaluar: number }>; porCanal?: Array<{ canal: string; series: number; error: number | null; errorBase: number | null }>; horizonteMeses: number; errorModelo: number | null; errorBase: number | null; seriesEvaluadas: number; seriesSinEvaluar: number; observations: number; alcance: string }
   auditoria?: Array<{ referencia: string; canal: string; modelo: string; mesesHistoria: number; meses: string[]; fuentes: string[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }>
 
   cobertura?: { fechaLlegadaProduccion: string; faltanteAntesLlegada: number; distribucion: string }
@@ -503,6 +503,14 @@ export default function InventarioPage() {
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumen), 'Por referencia')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle), 'Detalle por SKU')
+    if (forecastData.validacion?.revisionReferencias) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+      forecastData.validacion.revisionReferencias.map(row => ({
+        'Referencia': row.referencia, 'Producción estimada': row.produccion,
+        'Error modelo (%)': row.error == null ? 'Sin evidencia' : Number((row.error * 100).toFixed(1)),
+        'Error promedio 3 meses (%)': row.errorBase == null ? 'Sin evidencia' : Number((row.errorBase * 100).toFixed(1)),
+        'Canales evaluados': row.canalesEvaluados, 'Canales sin evaluar': row.canalesSinEvaluar,
+        'Alcance': 'Demanda mensual; no certifica producción ni ventas futuras',
+      }))), 'Validación por referencia')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(parametros), 'Parámetros')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(forecastData.forecast.filter(v => (v.faltanteAntesLlegada || 0) > 0).map(v => ({ Referencia: v.producto, Talla: v.size, SKU: v.sku, Faltante: v.faltanteAntesLlegada, Desde: v.primeraFechaFaltante, 'Llegada producción nueva': forecastData.cobertura?.fechaLlegadaProduccion }))), 'Faltantes antes de llegada')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(envios), 'Enviar a tiendas')
@@ -1119,6 +1127,14 @@ export default function InventarioPage() {
                       <tbody>{seasonalReview.slice(0, 8).map(row => <tr key={`${row.referencia}-${row.mes}`}><td className="p-1">{row.referencia}</td><td className="p-1">{row.mes}</td><td className="p-1">{row.anterior}</td><td className="p-1">{row.proyeccion}</td></tr>)}</tbody></table>
                       <p className="mt-2 text-xs">La descarga incluye el historial completo y la demanda mensual de todas las referencias.</p>
                     </div>}
+                    <details open>
+                      <summary className="cursor-pointer font-medium">Revisión por referencia: estimaciones, no órdenes confirmadas</summary>
+                      <p className="my-2 text-xs">Comparación sobre los mismos meses históricos. Un error menor que el promedio no garantiza ventas futuras. Los canales sin evidencia suficiente quedan identificados.</p>
+                      <div className="overflow-x-auto"><table className="w-full text-left text-xs">
+                        <thead><tr><th className="p-2">Referencia</th><th className="p-2">Producción estimada</th><th className="p-2">Error modelo</th><th className="p-2">Error promedio 3 meses</th><th className="p-2">Canales evaluados / sin evaluar</th></tr></thead>
+                        <tbody>{forecastData.validacion.revisionReferencias?.filter(row => row.produccion > 0).map(row => <tr className="border-t" key={row.referencia}><td className="p-2">{row.referencia}</td><td className="p-2">{row.produccion}</td><td className="p-2">{row.error == null ? 'Sin evidencia' : `${(row.error * 100).toFixed(1)} %`}</td><td className="p-2">{row.errorBase == null ? 'Sin evidencia' : `${(row.errorBase * 100).toFixed(1)} %`}</td><td className="p-2">{row.canalesEvaluados} / {row.canalesSinEvaluar}</td></tr>)}</tbody>
+                      </table></div>
+                    </details>
                     <details>
                       <summary className="cursor-pointer font-medium">Ver demanda mensual y reserva por referencia y canal</summary>
                       <div className="overflow-x-auto mt-3"><table className="w-full text-left text-xs">

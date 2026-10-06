@@ -347,3 +347,23 @@ test('configured seven days cap every channel reserve even with large annual err
     assert.equal(capped.resumen.totalProduccionSinReserva, zero.resumen.totalProducirSugerido)
   } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
 })
+
+test('inclusive horizon covers October 5 through January 31 and reference audit preserves missing evidence', async () => {
+  const original = { ...tables }
+  try {
+    isolatedSupplyFixture()
+    const result = await calculate('', '&stock_seguridad=7')
+    assert.equal(result.metodologia.protectionDays, 119)
+    const review = result.validacion.revisionReferencias.find(row => row.referencia === 'Prueba')
+    assert.equal(review.produccion, result.resumen.totalProducirSugerido)
+    assert.equal(review.error, result.validacion.errorModelo)
+    assert.equal(review.errorBase, result.validacion.errorBase)
+    assert.equal(review.canalesEvaluados, 1)
+    tables.siigo_invoices = [invoice('new', '333', 2)]
+    const sparse = await calculate()
+    const missing = sparse.validacion.revisionReferencias.find(row => row.referencia === 'Prueba')
+    assert.equal(missing.error, null, 'no evidence must not look like zero forecast error')
+    assert.equal(missing.canalesEvaluados, 0)
+    assert.ok(missing.canalesSinEvaluar > 0)
+  } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
+})
