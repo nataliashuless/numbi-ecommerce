@@ -531,7 +531,7 @@ export default function InventarioPage() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((forecastData.auditoria || []).flatMap(row => row.meses.map((mes, i) => ({
       Referencia: row.referencia, Canal: row.canal, Mes: mes, Fuente: row.fuentes[i],
       'Mes completo previsto': row.proyeccionCompleta?.[i] ?? row.demanda[i],
-      'Ventas ya realizadas': i === 0 ? row.vendidoMes || 0 : 0, 'Demanda pendiente': row.demanda[i], 'Estimación excluida sin comparable': row.demandaSinComparable?.[i] || 0,
+      'Ventas ya realizadas': i === 0 ? row.vendidoMes || 0 : 0, 'Demanda pendiente': row.demanda[i], 'Demanda estimada con ventas recientes': row.demandaSinComparable?.[i] || 0,
     })))), 'Cálculo de demanda')
     if (forecastData.crecimientoObservado) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(forecastData.crecimientoObservado.map(row => ({
       'Canal / tienda': row.canal, 'Meses actuales': row.mesesActuales.join(', '), 'Meses comparables': row.mesesComparables.join(', '),
@@ -1155,10 +1155,10 @@ export default function InventarioPage() {
                   <CardHeader><CardTitle>Comprobación del forecast</CardTitle></CardHeader>
                   <CardContent className="space-y-3 text-sm">
                     <p>Base de demanda: ventas de cada referencia del mismo mes del año pasado × crecimiento observado. Shopify, WhatsApp y cada tienda se calculan por separado. Black Friday y Navidad ya están incluidos en el histórico: no se añade otro aumento.</p>
-                    <p>Crecimiento observado = pares vendidos en los últimos tres meses completos ÷ pares de esos mismos meses del año anterior − 1. Una caída también se aplica. Sin base comparable se usa 0 % de ajuste, identificado como no calculable; si falta el mes histórico de la referencia, su estimación reciente queda excluida de producción automática y pendiente de revisión.</p>
-                    <p className="rounded border border-blue-200 bg-blue-50 p-3">Control de inventario: solo meses con ventas históricas comparables entran a producción. Las tallas se distribuyen según ventas registradas, sin inventar ventas por falta de stock. El faltante final se redondea al par más cercano: puede dejar una fracción de demanda estimada sin cubrir.</p>
-                    <details><summary className="cursor-pointer font-medium">Estimaciones sin mes comparable: excluidas de producción</summary>
-                      <p className="my-2">Estas cantidades son demanda estimada, no pares a fabricar. No tener comparación no significa que no habrá ventas.</p>
+                    <p>Crecimiento observado = pares vendidos en los últimos tres meses completos ÷ pares de esos mismos meses del año anterior − 1. Una caída también se aplica. Sin base comparable se usa 0 % de ajuste, identificado como no calculable; si falta el mes histórico de la referencia, se usa el promedio de sus últimos hasta tres meses cerrados disponibles desde su primera venta, sin añadir crecimiento. Si solo tiene ventas en el mes actual, se usa una estimación provisional con esas ventas; antes de siete días no se extrapola el ritmo.</p>
+                    <p className="rounded border border-blue-200 bg-blue-50 p-3">Control de inventario: los modelos con mes comparable usan ese histórico; los nuevos también entran a producción según sus ventas recientes. Las tallas se distribuyen según ventas registradas, sin inventar ventas por falta de stock. El faltante final se redondea al par más cercano: puede dejar una fracción de demanda estimada sin cubrir.</p>
+                    <details><summary className="cursor-pointer font-medium">Modelos sin mes comparable: estimación reciente incluida</summary>
+                      <p className="my-2">Estas cantidades son demanda estimada incluida. Para calcular lo que falta fabricar se descuentan inventario y pedidos por talla y fecha.</p>
                       {(forecastData.auditoria || []).filter(row => row.demandaSinComparable?.some(value => value > 0)).map(row => <p key={`${row.referencia}-${row.canal}`}>{row.referencia} · {row.canal}: {row.meses.map((mes, i) => (row.demandaSinComparable?.[i] || 0) > 0 ? `${mes}: ${row.demandaSinComparable![i]}` : '').filter(Boolean).join('; ')}</p>)}
                     </details>
                     <p>{forecastData.validacion.errorModelo == null ? 'No hay suficientes períodos comparables para medir el error; esto no certifica precisión.' : `Error histórico en períodos comparables a cuatro meses: ${(forecastData.validacion.errorModelo * 100).toFixed(1)} %. Promedio de tres meses como comparación: ${((forecastData.validacion.errorBase || 0) * 100).toFixed(1)} %.`}</p>

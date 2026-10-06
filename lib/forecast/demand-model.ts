@@ -312,12 +312,17 @@ export function forecastObservedGrowth(values: number[], channel: number[], mont
   return { values: projection, sources, growth }
 }
 
-// Conservative production policy: absent annual evidence stays outside automatic production.
-export function forecastComparableObservedGrowth(values: number[], channel: number[], months: number) {
+// Annual comparisons where available; recent observed sales for new references.
+export function forecastSalesWithRecentFallback(values: number[], channel: number[], months: number,
+  currentMonth?: { units: number; elapsedDays: number; daysInMonth: number }) {
   const result = forecastObservedGrowth(values, channel, months)
-  const excludedForecast = result.values.map((value, i) => result.sources[i].startsWith('año anterior') ? 0 : value)
-  return { ...result, excludedForecast,
-    values: result.values.map((value, i) => result.sources[i].startsWith('año anterior') ? value : 0) }
+  const hasClosedSales = values.some(value => value > 0)
+  const recentOnly = !hasClosedSales && currentMonth && currentMonth.units > 0
+    ? proratePartialMonth(currentMonth.units, currentMonth.elapsedDays, currentMonth.daysInMonth) : null
+  const projected = recentOnly == null ? result.values : result.values.map(() => recentOnly)
+  const sources = recentOnly == null ? result.sources : result.sources.map(() => 'modelo nuevo: ventas del mes en curso, estimación provisional sin crecimiento adicional')
+  return { ...result, sources, values: projected,
+    recentForecast: projected.map((value, i) => sources[i].startsWith('año anterior') ? 0 : value) }
 }
 
 // Actual observed shares only; no inferred lost sales and no equal-share demand.

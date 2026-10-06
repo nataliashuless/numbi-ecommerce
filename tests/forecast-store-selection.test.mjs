@@ -445,14 +445,25 @@ test('exported dated ledger independently reconciles production using cumulative
   } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
 })
 
-test('recent-only reference is visible for review but cannot trigger automatic production', async () => {
+test('recent-only reference contributes production from actual sales without reserve', async () => {
   const previous = tables.siigo_invoices
   try {
     tables.siigo_invoices = [{ ...invoice('new-only', '333', 30), date: '2026-09-15' }]
     const result = await calculate('a,b', '&stock_seguridad=0')
     const row = result.auditoria.find(row => row.referencia === 'Prueba' && row.canal === 'WhatsApp')
     assert.ok(row.demandaSinComparable.some(value => value > 0))
-    assert.ok(row.demanda.every(value => value === 0))
-    assert.equal(result.forecast.find(row => row.sku === 'P20').sugerenciaProduccion, 0)
+    assert.ok(row.demanda.every(value => value === 30))
+    assert.ok(result.forecast.find(row => row.sku === 'P20').sugerenciaProduccion > 0)
+  } finally { tables.siigo_invoices = previous }
+})
+
+test('first-month new model uses current sales and the sizes actually sold', async () => {
+  const previous = tables.siigo_invoices
+  try {
+    tables.siigo_invoices = [invoice('first-month-only', '333', 3)]
+    const result = await calculate('a,b', '&stock_seguridad=0')
+    const row = result.auditoria.find(row => row.referencia === 'Prueba' && row.canal === 'WhatsApp')
+    assert.deepEqual(Array.from(row.demanda), [0, 3, 3, 3])
+    assert.ok(result.forecast.find(row => row.sku === 'P20').sugerenciaProduccion > 0)
   } finally { tables.siigo_invoices = previous }
 })

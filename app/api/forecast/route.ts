@@ -10,7 +10,7 @@ import {
   coverageAtArrival,
   dailyDemand,
   backtestDemandModel,
-  forecastComparableObservedGrowth,
+  forecastSalesWithRecentFallback,
   observedGrowth,
   backtestObservedGrowth,
   variabilityAdjustedSizeProfile,
@@ -414,6 +414,8 @@ export async function GET(request: Request) {
 
     // Complete monthly actual sales history, with Siigo as the primary source.
     const monthKey = (date: string) => date.slice(0, 7)
+    const currentMonthTiming = { elapsedDays: Number(endDateStr.slice(8, 10)), daysInMonth: new Date(`${endDateStr.slice(0, 7)}-01T12:00:00Z`) }
+    const currentMonthDays = new Date(Date.UTC(currentMonthTiming.daysInMonth.getUTCFullYear(), currentMonthTiming.daysInMonth.getUTCMonth() + 1, 0)).getUTCDate()
     const monthSequence: string[] = []
     const firstInvoiceMonth = uniqueInvoices.length
       ? uniqueInvoices.reduce((min, inv) => monthKey(inv.date) < min ? monthKey(inv.date) : min, monthKey(uniqueInvoices[0].date))
@@ -624,21 +626,22 @@ export async function GET(request: Request) {
         skus.reduce((sum, sku) => sum + (onlineMonthly[directChannel].get(sku)?.[i] || 0), 0)
       )
       const directFirst = directSeries.findIndex(value => value > 0)
-      // A reference without closed-month sales has no empirical future base.
+      // If no closed-month history exists, current sales provide a provisional base.
       const directTraining = directFirst >= 0 ? directSeries.slice(directFirst) : []
       if (directFirst < 0 && !skus.some(sku => (onlineActual[directChannel].get(sku) || 0) > 0)) continue
-      const directAnnual = forecastComparableObservedGrowth(directTraining, onlineHistory[directChannel], futureMonthsNeeded + 1)
+      const directActual = skus.reduce((sum, sku) => sum + (onlineActual[directChannel].get(sku) || 0), 0)
+      const directAnnual = forecastSalesWithRecentFallback(directTraining, onlineHistory[directChannel], futureMonthsNeeded + 1, { units: directActual, elapsedDays: currentMonthTiming.elapsedDays, daysInMonth: currentMonthDays })
       const directProjection = directAnnual.values
       const directSizeSeries = new Map<string, number[]>()
       for (const sku of skus) {
         const size = parseProductName(stockBySku.get(sku)?.product_name || '').size || sku
-        const existing = directSizeSeries.get(size) || Array(monthSequence.length).fill(0)
+        const existing = directSizeSeries.get(size) || Array(Math.max(1, monthSequence.length)).fill(0)
         const values = onlineMonthly[directChannel].get(sku) || []
         for (let i = 0; i < existing.length; i++) existing[i] += values[i] || 0
+        if (directFirst < 0) existing[existing.length - 1] = (existing[existing.length - 1] || 0) + (onlineActual[directChannel].get(sku) || 0)
         directSizeSeries.set(size, existing)
       }
-      const directProfile = directFirst >= 0 ? observedSizeProfile(directSizeSeries) : profile
-      const directActual = skus.reduce((sum, sku) => sum + (onlineActual[directChannel].get(sku) || 0), 0)
+      const directProfile = observedSizeProfile(directSizeSeries)
       const directCurrentMonth = directProjection[0] || 0
       const directFuture = directProjection.slice(1)
       const directPeriodDemand = planningPeriods.map(period => Math.max(0, Math.round(
@@ -666,7 +669,7 @@ export async function GET(request: Request) {
       const manualSafety = directExpected / Math.max(1, protectionDays) * Math.max(0, stockSeguridad)
       // Configured days are a hard ceiling, never a floor for statistical inflation.
       const directSafety = Math.floor(manualSafety)
-      auditRows.push({ referencia: reference, canal: directChannel, historial: monthSequence.map((mes, i) => ({ mes, pares: directSeries[i] || 0 })), modelo: 'año anterior × crecimiento observado', mesesHistoria: directFirst >= 0 ? directTraining.length : 0, meses: futureMonthKeys, fuentes: directAnnual.sources, demandaSinComparable: directAnnual.excludedForecast.map((value, i) => Math.round(Math.max(0, value - (i === 0 ? directActual : 0)))), vendidoMes: directActual, proyeccionCompleta: [directCurrentMonth, ...directFuture], demanda: directPeriodDemand, reserva: directSafety, evidencia: directFirst >= 0 ? 'ventas directas' : 'sin historial cerrado: estimación provisional' })
+      auditRows.push({ referencia: reference, canal: directChannel, historial: monthSequence.map((mes, i) => ({ mes, pares: directSeries[i] || 0 })), modelo: 'año anterior × crecimiento observado', mesesHistoria: directFirst >= 0 ? directTraining.length : 0, meses: futureMonthKeys, fuentes: directAnnual.sources, demandaSinComparable: directAnnual.recentForecast.map((value, i) => Math.round(Math.max(0, value - (i === 0 ? directActual : 0)))), vendidoMes: directActual, proyeccionCompleta: [directCurrentMonth, ...directFuture], demanda: directPeriodDemand, reserva: directSafety, evidencia: directFirst >= 0 ? 'ventas directas' : 'sin historial cerrado: estimación provisional' })
       const directSafetyProfile = variabilityAdjustedSizeProfile(directSizeSeries, directProfile)
       for (const [sku, units] of allocateToSkus(skus, directSafety, directSafetyProfile)) addTarget(sku, units, protectionEnd)
 
@@ -686,13 +689,13 @@ export async function GET(request: Request) {
         const storeFirst = storeSeries.findIndex(value => value > 0)
         const storeTraining = storeFirst >= 0 ? storeSeries.slice(storeFirst) : []
         const enoughHistory = storeTraining.length >= 6 && storeTraining.filter(value => value > 0).length >= 3
-        const storeAnnual = forecastComparableObservedGrowth(storeTraining, storeHistories.get(store.id) || [], futureMonthsNeeded + 1)
+        const storeActual = skus.reduce((sum, sku) => sum + (currentStoreObserved.get(store.id)?.get(sku) || 0), 0)
+        const storeAnnual = forecastSalesWithRecentFallback(storeTraining, storeHistories.get(store.id) || [], futureMonthsNeeded + 1, { units: storeActual, elapsedDays: currentMonthTiming.elapsedDays, daysInMonth: currentMonthDays })
         const storeProjection = storeAnnual.values
         if (storeAnnual.sources.some(source => source.startsWith('año anterior'))) seasonalReferences.add(reference)
         if (enoughHistory) validateSeries(storeTraining, 'tiendas', reference, storeHistories.get(store.id) || [])
         else { validation.seriesSinEvaluar++; recordCheck(reference) }
         const storeFuture = storeProjection.slice(1)
-        const storeActual = skus.reduce((sum, sku) => sum + (currentStoreObserved.get(store.id)?.get(sku) || 0), 0)
         const storeCurrentMonth = storeProjection[0] || 0
         // Invoice sales already reduced Siigo stock: subtract them only from
         // the remaining monthly demand, exactly once, in every calendar month.
@@ -704,18 +707,17 @@ export async function GET(request: Request) {
         const storeDayLimit = storePeriodDemand.reduce((sum, value) => sum + value, 0)
           / Math.max(1, protectionDays) * Math.max(0, stockSeguridad)
         const storeBuffer = Math.floor(storeDayLimit)
-        auditRows.push({ referencia: reference, canal: store.nombre, historial: monthSequence.map((mes, i) => ({ mes, pares: storeSeries[i] || 0 })), modelo: 'año anterior × crecimiento observado', mesesHistoria: storeTraining.length, meses: futureMonthKeys, fuentes: storeAnnual.sources, demandaSinComparable: storeAnnual.excludedForecast.map((value, i) => Math.round(Math.max(0, value - (i === 0 ? storeActual : 0)))), vendidoMes: storeActual, proyeccionCompleta: [storeCurrentMonth, ...storeFuture], demanda: storePeriodDemand, reserva: storeBuffer, evidencia: enoughHistory ? 'ventas de tienda facturadas en Siigo; registros manuales solo sin factura del SKU/mes' : 'historial escaso: participación reciente observada, sin validación individual' })
+        auditRows.push({ referencia: reference, canal: store.nombre, historial: monthSequence.map((mes, i) => ({ mes, pares: storeSeries[i] || 0 })), modelo: 'año anterior × crecimiento observado', mesesHistoria: storeTraining.length, meses: futureMonthKeys, fuentes: storeAnnual.sources, demandaSinComparable: storeAnnual.recentForecast.map((value, i) => Math.round(Math.max(0, value - (i === 0 ? storeActual : 0)))), vendidoMes: storeActual, proyeccionCompleta: [storeCurrentMonth, ...storeFuture], demanda: storePeriodDemand, reserva: storeBuffer, evidencia: enoughHistory ? 'ventas de tienda facturadas en Siigo; registros manuales solo sin factura del SKU/mes' : 'historial escaso: participación reciente observada, sin validación individual' })
         const storeSizeSeries = new Map<string, number[]>()
         for (const sku of skus) {
           const size = parseProductName(stockBySku.get(sku)?.product_name || '').size || sku
-          const existing = storeSizeSeries.get(size) || Array(monthSequence.length).fill(0)
+          const existing = storeSizeSeries.get(size) || Array(Math.max(1, monthSequence.length)).fill(0)
           const values = storeSkuMonthly.get(store.id)?.get(sku) || []
           for (let i = 0; i < existing.length; i++) existing[i] += values[i] || 0
+          if (storeFirst < 0) existing[existing.length - 1] = (existing[existing.length - 1] || 0) + (currentStoreObserved.get(store.id)?.get(sku) || 0)
           storeSizeSeries.set(size, existing)
         }
-        const localStoreProfile = storeSeries.some(value => value > 0)
-          ? observedSizeProfile(storeSizeSeries)
-          : profile
+        const localStoreProfile = observedSizeProfile(storeSizeSeries)
         const storeProfile = localStoreProfile
         // Only linked stores are eligible. Each store's reserve uses its own
         // size curve and is netted only against that store's stock.
