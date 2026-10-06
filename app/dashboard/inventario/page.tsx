@@ -1109,6 +1109,7 @@ export default function InventarioPage() {
                     {forecastData.validacion.porCanal?.map(row => <p key={row.canal}>{row.canal === 'directo' ? 'Online + WhatsApp' : 'Tiendas'}: {row.error == null ? 'sin evidencia suficiente' : `${(row.error * 100).toFixed(1)} % de error histórico`} ({row.series} series evaluadas).</p>)}
                     {(forecastData.validacion.errorModelo == null || (forecastData.validacion.errorBase != null && forecastData.validacion.errorModelo >= forecastData.validacion.errorBase)) && <p className="rounded border border-amber-300 bg-amber-50 p-3 font-medium">Estimación pendiente de revisión: la regla del año anterior no ha demostrado mejorar el promedio de tres meses en la prueba a cuatro meses. La cantidad calculada no debe tomarse como una orden de fabricación confirmada.</p>}
                     <p>{forecastData.validacion.seriesEvaluadas} combinaciones de referencia y canal evaluadas; {forecastData.validacion.seriesSinEvaluar} sin validación individual suficiente.</p>
+                    <p>Reserva limitada a {forecastData.parametros.stockSeguridad} días de demanda media prevista por referencia y canal, redondeada hacia abajo a pares completos. El error histórico no puede superar ese límite; en tiendas la reserva puede ser menor.</p>
                     {forecastData.resumen.totalProduccionSinReserva != null && <p className="rounded bg-amber-50 p-3 font-medium">Desglose de producción: {forecastData.resumen.totalProduccionSinReserva} pares para cubrir la demanda sin reserva + {forecastData.resumen.totalProduccionPorReserva} pares adicionales por reserva de seguridad = {forecastData.resumen.totalProducirSugerido} pares. Ambos cálculos descuentan stock y pedidos según talla y fecha de llegada.</p>}
                     <p className="text-[#545454]">{forecastData.validacion.alcance} Las facturas de Siigo son ventas reales de las tiendas. Las ventas del mes en curso se descuentan de la demanda pendiente, sin volver a descontarlas del stock. La sugerencia es una estimación, no una garantía de ventas.</p>
                     {seasonalReview.length > 0 && <div className="rounded border border-amber-300 p-3">
@@ -1290,7 +1291,7 @@ export default function InventarioPage() {
                         <p className="mt-1 text-xs text-[#545454]">Excluye fines de semana y festivos nacionales de Colombia.</p>
                       </div>
                       <div className="flex-1">
-                        <Label htmlFor="seguridad">Stock de seguridad (dias)</Label>
+                        <Label htmlFor="seguridad">Límite de seguridad (días)</Label>
                         <Input
                           id="seguridad"
                           type="number"

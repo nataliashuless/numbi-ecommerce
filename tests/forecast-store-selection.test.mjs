@@ -325,3 +325,25 @@ test('production breakdown isolates safety with the same sales and dated supply'
     assert.equal(reserve.resumen.totalProducirSugerido, reserve.resumen.totalProduccionSinReserva + reserve.resumen.totalProduccionPorReserva)
   } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
 })
+
+
+test('configured seven days cap every channel reserve even with large annual errors; zero disables all reserves', async () => {
+  const original = { ...tables }
+  try {
+    isolatedSupplyFixture()
+    tables.tiendas_terceros = [stores[0]]
+    tables.siigo_product_stock = [stock('P20', '20', 0), stock('P20', '20', 0, 30)]
+    tables.siigo_invoices = [...steadyHistory('333', 'P20', 100), ...steadyHistory('111', 'P20', 100)]
+    for (const inv of tables.siigo_invoices) if (inv.date >= '2025-10-01') inv.items = [{ code: 'P20', quantity: 500 }]
+    const capped = await calculate('', '&stock_seguridad=7')
+    for (const row of capped.auditoria) {
+      const maxPairs = Math.floor(row.demanda.reduce((sum, q) => sum + q, 0) / capped.metodologia.protectionDays * 7)
+      assert.ok(row.reserva <= maxPairs, `${row.canal} exceeds seven days`)
+    }
+    assert.ok(capped.auditoria.some(row => row.canal === 'A' && row.reserva > 0))
+    const zero = await calculate('', '&stock_seguridad=0')
+    assert.ok(zero.auditoria.every(row => row.reserva === 0))
+    assert.equal(zero.resumen.totalProduccionPorReserva, 0)
+    assert.equal(capped.resumen.totalProduccionSinReserva, zero.resumen.totalProducirSugerido)
+  } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
+})

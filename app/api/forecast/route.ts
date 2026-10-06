@@ -168,7 +168,6 @@ export async function GET(request: Request) {
     const leadTimeEnd = addBusinessDays(endDate, leadTimeBusinessDays)
     const { periods: planningPeriods, planningEnd: protectionEnd } = buildSchoolSeasonPeriods(endDate)
     const protectionDays = Math.max(1, Math.ceil((protectionEnd.getTime() - endDate.getTime()) / 86_400_000))
-    const protectionMonths = protectionDays / 30.4375
     const horizonteDias = protectionDays
     const seasonalStart = new Date(endDate)
     seasonalStart.setFullYear(seasonalStart.getFullYear() - 1)
@@ -633,9 +632,9 @@ export async function GET(request: Request) {
       if (directFirst >= 0) validateSeries(directTraining, 'directo')
       else validation.seriesSinEvaluar++
       const directExpected = directPeriodDemand.reduce((sum, value) => sum + value, 0)
-      const statisticalSafety = safetyStock(directModel, protectionMonths, directExpected)
       const manualSafety = directExpected / Math.max(1, protectionDays) * Math.max(0, stockSeguridad)
-      const directSafety = Math.round(Math.max(statisticalSafety, manualSafety))
+      // Configured days are a hard ceiling, never a floor for statistical inflation.
+      const directSafety = Math.floor(manualSafety)
       auditRows.push({ referencia: reference, canal: 'Online + WhatsApp', historial: monthSequence.map((mes, i) => ({ mes, pares: directSeries[i] || 0 })), modelo: directAnnual.sources.every(source => source === 'año anterior') ? 'mismo mes año anterior' : 'año anterior cuando existe; alternativa reciente', mesesHistoria: directFirst >= 0 ? directTraining.length : 0, meses: futureMonthKeys, fuentes: directAnnual.sources, demanda: directPeriodDemand, reserva: directSafety, evidencia: directFirst >= 0 ? 'ventas directas' : 'sin historial cerrado: estimación provisional' })
       const directSafetyProfile = variabilityAdjustedSizeProfile(directSizeSeries, directProfile)
       for (const [sku, units] of allocateToSkus(skus, directSafety, directSafetyProfile)) addTarget(sku, units, protectionEnd)
@@ -693,9 +692,12 @@ export async function GET(request: Request) {
             : storeFuture[period.futureIndex] || 0,
         )))
         const monthlyExpected = storeFuture[0] || storeCurrentMonth
-        const storeBuffer = Math.round(enoughHistory || storeAnnual.sources.includes('año anterior')
+        const statisticalStoreBuffer = enoughHistory || storeAnnual.sources.includes('año anterior')
           ? safetyStock(storeModel, 1, monthlyExpected)
-          : safetyStock(aggregateModel, 1, aggregateFuture[0] || 0) * share)
+          : safetyStock(aggregateModel, 1, aggregateFuture[0] || 0) * share
+        const storeDayLimit = storePeriodDemand.reduce((sum, value) => sum + value, 0)
+          / Math.max(1, protectionDays) * Math.max(0, stockSeguridad)
+        const storeBuffer = Math.floor(Math.min(statisticalStoreBuffer, storeDayLimit))
         auditRows.push({ referencia: reference, canal: store.nombre, historial: monthSequence.map((mes, i) => ({ mes, pares: storeSeries[i] || 0 })), modelo: storeAnnual.sources.every(source => source === 'año anterior') ? 'mismo mes año anterior' : 'año anterior cuando existe; alternativa de tienda', mesesHistoria: storeTraining.length, meses: futureMonthKeys, fuentes: storeAnnual.sources, demanda: storePeriodDemand, reserva: storeBuffer, evidencia: enoughHistory ? 'ventas de tienda facturadas en Siigo; registros manuales solo sin factura del SKU/mes' : 'historial escaso: proporción de tiendas, sin validación individual' })
         const storeSizeSeries = new Map<string, number[]>()
         for (const sku of skus) {
@@ -1146,6 +1148,7 @@ export async function GET(request: Request) {
         protectionDays,
         historyStart: firstInvoiceMonth,
         historyMonths: monthSequence.length,
+        safetyPolicy: 'configured_days_hard_cap_per_reference_and_channel_floor_to_whole_pairs',
         stockoutHistory: 'inferred_size_gaps_only_no_historical_stock_snapshots',
         storeDemand: 'siigo_invoices_are_actual_sales_manual_fallback_without_same_sku_month_invoice',
         stores: {
