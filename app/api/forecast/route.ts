@@ -153,6 +153,7 @@ export async function GET(request: Request) {
   const leadTimeBusinessDays = Number.isFinite(requestedLeadTime)
     ? Math.min(365, Math.max(1, requestedLeadTime))
     : DEFAULT_PRODUCTION_LEAD_BUSINESS_DAYS
+  const incluirEva = searchParams.get('incluir_eva') === 'true'
   const stockSeguridad = parseInt(searchParams.get('stock_seguridad') || '7')
 
   const supabase = getAdminClient()
@@ -176,10 +177,19 @@ export async function GET(request: Request) {
     const seasonalEndStr = seasonalEnd.toISOString().slice(0, 10)
     const { data: feriaRows, error: feriaError } = await supabase
       .from('ferias')
-      .select('fecha_inicio, fecha_fin')
+      .select('id, nombre, fecha_inicio, fecha_fin')
       .lte('fecha_inicio', endDateStr)
     if (feriaError) throw new Error(feriaError.message)
-    const feriaWindows = (feriaRows || []) as Array<{ fecha_inicio: string; fecha_fin: string }>
+    const feriaWindows = (feriaRows || []) as Array<{ id?: string; nombre?: string; fecha_inicio: string; fecha_fin: string }>
+    const evaWindows = feriaWindows.filter(feria => /\beva\b/i.test(feria.nombre || ''))
+    const isEvaInvoice = (invoice: { assigned_feria_id: string | null; date: string; customer_identification: string | null; observations: string | null }) => {
+      if (invoice.assigned_feria_id != null) return evaWindows.some(feria => feria.id === invoice.assigned_feria_id)
+      const store = identificationKeys(invoice.customer_identification).some(nit => storeByNit.has(nit))
+      const order = extractOrderNum(invoice.observations)
+      if (store || (order !== null && shopOrderNumbers.has(order))) return false
+      const matching = feriaWindows.filter(feria => invoice.date >= feria.fecha_inicio && invoice.date <= feria.fecha_fin)
+      return matching.length === 1 && evaWindows.includes(matching[0])
+    }
     const isFeriaDate = (date: string) => feriaWindows.some(feria => date >= feria.fecha_inicio && date <= feria.fecha_fin)
 
     // 1. Stock per SKU from siigo_product_stock (paginated)
@@ -783,6 +793,40 @@ export async function GET(request: Request) {
 
     }
 
+    // EVA is an explicit scenario, separate from recurring channel sales.
+    // Repeat last year's dated event sales only within the remaining horizon.
+    // Dates are a planning assumption, not a confirmed fair schedule.
+    const evaDemandByReference = new Map<string, number[]>()
+    let evaHistoricalUnits = 0
+    for (const invoice of uniqueInvoices) {
+      if (!isEvaInvoice(invoice)) continue
+      const projectedDate = new Date(`${invoice.date}T12:00:00Z`)
+      projectedDate.setUTCFullYear(projectedDate.getUTCFullYear() + 1)
+      const date = projectedDate.toISOString().slice(0, 10)
+      if (date < endDateStr || date > protectionEnd.toISOString().slice(0, 10)) continue
+      for (const item of invoice.items || []) {
+        if (!item.code || !stockBySku.has(item.code)) continue
+        const quantity = Math.max(0, Number(item.quantity) || 0)
+        evaHistoricalUnits += quantity
+        if (!incluirEva) continue
+        addTarget(item.code, quantity, projectedDate)
+        const baseNeeds = needsWithoutReserve.get(item.code) || []
+        baseNeeds.push({ date, quantity }); needsWithoutReserve.set(item.code, baseNeeds)
+        addForecastDemand(item.code, quantity)
+        const reference = parseProductName(stockBySku.get(item.code)!.product_name).reference
+        const demand = evaDemandByReference.get(reference) || planningPeriods.map(() => 0)
+        const index = planningPeriods.findIndex(period => period.month === date.slice(0, 7))
+        if (index >= 0) demand[index] += quantity
+        evaDemandByReference.set(reference, demand)
+      }
+    }
+    for (const [reference, demanda] of evaDemandByReference) {
+      auditRows.push({ referencia: reference, canal: 'Feria EVA', modelo: 'escenario EVA: ventas del año pasado en las mismas fechas', mesesHistoria: 0,
+        meses: planningPeriods.map(period => period.month), fuentes: planningPeriods.map(() => 'EVA: fecha histórica trasladada un año'), demanda, reserva: 0,
+        evidencia: 'Escenario sin crecimiento adicional; fechas estimadas, no calendario confirmado', historial: [] })
+      validation.seriesSinEvaluar++; recordCheck(reference)
+    }
+
     // 4b. Pending production orders (zapatos en camino) → units by (diseño, talla)
     type PendingLine = { quantity: number; arrival: string; inTransit: boolean }
     const enCaminoByKey = new Map<string, PendingLine[]>()
@@ -1099,6 +1143,8 @@ export async function GET(request: Request) {
     enCaminoSinMatch.sort((a, b) => b.unidades - a.unidades)
 
     return NextResponse.json({
+      feriaEva: { incluida: incluirEva, demandaHistoricaComparable: evaHistoricalUnits, demandaIncluida: incluirEva ? evaHistoricalUnits : 0,
+        supuesto: 'Si se incluye: mismas fechas y pares de EVA del año anterior, sin crecimiento adicional. No confirma fechas del evento.' },
       crecimientoObservado: [
         ...Object.entries(onlineHistory).map(([canal, history]) => ({ canal, ...observedGrowth(history) })),
         ...stores.filter(store => store.siigo_warehouse_id != null).map(store => ({ canal: store.nombre, ...observedGrowth(storeHistories.get(store.id) || []) })),

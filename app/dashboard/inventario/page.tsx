@@ -158,6 +158,7 @@ interface ForecastReference {
 }
 
 interface ForecastData {
+  feriaEva?: { incluida: boolean; demandaHistoricaComparable: number; demandaIncluida: number; supuesto: string }
   crecimientoObservado?: Array<{ canal: string; recent: number; previous: number; factor: number; observed: boolean; mesesActuales: string[]; mesesComparables: string[] }>
   validacion?: { revisionReferencias?: Array<{ referencia: string; produccion: number; error: number | null; errorAnterior?: number | null; errorBase: number | null; canalesEvaluados: number; canalesSinEvaluar: number }>; porCanal?: Array<{ canal: string; series: number; error: number | null; errorBase: number | null }>; horizonteMeses: number; errorAnterior?: number | null; errorModelo: number | null; errorBase: number | null; seriesEvaluadas: number; seriesSinEvaluar: number; observations: number; alcance: string }
   auditoria?: Array<{ referencia: string; canal: string; modelo: string; mesesHistoria: number; meses: string[]; fuentes: string[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }>
@@ -369,7 +370,8 @@ export default function InventarioPage() {
       setStoreSelectionError(null)
       const saved: unknown = JSON.parse(localStorage.getItem('shuless.forecast.excludedStores') || '[]')
       const excluded = Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string') : []
-      const res = await fetch(`/api/forecast?dias=${diasAnalisis}&lead_time=${leadTime}&stock_seguridad=${stockSeguridad}&excluir_tiendas=${encodeURIComponent(excluded.join(','))}`)
+      const eva = localStorage.getItem('shuless.forecast.eva.' + new Intl.DateTimeFormat('en', { timeZone: 'America/Bogota', year: 'numeric' }).format(new Date())) === 'true'
+      const res = await fetch(`/api/forecast?incluir_eva=${eva}&dias=${diasAnalisis}&lead_time=${leadTime}&stock_seguridad=${stockSeguridad}&excluir_tiendas=${encodeURIComponent(excluded.join(','))}`)
       if (!res.ok) {
         const failure = await res.json().catch(() => null)
         throw new Error(failure?.error || 'Error al cargar forecast')
@@ -384,6 +386,14 @@ export default function InventarioPage() {
     } finally {
       setForecastLoading(false)
     }
+  }
+
+  async function changeEvaAttendance(included: boolean) {
+    try {
+      const year = new Intl.DateTimeFormat('en', { timeZone: 'America/Bogota', year: 'numeric' }).format(new Date())
+      localStorage.setItem('shuless.forecast.eva.' + year, String(included))
+      await fetchForecast()
+    } catch { setStoreSelectionError('No se pudo guardar la selección de EVA en este navegador.') }
   }
 
   async function applyStoreSelection() {
@@ -472,6 +482,9 @@ export default function InventarioPage() {
 
     // Sheet 3: Parámetros usados
     const parametros = [
+      { Parámetro: 'Asistencia a Feria EVA', Valor: forecastData.feriaEva?.incluida ? 'Sí' : 'No' },
+      { Parámetro: 'Demanda EVA incluida (pares)', Valor: String(forecastData.feriaEva?.demandaIncluida || 0) },
+      { Parámetro: 'Supuesto EVA', Valor: forecastData.feriaEva?.supuesto || '' },
       { Parámetro: 'Período de análisis (días)', Valor: diasAnalisis },
       { Parámetro: 'Lead time producción (días hábiles)', Valor: leadTime },
       { Parámetro: 'Stock de seguridad (días)', Valor: stockSeguridad },
@@ -1114,6 +1127,13 @@ export default function InventarioPage() {
                     </div>
                   </CardContent>
                 </Card>
+
+                <Card className="mb-6"><CardHeader><CardTitle>Asistencia a Feria EVA</CardTitle></CardHeader><CardContent className="space-y-2">
+                  <label className="flex items-center gap-3"><input type="checkbox" checked={forecastData.feriaEva?.incluida === true} disabled={forecastLoading} onChange={event => changeEvaAttendance(event.target.checked)} />Sí asistiremos a EVA: incluir sus ventas previstas</label>
+                  <p className="text-sm font-medium">{forecastData.feriaEva?.incluida ? `EVA incluida: ${forecastData.feriaEva.demandaIncluida} pares de demanda adicional antes de descontar inventario y pedidos.` : 'No asistiremos a EVA: sus ventas no se incluyen en la demanda prevista.'}</p>
+                  <p className="text-xs text-[#545454]">La selección se guarda para este año en este navegador. Otras ferias siguen excluidas. {forecastData.feriaEva?.supuesto}</p>
+                  {forecastData.feriaEva?.incluida && forecastData.feriaEva.demandaHistoricaComparable === 0 && <p className="text-sm text-amber-700">No hay ventas EVA identificadas para comparar dentro del período. No se inventa demanda para la feria.</p>}
+                </CardContent></Card>
 
                 {forecastData.validacion && <Card className="mb-6">
                   <CardHeader><CardTitle>Comprobación del forecast</CardTitle></CardHeader>

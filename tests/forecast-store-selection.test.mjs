@@ -390,3 +390,29 @@ test('Shopify WhatsApp and individual stores use separate observed growth exclud
     assert.deepEqual(Array.from(result.crecimientoObservado[0].mesesComparables), ['2025-07', '2025-08', '2025-09'])
   } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
 })
+
+test('EVA is off by default and adds only matched event demand when enabled', async () => {
+  const original = { ...tables }
+  try {
+    isolatedSupplyFixture()
+    tables.ferias = [
+      { id: 'eva', nombre: 'Feria EVA Navidad', fecha_inicio: '2025-12-24', fecha_fin: '2025-12-28' },
+      { id: 'other', nombre: 'Otra feria', fecha_inicio: '2025-12-24', fecha_fin: '2025-12-28' },
+    ]
+    tables.siigo_invoices.push(
+      { ...invoice('eva-sale', '333', 12), date: '2025-12-25', assigned_feria_id: 'eva' },
+      { ...invoice('other-sale', '333', 50), date: '2025-12-25', assigned_feria_id: 'other' },
+    )
+    const off = await calculate('', '&stock_seguridad=0')
+    const on = await calculate('', '&stock_seguridad=0&incluir_eva=true')
+    assert.equal(off.feriaEva.incluida, false)
+    assert.equal(off.feriaEva.demandaIncluida, 0)
+    assert.equal(on.feriaEva.demandaIncluida, 12)
+    assert.equal(on.resumen.totalProducirSugerido - off.resumen.totalProducirSugerido, 12)
+    assert.deepEqual(Array.from(on.auditoria.find(row => row.canal === 'Feria EVA').demanda), [0, 0, 12, 0])
+    assert.deepEqual(on.auditoria.find(row => row.canal === 'WhatsApp').demanda, off.auditoria.find(row => row.canal === 'WhatsApp').demanda)
+    // An explicitly different fair must not become EVA through overlapping dates.
+    tables.siigo_invoices = tables.siigo_invoices.filter(row => row.id !== 'eva-sale')
+    assert.equal((await calculate('', '&incluir_eva=true')).feriaEva.demandaIncluida, 0)
+  } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
+})
