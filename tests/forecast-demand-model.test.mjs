@@ -14,7 +14,7 @@ import {
   proratePartialMonth,
   safetyStock,
   selectDemandModel,
-  seasonallyAdjustedFuture,
+  backtestDemandModel,
   stabilizedStoreSizeProfile,
   variabilityAdjustedSizeProfile,
 } from '../lib/forecast/demand-model.ts'
@@ -173,16 +173,56 @@ test('daily allocation preserves remaining-month total and receives same-day sup
   assert.equal(coverageAtArrival(0, [{ quantity: 80, arrival: '2026-10-05' }], needs, '2026-12-22').shortageBeforeArrival, 0)
 })
 
-const seasonalMonths = Array.from({ length: 24 }, (_, i) => new Date(Date.UTC(2024, 9 + i, 1)).toISOString().slice(0, 7))
-test('pre-launch zeros do not halve a new model seasonal forecast', () => {
-  assert.deepEqual(seasonallyAdjustedFuture([100, 100, 100, 100], [...Array(22).fill(0), 100, 100], seasonalMonths, ['2026-10', '2026-11', '2026-12', '2027-01']), [100, 100, 100, 100])
-  assert.deepEqual(seasonallyAdjustedFuture([100], Array(24).fill(0), seasonalMonths, ['2026-10']), [100])
+
+test('sustained decline is not overridden by an unvalidated older seasonal average', () => {
+  const history = [...Array(18).fill(100), ...Array(12).fill(10)]
+  const selected = selectDemandModel(history)
+  assert.deepEqual(forecastMonths(history, selected.name, 4), [10, 10, 10, 10])
 })
-test('seasonal adjustment preserves real zero months after launch and established weights', () => {
-  const history = Array(24).fill(100)
-  history[12] = 0
-  assert.deepEqual(seasonallyAdjustedFuture([100], history, seasonalMonths, ['2026-10']), [67.5])
-  history[0] = 200
-  history[12] = 300
-  assert.deepEqual(seasonallyAdjustedFuture([100], history, seasonalMonths, ['2026-10']), [182.5])
+
+test('every eligible model is evaluated on identical held-out months', () => {
+  for (const length of [6, 14, 15, 17, 18, 23, 24, 27, 30]) {
+    const history = Array.from({ length }, (_, index) => 10 + index % 12 * 3)
+    const selected = selectDemandModel(history)
+    const minHistory = length >= 18 ? 15 : length >= 15 ? 12 : 3
+    const start = Math.max(minHistory, length - 12)
+    const actual = history.slice(start)
+    const residuals = actual.map((value, index) => value - forecastMonths(history.slice(0, start + index), selected.name, 1)[0])
+    assert.equal(selected.metrics.observations, length - start)
+    assert.deepEqual(selected.residuals, residuals)
+  }
+  assert.equal(selectDemandModel([10, 20, 30, 40, 50]).metrics.observations, 0)
+})
+
+test('repeated annual peaks are retained by a validated seasonal candidate', () => {
+  const cycle = [10, 10, 10, 10, 10, 10, 10, 10, 10, 30, 100, 120]
+  const history = [...cycle, ...cycle, ...cycle].slice(0, 33)
+  const selected = selectDemandModel(history)
+  assert.equal(selected.name, 'seasonal')
+  assert.deepEqual(forecastMonths(history, selected.name, 4), [30, 100, 120, 10])
+})
+
+test('rolling four-month diagnostic selects only from past data and compares identical horizons', () => {
+  const history = Array.from({ length: 24 }, (_, index) => index < 18 ? 10 : 100)
+  const report = backtestDemandModel(history)
+  let absoluteError = 0
+  let baselineError = 0
+  let actualUnits = 0
+  for (let origin = 9; origin <= 20; origin++) {
+    const training = history.slice(0, origin)
+    const predictions = forecastMonths(training, selectDemandModel(training).name, 4)
+    const baseline = forecastMonths(training, 'ma3', 4)
+    for (let step = 0; step < 4; step++) {
+      absoluteError += Math.abs(predictions[step] - history[origin + step])
+      baselineError += Math.abs(baseline[step] - history[origin + step])
+      actualUnits += history[origin + step]
+    }
+  }
+  assert.equal(report.origins, 12)
+  assert.equal(report.selected.observations, 48)
+  assert.equal(report.baseline.observations, 48)
+  assert.equal(report.selectedAbsoluteError, absoluteError)
+  assert.equal(report.baselineAbsoluteError, baselineError)
+  assert.equal(report.actualUnits, actualUnits)
+  assert.equal(backtestDemandModel([1, 2, 3, 4]).origins, 0)
 })

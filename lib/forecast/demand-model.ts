@@ -98,22 +98,28 @@ function metrics(actual: number[], predicted: number[]): BacktestMetrics {
 
 export function selectDemandModel(values: number[]): SelectedModel {
   const clean = values.map(x => Math.max(0, Number(x) || 0))
-  const candidates: ModelName[] = ['naive', 'ma3', 'wma3', 'ses', 'trend', 'seasonal', 'seasonal_blend']
+  const minimumHistory: Record<ModelName, number> = {
+    naive: 3, ma3: 3, wma3: 3, ses: 3, trend: 3, seasonal: 12, seasonal_blend: 15,
+  }
+  const minimumOrigins = 3
+  const names: ModelName[] = ['naive', 'ma3', 'wma3', 'ses', 'trend', 'seasonal', 'seasonal_blend']
+  const candidates = names.filter(name => clean.length >= minimumHistory[name] + minimumOrigins)
+  // Every candidate sees exactly the same held-out months. Otherwise a seasonal
+  // model could win merely because it was tested on a shorter, easier period.
+  const start = Math.max(clean.length - 12, ...candidates.map(name => minimumHistory[name]), 3)
   let best: SelectedModel | null = null
   let baseline: SelectedModel | null = null
   let bestScore = Number.POSITIVE_INFINITY
   for (const name of candidates) {
     const actual: number[] = []
     const forecasts: number[] = []
-    const firstOrigin = name.startsWith('seasonal') ? 12 : 3
-    const start = Math.max(firstOrigin, clean.length - 12)
     for (let origin = start; origin < clean.length; origin++) {
       const forecast = predict(name, clean.slice(0, origin))
       if (forecast == null || !Number.isFinite(forecast)) continue
       actual.push(clean[origin])
       forecasts.push(forecast)
     }
-    if (actual.length < Math.min(3, Math.max(1, clean.length - firstOrigin))) continue
+    if (actual.length < minimumOrigins) continue
     const result = metrics(actual, forecasts)
     // WAPE leads selection; a modest bias penalty rejects systematically high
     // inventory plans when two models have similar absolute error.
@@ -148,6 +154,47 @@ export function forecastMonths(values: number[], model: ModelName, months: numbe
     out.push(Math.max(0, value))
   }
   return out
+}
+
+export interface RollingDemandBacktest {
+  selected: BacktestMetrics
+  baseline: BacktestMetrics
+  horizon: number
+  origins: number
+  actualUnits: number
+  selectedAbsoluteError: number
+  baselineAbsoluteError: number
+}
+
+// Nested rolling-origin evaluation: model selection only sees the history
+// before each origin, and both policies predict the same next full horizon.
+// Overlapping origins are repeated planning exercises, not independent samples.
+export function backtestDemandModel(values: number[], horizon = 4): RollingDemandBacktest {
+  const clean = values.map(value => Math.max(0, Number(value) || 0))
+  const steps = Math.max(1, Math.min(4, Math.floor(horizon) || 4))
+  const actual: number[] = []
+  const selectedForecasts: number[] = []
+  const baselineForecasts: number[] = []
+  let origins = 0
+  const lastOrigin = clean.length - steps
+  const firstOrigin = Math.max(6, lastOrigin - 11)
+  for (let origin = firstOrigin; origin <= lastOrigin; origin++) {
+    const training = clean.slice(0, origin)
+    const selected = selectDemandModel(training)
+    selectedForecasts.push(...forecastMonths(training, selected.name, steps))
+    baselineForecasts.push(...forecastMonths(training, 'ma3', steps))
+    actual.push(...clean.slice(origin, origin + steps))
+    origins += 1
+  }
+  return {
+    selected: metrics(actual, selectedForecasts),
+    baseline: metrics(actual, baselineForecasts),
+    horizon: steps,
+    origins,
+    actualUnits: actual.reduce((sum, value) => sum + value, 0),
+    selectedAbsoluteError: selectedForecasts.reduce((sum, value, index) => sum + Math.abs(value - actual[index]), 0),
+    baselineAbsoluteError: baselineForecasts.reduce((sum, value, index) => sum + Math.abs(value - actual[index]), 0),
+  }
 }
 
 export function safetyStock(selected: SelectedModel, protectionMonths: number, expectedDemand: number): number {
@@ -436,39 +483,4 @@ function isColombiaHoliday(date: Date): boolean {
   return [...emiliani, ...relative].some(holiday =>
     holiday.getFullYear() === year && holiday.getMonth() === date.getMonth() && holiday.getDate() === date.getDate()
   )
-}
-
-export function seasonallyAdjustedFuture(
-  base: number[],
-  history: number[],
-  historyMonths: string[],
-  targetMonths: string[],
-): number[] {
-  // First recorded sale is our launch proxy. Later zero-sales months remain
-  // valid observations; months before any sales are not seasonal evidence.
-  const firstSale = history.findIndex(value => value > 0)
-  const recent = history.slice(-3)
-  const priorComparable = history.slice(-15, -12)
-  const recentAverage = recent.reduce((sum, value) => sum + value, 0) / Math.max(1, recent.length)
-  const priorAverage = priorComparable.reduce((sum, value) => sum + value, 0) / Math.max(1, priorComparable.length)
-  const growth = firstSale >= 0 && history.length - 15 >= firstSale && priorAverage > 0 ? Math.min(1.5, Math.max(0.75, recentAverage / priorAverage)) : 1
-
-  return targetMonths.map((target, index) => {
-    const monthNumber = target.slice(5, 7)
-    const comparable = historyMonths
-      .map((month, historyIndex) => ({ month, historyIndex, value: history[historyIndex] || 0 }))
-      .filter(row => firstSale >= 0 && row.historyIndex >= firstSale && row.month.slice(5, 7) === monthNumber && row.month < target)
-      .slice(-2)
-    if (!comparable.length) return Math.max(0, base[index] || 0)
-    const seasonalBase = comparable.length === 1
-      ? comparable[0].value
-      : comparable[0].value * 0.35 + comparable[1].value * 0.65
-    const seasonal = seasonalBase * growth
-    const model = Math.max(0, base[index] || 0)
-    const blended = model * 0.5 + seasonal * 0.5
-    // November/December are consistently the strongest commercial months in
-    // Shuless history. Do not let a short recent moving average erase that
-    // observed peak, but retain a 50% blend to avoid copying one year blindly.
-    return ['11', '12'].includes(monthNumber) ? Math.max(model, blended) : blended
-  })
 }

@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
 import * as demandModel from '../lib/forecast/demand-model.ts'
+import * as calendar from '../lib/forecast/calendar.ts'
 
 // Exercise the actual endpoint with isolated database records. Excluded store
 // invoices must never become direct demand when their NIT is still recognized.
@@ -24,12 +25,20 @@ const tables = {
   siigo_invoices: [invoice('direct', '333', 4), invoice('a', '111', 100), invoice('b', '222', 200)],
   ventas_terceros: [{ tienda_id: 'a', producto_sku: 'P20', fecha: date, cantidad: 7 }],
 }
+const queryErrors = new Map()
 const db = { from(table) {
-  let rows = tables[table] || []
+  // Explicit fixture defaults keep real equality filters meaningful.
+  let rows = (tables[table] || []).map(row => ({
+    ...(table === 'siigo_product_stock' ? { account_group_id: 339 } : {}),
+    ...(table === 'tiendas_terceros' ? { activa: true } : {}),
+    ...row,
+  }))
   const query = new Proxy({}, { get(_, key) {
-    if (key === 'then') return resolve => resolve({ data: rows, error: null })
+    if (key === 'then') return resolve => resolve({ data: queryErrors.has(table) ? null : rows, error: queryErrors.get(table) || null })
     return (...args) => {
-      if (key === 'range') rows = rows.slice(args[0], args[1] + 1)
+      if (key === 'eq') rows = rows.filter(row => row[args[0]] === args[1])
+      if (key === 'in') rows = rows.filter(row => args[1].includes(row[args[0]]))
+      if (key === 'range') rows = rows.slice(args[0], Math.min(args[1] + 1, args[0] + 1000))
       if (key === 'gte') rows = rows.filter(row => row[args[0]] >= args[1])
       if (key === 'lte') rows = rows.filter(row => row[args[0]] <= args[1])
       return query
@@ -39,17 +48,19 @@ const db = { from(table) {
 } }
 tables.siigo_product_stock.push({ product_code: 'EX20', product_name: 'Exclusivo Talla 20', warehouse_id: 27, warehouse_name: 'Principal', quantity: 1 })
 tables.siigo_invoices[1].items.push({ code: 'EX20', quantity: 100 })
+const responseStatus = new WeakMap()
 const exports = {}
 const source = fs.readFileSync(new URL('../app/api/forecast/route.ts', import.meta.url), 'utf8')
 vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
   exports, URL, console, Date: AuditDate, require(name) {
-    if (name === 'next/server') return { NextResponse: { json: value => value } }
+    if (name === 'next/server') return { NextResponse: { json: (value, options) => { responseStatus.set(value, options?.status || 200); return value } } }
     if (name === '@/lib/auth-helpers') return { requireAuth: async () => ({}), getAdminClient: () => db }
     if (name === '@/lib/forecast/demand-model') return demandModel
+    if (name === '@/lib/forecast/calendar') return calendar
     throw new Error(name)
   },
 })
-const calculate = excluded => exports.GET({ url: `https://example.test/api/forecast?dias=90&excluir_tiendas=${excluded}` })
+const calculate = (excluded = '', extra = '') => exports.GET({ url: `https://example.test/api/forecast?dias=90&excluir_tiendas=${excluded}${extra}` })
 
 test('store selection excludes invoices and sell-through without reclassifying direct sales', async () => {
   const all = await calculate('')
@@ -117,4 +128,140 @@ test('Shopify history survives coincident fair dates, pagination, and explicit f
     assert.equal(explicit.forecast[0].ventasShopify, baseline.forecast[0].ventasShopify - 20)
     assert.equal(explicit.forecast[0].ventasFerias, 20)
   } finally { Object.assign(tables, original) }
+})
+
+
+const stock = (sku, size, quantity, warehouse = 27) => ({
+  product_code: sku, product_name: `Prueba Talla ${size}`, warehouse_id: warehouse,
+  warehouse_name: warehouse === 27 ? 'Principal' : 'Tienda A', quantity,
+})
+const steadyHistory = (nit, sku, quantity) => Array.from({ length: 24 }, (_, i) => ({
+  ...invoice(`${nit}-${sku}-${i}`, nit, quantity),
+  date: new Date(Date.UTC(2024, 9 + i, 15)).toISOString().slice(0, 10),
+  items: [{ code: sku, quantity }],
+}))
+function isolatedSupplyFixture() {
+  tables.ferias = []
+  tables.shopify_orders = []
+  tables.tiendas_terceros = []
+  tables.ventas_terceros = []
+  tables.siigo_product_stock = [stock('P20', '20', 0)]
+  tables.siigo_invoices = steadyHistory('333', 'P20', 31)
+  tables.production_orders = []
+  tables.production_order_items = []
+}
+
+test('direct demand keeps its own size curve when stores sell a different size', async () => {
+  const original = { ...tables }
+  try {
+    isolatedSupplyFixture()
+    tables.tiendas_terceros = [stores[0]]
+    tables.siigo_product_stock = [stock('P20', '20', 500), stock('P21', '21', 0), stock('P20', '20', 10000, 30), stock('P21', '21', 10000, 30)]
+    tables.siigo_invoices = [...steadyHistory('333', 'P20', 100), ...steadyHistory('111', 'P21', 900)]
+    const result = await calculate('', '&stock_seguridad=0')
+    assert.equal(result.forecast.find(row => row.sku === 'P21').sugerenciaProduccion, 0,
+      'store size mix must not create online demand for talla21')
+    assert.equal(result.resumen.totalProducirSugerido, 0)
+  } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
+})
+
+test('failed production order or item reads do not return an apparently valid forecast', async () => {
+  const original = { ...tables }
+  try {
+    isolatedSupplyFixture()
+    tables.production_orders = [{ id: 'pending', numero: '032', estado: 'pendiente', fecha_entrega: '2026-11-01' }]
+    for (const table of ['production_orders', 'production_order_items']) {
+      queryErrors.set(table, { message: `unavailable ${table}` })
+      const result = await calculate()
+      assert.equal(result.forecast, undefined, `${table} failure must stop recommendations`)
+      assert.match(result.error, new RegExp(table))
+      assert.equal(responseStatus.get(result), 500)
+      queryErrors.delete(table)
+    }
+  } finally { queryErrors.clear(); Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
+})
+
+test('received order already in Siigo is not counted as additional inbound supply', async () => {
+  const original = { ...tables }
+  try {
+    isolatedSupplyFixture()
+    tables.siigo_product_stock = [stock('P20', '20', 10)]
+    const baseline = await calculate('', '&stock_seguridad=0')
+    tables.production_orders = [
+      { id: 'received', numero: '031', estado: 'recibida', fecha_entrega: '2026-09-26' },
+      { id: 'cancelled', numero: '099', estado: 'cancelada', fecha_entrega: '2026-10-05' },
+    ]
+    tables.production_order_items = [
+      { id: 'received-item', order_id: 'received', diseno: 'Prueba', talla: '20', cantidad: 174 },
+      { id: 'cancelled-item', order_id: 'cancelled', diseno: 'Prueba', talla: '20', cantidad: 1000 },
+    ]
+    const result = await calculate('', '&stock_seguridad=0')
+    assert.equal(result.forecast[0].stockBodega, 10)
+    assert.equal(result.forecast[0].enCamino, 0)
+    assert.equal(result.forecast[0].sugerenciaProduccion, baseline.forecast[0].sugerenciaProduccion)
+  } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
+})
+
+test('dated inbound only offsets its matching size and demand that occurs after arrival', async () => {
+  const original = { ...tables }
+  try {
+    isolatedSupplyFixture()
+    const baseline = await calculate('', '&stock_seguridad=0')
+    tables.production_orders = [{ id: 'pending', numero: '032', estado: 'pendiente', fecha_entrega: '2026-10-05' }]
+    tables.production_order_items = [
+      { id: 'matching', order_id: 'pending', diseno: 'Prueba', talla: '20', cantidad: 1000 },
+      { id: 'unrelated-order', order_id: 'not-requested', diseno: 'Prueba', talla: '20', cantidad: 1000 },
+    ]
+    const timely = await calculate('', '&stock_seguridad=0')
+    assert.equal(timely.forecast[0].enCamino, 1000, 'items outside queried order IDs must not leak in')
+    assert.equal(timely.forecast[0].sugerenciaProduccion, 0)
+    assert.equal(timely.forecast[0].faltanteAntesLlegada, 0)
+    tables.production_orders[0].fecha_entrega = '2027-01-15'
+    const midJanuary = await calculate('', '&stock_seguridad=0')
+    assert.ok(midJanuary.forecast[0].sugerenciaProduccion > 0, 'supply on January15 cannot serve earlier demand')
+    assert.ok(midJanuary.forecast[0].sugerenciaProduccion < baseline.forecast[0].sugerenciaProduccion, 'January15 supply covers remaining January demand')
+    assert.equal(midJanuary.forecast[0].faltanteAntesLlegada, baseline.forecast[0].faltanteAntesLlegada)
+    tables.production_orders[0].fecha_entrega = '2027-02-01'
+    const late = await calculate('', '&stock_seguridad=0')
+    assert.equal(late.forecast[0].sugerenciaProduccion, baseline.forecast[0].sugerenciaProduccion)
+    assert.equal(late.forecast[0].faltanteAntesLlegada, baseline.forecast[0].faltanteAntesLlegada)
+    tables.production_orders[0].fecha_entrega = '2026-10-05'
+    tables.production_order_items[0].talla = '21'
+    const wrongSize = await calculate('', '&stock_seguridad=0')
+    assert.equal(wrongSize.forecast[0].enCamino, 0)
+    assert.equal(wrongSize.forecast[0].sugerenciaProduccion, baseline.forecast[0].sugerenciaProduccion)
+    assert.ok(baseline.forecast[0].sugerenciaProduccion > 0)
+  } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
+})
+
+
+test('inactive store history remains excluded instead of becoming online demand', async () => {
+  const original = { ...tables }
+  try {
+    isolatedSupplyFixture()
+    tables.tiendas_terceros = [{ ...stores[0], activa: false }]
+    tables.siigo_invoices = [...steadyHistory('111', 'P20', 100), invoice('current-inactive', '111', 20)]
+    const result = await calculate('', '&stock_seguridad=0')
+    const row = result.forecast.find(variant => variant.sku === 'P20')
+    assert.equal(row.ventasWhatsApp, 0)
+    assert.equal(row.ventasTiendas, 0)
+    assert.equal(row.velocidadDiaria, 0)
+    assert.equal(row.sugerenciaProduccion, 0)
+    assert.equal(result.tiendasForecast.length, 0)
+  } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
+})
+
+test('all pending order items are read beyond the Supabase 1000-row cap', async () => {
+  const original = { ...tables }
+  try {
+    isolatedSupplyFixture()
+    tables.production_orders = [{ id: 'pending', numero: '032', estado: 'pendiente', fecha_entrega: '2026-11-01' }]
+    tables.production_order_items = Array.from({ length: 1001 }, (_, index) => ({
+      id: `item-${index}`, order_id: 'pending', diseno: 'Prueba', talla: '20', cantidad: 1,
+    }))
+    const result = await calculate('', '&stock_seguridad=0')
+    assert.equal(result.forecast[0].enCamino, 1001)
+    assert.equal(result.enCamino.totalUnidades, 1001)
+    assert.equal(result.enCamino.matchUnidades, 1001)
+  } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
 })

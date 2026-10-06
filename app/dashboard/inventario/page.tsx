@@ -156,6 +156,9 @@ interface ForecastReference {
 }
 
 interface ForecastData {
+  validacion?: { horizonteMeses: number; errorModelo: number | null; errorBase: number | null; seriesEvaluadas: number; seriesSinEvaluar: number; observations: number; alcance: string }
+  auditoria?: Array<{ referencia: string; canal: string; modelo: string; mesesHistoria: number; meses: string[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }>
+
   cobertura?: { fechaLlegadaProduccion: string; faltanteAntesLlegada: number; distribucion: string }
   tiendasForecast?: Array<{ id: string; nombre: string; incluida: boolean; tieneBodega: boolean }>
   reposicionTiendas?: { mes: string; tiendasSinBodega: number }
@@ -488,6 +491,8 @@ export default function InventarioPage() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(parametros), 'Parámetros')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(forecastData.forecast.filter(v => (v.faltanteAntesLlegada || 0) > 0).map(v => ({ Referencia: v.producto, Talla: v.size, SKU: v.sku, Faltante: v.faltanteAntesLlegada, Desde: v.primeraFechaFaltante, 'Llegada producción nueva': forecastData.cobertura?.fechaLlegadaProduccion }))), 'Faltantes antes de llegada')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(envios), 'Enviar a tiendas')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((forecastData.auditoria || []).map(row => ({ Referencia: row.referencia, Canal: row.canal, Método: row.modelo, 'Meses de historial': row.mesesHistoria, Evidencia: row.evidencia, Reserva: row.reserva, ...Object.fromEntries(row.meses.map((month, i) => [month, row.demanda[i]])) }))), 'Demanda mensual')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((forecastData.auditoria || []).flatMap(row => row.historial.map(month => ({ Referencia: row.referencia, Canal: row.canal, Mes: month.mes, Pares: month.pares })))), 'Historial mensual')
 
     const today = new Date()
     const stamp = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`
@@ -1080,6 +1085,23 @@ export default function InventarioPage() {
                   </CardContent>
                 </Card>
 
+                {forecastData.validacion && <Card className="mb-6">
+                  <CardHeader><CardTitle>Comprobación del forecast</CardTitle></CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <p>El modelo compara métodos recientes y estacionales sobre los mismos meses. No suma un aumento adicional por Black Friday o Navidad después de elegir el método.</p>
+                    <p>{forecastData.validacion.errorModelo == null ? 'No hay suficiente historia para medir el error.' : `Error histórico de demanda a cuatro meses: ${(forecastData.validacion.errorModelo * 100).toFixed(1)} %. Promedio de tres meses como comparación: ${((forecastData.validacion.errorBase || 0) * 100).toFixed(1)} %.`}</p>
+                    <p>{forecastData.validacion.seriesEvaluadas} combinaciones de referencia y canal evaluadas; {forecastData.validacion.seriesSinEvaluar} sin validación individual suficiente.</p>
+                    <p className="text-[#545454]">{forecastData.validacion.alcance} Las facturas a tiendas son una aproximación cuando no hay ventas al consumidor registradas. La sugerencia es una estimación, no una garantía de ventas.</p>
+                    <details>
+                      <summary className="cursor-pointer font-medium">Ver demanda mensual y reserva por referencia y canal</summary>
+                      <div className="overflow-x-auto mt-3"><table className="w-full text-left text-xs">
+                        <thead><tr><th className="p-2">Referencia / canal</th><th className="p-2">Historial cerrado</th><th className="p-2">Demanda pendiente por mes</th><th className="p-2">Reserva</th></tr></thead>
+                        <tbody>{forecastData.auditoria?.map((row, i) => <tr key={i} className="border-t"><td className="p-2">{row.referencia} · {row.canal}<span className="block text-[#545454]">{row.evidencia}</span></td><td className="p-2">{row.mesesHistoria} meses</td><td className="p-2">{row.meses.map((month, index) => `${month}: ${row.demanda[index]}`).join(' · ')}</td><td className="p-2">{row.reserva}</td></tr>)}</tbody>
+                      </table></div>
+                    </details>
+                  </CardContent>
+                </Card>}
+
                 {forecastData.cobertura && <Card className="mb-6 border-amber-300 bg-amber-50"><CardContent className="pt-6">
                   <p className="font-semibold">Faltantes antes de llegada: {forecastData.cobertura.faltanteAntesLlegada} pares</p>
                   <p className="text-sm mt-1">Producción nueva: llegada estimada {forecastData.cobertura.fechaLlegadaProduccion}. Los faltantes anteriores requieren adelantar entregas o conseguir inventario; no están sumados a “Producir”. La reserva de seguridad puede requerir reposición adicional.</p>
@@ -1124,7 +1146,7 @@ export default function InventarioPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-[#1A2238]">{totalProducirToggle.toLocaleString()}</div>
-                      <p className="text-xs text-[#545454]">cálculo automático para Online, WhatsApp y Tiendas</p>
+                      <p className="text-xs text-[#545454]">estimación para Online, WhatsApp y Tiendas</p>
                     </CardContent>
                   </Card>
                   <Card>
@@ -1579,7 +1601,7 @@ export default function InventarioPage() {
                             <div className="mt-4 pt-4 border-t">
                               <div className="flex justify-between items-center text-sm">
                                 <div className="text-[#545454]">
-                                  Recomendación conservadora hasta enero: demanda mensual estacional + seguridad − bodega − órdenes en camino
+                                  Estimación hasta enero: demanda mensual prevista + seguridad − bodega − órdenes en camino
                                 </div>
                                 <div>
                                   <span className="text-[#545454]">Total a producir: </span>

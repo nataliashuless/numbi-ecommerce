@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { businessDateBogota, buildSchoolSeasonPeriods } from '@/lib/forecast/calendar'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 import {
   addBusinessDays,
@@ -11,7 +12,8 @@ import {
   dailyDemand,
   safetyStock,
   selectDemandModel,
-  seasonallyAdjustedFuture,
+  backtestDemandModel,
+  proratePartialMonth,
   stabilizedStoreSizeProfile,
   variabilityAdjustedSizeProfile,
 } from '@/lib/forecast/demand-model'
@@ -109,44 +111,6 @@ const PRINCIPAL_WAREHOUSE_ID = 27
 const PRODUCT_ACCOUNT_GROUP_ID = 339 // solo productos terminados
 const DEFAULT_PRODUCTION_LEAD_BUSINESS_DAYS = 52
 
-type PlanningPeriod = {
-  month: string
-  demandDate: Date
-  fraction: number
-  futureIndex: number | null
-}
-
-function buildSchoolSeasonPeriods(today: Date): { periods: PlanningPeriod[]; planningEnd: Date } {
-  let planningEnd = new Date(today.getFullYear(), 0, 31, 12)
-  if (today > planningEnd) planningEnd = new Date(today.getFullYear() + 1, 0, 31, 12)
-
-  const periods: PlanningPeriod[] = []
-  const currentMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 12)
-  const daysInCurrentMonth = currentMonthEnd.getDate()
-  const remainingDays = Math.max(0, daysInCurrentMonth - today.getDate() + 1)
-  periods.push({
-    month: today.toISOString().slice(0, 7),
-    demandDate: currentMonthEnd,
-    fraction: remainingDays / daysInCurrentMonth,
-    futureIndex: null,
-  })
-
-  let cursor = new Date(today.getFullYear(), today.getMonth() + 1, 1, 12)
-  let futureIndex = 0
-  while (cursor <= planningEnd) {
-    periods.push({
-      month: cursor.toISOString().slice(0, 7),
-      demandDate: new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 12),
-      fraction: 1,
-      futureIndex,
-    })
-    cursor.setMonth(cursor.getMonth() + 1)
-    futureIndex += 1
-  }
-  return { periods, planningEnd }
-}
-
-
 function parseProductName(desc: string): { reference: string; size: string | null } {
   const trimmed = (desc || '').trim()
   let m = trimmed.match(/^(.+?)\s*[-–—]?\s*talla\s+(\d+(?:[.,]\d+)?)$/i)
@@ -192,8 +156,8 @@ export async function GET(request: Request) {
   const supabase = getAdminClient()
 
   try {
-    const endDate = new Date()
-    const startDate = new Date()
+    const endDate = businessDateBogota(new Date())
+    const startDate = new Date(endDate)
     startDate.setDate(startDate.getDate() - diasAnalisis)
     const startDateStr = startDate.toISOString().slice(0, 10)
     const endDateStr = endDate.toISOString().slice(0, 10)
@@ -209,10 +173,11 @@ export async function GET(request: Request) {
     seasonalEnd.setFullYear(seasonalEnd.getFullYear() - 1)
     const seasonalStartStr = seasonalStart.toISOString().slice(0, 10)
     const seasonalEndStr = seasonalEnd.toISOString().slice(0, 10)
-    const { data: feriaRows } = await supabase
+    const { data: feriaRows, error: feriaError } = await supabase
       .from('ferias')
       .select('fecha_inicio, fecha_fin')
       .lte('fecha_inicio', endDateStr)
+    if (feriaError) throw new Error(feriaError.message)
     const feriaWindows = (feriaRows || []) as Array<{ fecha_inicio: string; fecha_fin: string }>
     const isFeriaDate = (date: string) => feriaWindows.some(feria => date >= feria.fecha_inicio && date <= feria.fecha_fin)
 
@@ -229,12 +194,12 @@ export async function GET(request: Request) {
     {
       let pageStart = 0
       const pageSize = 1000
-      for (let i = 0; i < 50; i++) {
+      for (;;) {
         const { data: page, error: sErr } = await supabase
           .from('siigo_product_stock')
           .select('product_id, product_code, product_name, warehouse_id, warehouse_name, quantity')
           .eq('account_group_id', PRODUCT_ACCOUNT_GROUP_ID)
-          .range(pageStart, pageStart + pageSize - 1)
+          .order('product_id').order('warehouse_id').range(pageStart, pageStart + pageSize - 1)
         if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 })
         if (!page || page.length === 0) break
         stockRows.push(...(page as StockRow[]))
@@ -295,28 +260,29 @@ export async function GET(request: Request) {
     }
 
     // 3. Sales in last N days: from Siigo invoice cache, items × quantity, classifying by channel
-    type Store = { id: string; nombre: string; siigo_customer_identification: string | null; siigo_warehouse_id: number | null }
+    type Store = { id: string; nombre: string; siigo_customer_identification: string | null; siigo_warehouse_id: number | null; activa?: boolean }
     const { data: tiendaNitsRaw, error: tiendasError } = await supabase
       .from('tiendas_terceros')
-      .select('id, nombre, siigo_customer_identification, siigo_warehouse_id')
-      .eq('activa', true)
+      .select('id, nombre, siigo_customer_identification, siigo_warehouse_id, activa')
     if (tiendasError) throw tiendasError
-    const availableStores = (tiendaNitsRaw || []) as Store[]
+    const allStores = (tiendaNitsRaw || []) as Store[]
+    const availableStores = allStores.filter(store => store.activa !== false)
     const excludedStoreIds = new Set((searchParams.get('excluir_tiendas') || '').split(',').filter(Boolean))
+    for (const store of allStores) if (store.activa === false) excludedStoreIds.add(store.id)
     const stores = availableStores.filter(store => !excludedStoreIds.has(store.id))
     const storeByNit = new Map<string, Store>()
-    for (const store of availableStores) {
+    for (const store of allStores) {
       for (const nit of identificationKeys(store.siigo_customer_identification)) storeByNit.set(nit, store)
     }
 
     type StoreSale = { tienda_id: string; fecha: string; producto_sku: string | null; cantidad: number }
     const realStoreSales: StoreSale[] = []
     const excludedSalesSkus = new Set<string>()
-    for (let pageStart = 0; pageStart < 50_000; pageStart += 1000) {
+    for (let pageStart = 0; ; pageStart += 1000) {
       const { data: page, error: storeSalesError } = await supabase
         .from('ventas_terceros')
         .select('tienda_id, fecha, producto_sku, cantidad')
-        .range(pageStart, pageStart + 999)
+        .order('id').range(pageStart, pageStart + 999)
       if (storeSalesError) throw new Error(storeSalesError.message)
       if (!page?.length) break
       for (const sale of page as StoreSale[]) {
@@ -357,13 +323,13 @@ export async function GET(request: Request) {
       const result: Invoice[] = []
       let pageStart = 0
       const pageSize = 1000
-      for (let i = 0; i < 50; i++) {
+      for (;;) {
         const { data: page, error: invoiceError } = await supabase
           .from('siigo_invoices')
           .select('id, date, customer_identification, observations, items, total, credited_amount, assigned_feria_id')
           .gte('date', from)
           .lte('date', to)
-          .range(pageStart, pageStart + pageSize - 1)
+          .order('id').range(pageStart, pageStart + pageSize - 1)
         if (invoiceError) throw new Error(invoiceError.message)
         if (!page || page.length === 0) break
         const fresh = (page as Invoice[]).filter(p => (p.credited_amount || 0) < p.total)
@@ -525,7 +491,6 @@ export async function GET(request: Request) {
     const needEventsBySku = new Map<string, Array<{ date: string; quantity: number; recoverableSafety?: number }>>()
     const dispatchesBySku = new Map<string, StoreDispatch[]>()
     const forecastDemandBySku = new Map<string, number>()
-    const modelByReference = new Map<string, ReturnType<typeof selectDemandModel>>()
     const comparableMonthlyLevels = [...skusByReference.values()]
       .map(skus => {
         const recent = monthSequence.slice(-3).map((_, offset) => {
@@ -542,9 +507,18 @@ export async function GET(request: Request) {
     const newReferenceFallback = comparableMonthlyLevels.length
       ? comparableMonthlyLevels[Math.floor((comparableMonthlyLevels.length - 1) * 0.25)]
       : 0
-    let baselineAbsError = 0
-    let selectedAbsError = 0
-    let backtestActual = 0
+    const auditRows: Array<{ referencia: string; canal: string; modelo: string; mesesHistoria: number; meses: string[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }> = []
+    const validation = { actualUnits: 0, selectedAbsoluteError: 0, baselineAbsoluteError: 0, observations: 0, seriesEvaluadas: 0, seriesSinEvaluar: 0 }
+    const validateSeries = (values: number[]) => {
+      const check = backtestDemandModel(values, 4)
+      if (check.origins < 3) { validation.seriesSinEvaluar++; return }
+      validation.actualUnits += check.actualUnits
+      validation.selectedAbsoluteError += check.selectedAbsoluteError
+      validation.baselineAbsoluteError += check.baselineAbsoluteError
+      validation.observations += check.selected.observations
+      validation.seriesEvaluadas++
+    }
+    const seasonalReferences = new Set<string>()
     const addTarget = (sku: string, quantity: number, date: Date, recoverableSafety = 0) => {
       if (quantity <= 0) return
       const events = needEventsBySku.get(sku) || []
@@ -583,8 +557,7 @@ export async function GET(request: Request) {
         : hasLaunchInventory
           ? [newReferenceFallback, newReferenceFallback, newReferenceFallback]
           : [0, 0, 0]
-      const selected = selectDemandModel(training)
-      modelByReference.set(reference, selected)
+
       const futureMonthsNeeded = planningPeriods.filter(period => period.futureIndex != null).length
       const sizeSeries = new Map<string, number[]>()
       for (const sku of skus) {
@@ -616,36 +589,7 @@ export async function GET(request: Request) {
         : aggregateFirst >= 0 || skus.some(sku => excludedSalesSkus.has(sku)) ? [0, 0, 0] : training
       const directModel = selectDemandModel(directTraining)
       const futureMonthKeys = planningPeriods.map(period => period.month)
-      const directProjection = seasonallyAdjustedFuture(
-        forecastMonths(directTraining, directModel.name, futureMonthsNeeded + 1),
-        directSeries,
-        monthSequence,
-        futureMonthKeys,
-      )
-      const directActual = skus.reduce((sum, sku) => sum + (directMonthActual.get(sku) || 0), 0)
-      const directCurrentMonth = directFirst < 0 && directActual > 0
-        ? directActual * calendarDays / elapsedDays
-        : directProjection[0] || 0
-      const directFuture = directProjection.slice(1)
-      const directPeriodDemand = planningPeriods.map(period => Math.max(0, Math.round(
-        (period.futureIndex == null ? remainingMonthDemand(directCurrentMonth, directActual) : (directFuture[period.futureIndex] || 0)),
-      )))
-      for (let periodIndex = 0; periodIndex < planningPeriods.length; periodIndex++) {
-        const period = planningPeriods[periodIndex]
-        const quantity = directPeriodDemand[periodIndex]
-        for (const [sku, units] of allocateToSkus(skus, quantity, profile)) {
-          addForecastDemand(sku, units)
-          const periodEnd = period.demandDate.toISOString().slice(0, 10)
-          const periodStart = period.futureIndex == null ? endDateStr : `${period.month}-01`
-          for (const daily of dailyDemand(units, periodStart, periodEnd)) {
-            addTarget(sku, daily.quantity, new Date(`${daily.date}T12:00:00Z`))
-          }
-        }
-      }
-      const directExpected = directPeriodDemand.reduce((sum, value) => sum + value, 0)
-      const statisticalSafety = safetyStock(directModel, protectionMonths, directExpected)
-      const manualSafety = directExpected / Math.max(1, protectionDays) * Math.max(0, stockSeguridad)
-      const directSafety = Math.round(Math.max(statisticalSafety, manualSafety))
+      const directProjection = forecastMonths(directTraining, directModel.name, futureMonthsNeeded + 1)
       const directSizeSeries = new Map<string, number[]>()
       for (const sku of skus) {
         const size = parseProductName(stockBySku.get(sku)?.product_name || '').size || sku
@@ -654,7 +598,36 @@ export async function GET(request: Request) {
         for (let i = 0; i < existing.length; i++) existing[i] += values[i] || 0
         directSizeSeries.set(size, existing)
       }
-      const directSafetyProfile = variabilityAdjustedSizeProfile(directSizeSeries, profile)
+      const directProfile = directFirst >= 0 ? correctedSizeProfile(directSizeSeries, directSeries) : profile
+      const directActual = skus.reduce((sum, sku) => sum + (directMonthActual.get(sku) || 0), 0)
+      const directCurrentMonth = directFirst < 0 && directActual > 0
+        ? proratePartialMonth(directActual, elapsedDays, calendarDays)
+        : directProjection[0] || 0
+      const directFuture = directProjection.slice(1)
+      const directPeriodDemand = planningPeriods.map(period => Math.max(0, Math.round(
+        (period.futureIndex == null ? remainingMonthDemand(directCurrentMonth, directActual) : (directFuture[period.futureIndex] || 0)),
+      )))
+      for (let periodIndex = 0; periodIndex < planningPeriods.length; periodIndex++) {
+        const period = planningPeriods[periodIndex]
+        const quantity = directPeriodDemand[periodIndex]
+        for (const [sku, units] of allocateToSkus(skus, quantity, directProfile)) {
+          addForecastDemand(sku, units)
+          const periodEnd = period.demandDate.toISOString().slice(0, 10)
+          const periodStart = period.futureIndex == null ? endDateStr : `${period.month}-01`
+          for (const daily of dailyDemand(units, periodStart, periodEnd)) {
+            addTarget(sku, daily.quantity, new Date(`${daily.date}T12:00:00Z`))
+          }
+        }
+      }
+      if (directModel.name.startsWith('seasonal')) seasonalReferences.add(reference)
+      if (directFirst >= 0) validateSeries(directTraining)
+      else validation.seriesSinEvaluar++
+      const directExpected = directPeriodDemand.reduce((sum, value) => sum + value, 0)
+      const statisticalSafety = safetyStock(directModel, protectionMonths, directExpected)
+      const manualSafety = directExpected / Math.max(1, protectionDays) * Math.max(0, stockSeguridad)
+      const directSafety = Math.round(Math.max(statisticalSafety, manualSafety))
+      auditRows.push({ referencia: reference, canal: 'Online + WhatsApp', historial: monthSequence.map((mes, i) => ({ mes, pares: directSeries[i] || 0 })), modelo: directModel.name, mesesHistoria: directFirst >= 0 ? directTraining.length : 0, meses: futureMonthKeys, demanda: directPeriodDemand, reserva: directSafety, evidencia: directFirst >= 0 ? 'ventas directas' : 'sin historial cerrado: estimación provisional' })
+      const directSafetyProfile = variabilityAdjustedSizeProfile(directSizeSeries, directProfile)
       for (const [sku, units] of allocateToSkus(skus, directSafety, directSafetyProfile)) addTarget(sku, units, protectionEnd)
 
       // Store demand: each location owns its stock and receives one independent
@@ -662,12 +635,7 @@ export async function GET(request: Request) {
       // reference aggregated across stores, scaled by its stable recent share.
       const aggregateTraining = aggregateFirst >= 0 ? aggregateStoreSeries.slice(aggregateFirst) : [0, 0, 0]
       const aggregateModel = selectDemandModel(aggregateTraining)
-      const aggregateProjection = seasonallyAdjustedFuture(
-        forecastMonths(aggregateTraining, aggregateModel.name, futureMonthsNeeded + 1),
-        aggregateStoreSeries,
-        monthSequence,
-        futureMonthKeys,
-      )
+      const aggregateProjection = forecastMonths(aggregateTraining, aggregateModel.name, futureMonthsNeeded + 1)
       const aggregateFuture = aggregateProjection.slice(1)
       const eligibleStores = stores.filter(store => store.siigo_warehouse_id != null && skus.some(sku =>
         (stockByWarehouseSku.get(`${store.siigo_warehouse_id}|${sku}`) || 0) > 0
@@ -692,18 +660,16 @@ export async function GET(request: Request) {
           : equalShare
         const storeModel = enoughHistory ? selectDemandModel(storeTraining) : aggregateModel
         const storeProjection = enoughHistory
-          ? seasonallyAdjustedFuture(
-            forecastMonths(storeTraining, storeModel.name, futureMonthsNeeded + 1),
-            storeSeries,
-            monthSequence,
-            futureMonthKeys,
-          )
+          ? forecastMonths(storeTraining, storeModel.name, futureMonthsNeeded + 1)
           : aggregateProjection.map(value => value * share)
+        if (storeModel.name.startsWith('seasonal')) seasonalReferences.add(reference)
+        if (enoughHistory) validateSeries(storeTraining)
+        else validation.seriesSinEvaluar++
         const storeFuture = storeProjection.slice(1)
         const storeActual = skus.reduce((sum, sku) => sum + (realStoreMonthActual.get(store.id)?.get(sku) || 0), 0)
         const hasRealMonth = realStoreSales.some(sale => sale.tienda_id === store.id && sale.fecha.startsWith(lastHistoryMonth) && skus.includes(sale.producto_sku || ''))
         const storeCurrentMonth = storeFirst < 0 && storeActual > 0
-          ? storeActual * calendarDays / elapsedDays
+          ? proratePartialMonth(storeActual, elapsedDays, calendarDays)
           : storeProjection[0] || 0
         // Store shipment invoices are a replenishment proxy, not actual sales.
         // Only recorded sell-through can be subtracted as month-to-date sales.
@@ -716,6 +682,7 @@ export async function GET(request: Request) {
         const storeBuffer = Math.round(enoughHistory
           ? safetyStock(storeModel, 1, monthlyExpected)
           : safetyStock(aggregateModel, 1, aggregateFuture[0] || 0) * share)
+        auditRows.push({ referencia: reference, canal: store.nombre, historial: monthSequence.map((mes, i) => ({ mes, pares: storeSeries[i] || 0 })), modelo: enoughHistory ? storeModel.name : `${storeModel.name} proporcional`, mesesHistoria: storeTraining.length, meses: futureMonthKeys, demanda: storePeriodDemand, reserva: storeBuffer, evidencia: enoughHistory ? 'historial de tienda (ventas o despachos como aproximación)' : 'historial escaso: proporción de tiendas, sin validación individual' })
         const storeSizeSeries = new Map<string, number[]>()
         for (const sku of skus) {
           const size = parseProductName(stockBySku.get(sku)?.product_name || '').size || sku
@@ -742,9 +709,8 @@ export async function GET(request: Request) {
           observedStoreUnits,
           unavailableSizes,
         )
-        // If a store has demand but no warehouse link, do not silently drop its
-        // replenishment. Its observable stock is unknown, so use zero rather
-        // than inventing inventory that may not exist.
+        // Only linked stores are eligible. Each store's reserve uses its own
+        // size curve and is netted only against that store's stock.
         const storeSafetyProfile = variabilityAdjustedSizeProfile(storeSizeSeries, storeProfile)
         const safetyAllocation = allocateToSkus(skus, storeBuffer, storeSafetyProfile)
         // One monthly shipment target, separate from production through January.
@@ -791,16 +757,7 @@ export async function GET(request: Request) {
         }
       }
 
-      // Aggregate comparable one-step metrics for the internal baseline report.
-      if (selected.metrics.observations > 0) {
-        const actualScale = training.slice(-selected.metrics.observations).reduce((sum, value) => sum + Math.abs(value), 0)
-        backtestActual += actualScale
-        selectedAbsError += selected.metrics.wape * actualScale
-        const naiveErrors: number[] = []
-        const start = Math.max(1, training.length - selected.metrics.observations)
-        for (let i = start; i < training.length; i++) naiveErrors.push(Math.abs(training[i] - training[i - 1]))
-        baselineAbsError += naiveErrors.reduce((sum, value) => sum + value, 0)
-      }
+
     }
 
     // 4b. Pending production orders (zapatos en camino) → units by (diseño, talla)
@@ -811,12 +768,16 @@ export async function GET(request: Request) {
     const enCaminoLabelByKey = new Map<string, string>()
     let enCaminoTotalUnits = 0
     {
-      const { data: orderRows } = await supabase
-        .from('production_orders')
-        .select('id, numero, fecha_creacion, fecha_entrega, estado')
-        .in('estado', ['pendiente', 'recibida'])
-        .range(0, 999)
       type OrderRow = { id: string; numero: string | null; fecha_creacion: string | null; fecha_entrega: string | null; estado: string }
+      const orderRows: OrderRow[] = []
+      for (let offset = 0; ; offset += 1000) {
+        const { data, error } = await supabase.from('production_orders')
+          .select('id, numero, fecha_creacion, fecha_entrega, estado')
+          .in('estado', ['pendiente', 'recibida']).order('id').range(offset, offset + 999)
+        if (error) throw new Error('No se pudieron cargar las órdenes en camino: ' + error.message)
+        orderRows.push(...(data || []))
+        if (!data || data.length < 1000) break
+      }
       const typedOrders = ((orderRows || []) as OrderRow[]).filter(order =>
         order.estado === 'pendiente' || /^(orden\s+)?0*30$/i.test((order.numero || '').trim()),
       )
@@ -833,13 +794,16 @@ export async function GET(request: Request) {
         return [o.id, addBusinessDays(placed, leadTimeBusinessDays).toISOString().slice(0, 10)]
       }))
       if (orderIds.length > 0) {
-        const { data: items } = await supabase
-          .from('production_order_items')
-          .select('id, order_id, diseno, talla, cantidad')
-          .in('order_id', orderIds)
-          .range(0, 9999)
         type OrderItem = { id: string; order_id: string; diseno: string; talla: string | null; cantidad: number }
-        const typedItems = (items || []) as OrderItem[]
+        const typedItems: OrderItem[] = []
+        for (let offset = 0; ; offset += 1000) {
+          const { data, error } = await supabase.from('production_order_items')
+            .select('id, order_id, diseno, talla, cantidad').in('order_id', orderIds)
+            .order('id').range(offset, offset + 999)
+          if (error) throw new Error('No se pudieron cargar las tallas en camino: ' + error.message)
+          typedItems.push(...(data || []))
+          if (!data || data.length < 1000) break
+        }
         const oc30 = typedOrders.find(order => /^(orden\s+)?0*30$/i.test((order.numero || '').trim()))
         const oc30Items = typedItems.filter(item => item.order_id === oc30?.id)
         const receivedAllocation = largestRemainder(30, oc30Items.map(item => ({
@@ -931,9 +895,8 @@ export async function GET(request: Request) {
       const velocidadDiariaReciente = ventasTotal / diasAnalisis
       const velocidadDiariaEstacional = ventasPeriodoEstacional / horizonteDias
       const { reference, size } = parseProductName(stockInfo.product_name)
-      const selectedModel = modelByReference.get(reference)
       const demandaFuente: VariantForecast['demandaFuente'] =
-        selectedModel?.name.startsWith('seasonal') ? 'estacional' : 'reciente'
+        seasonalReferences.has(reference) ? 'estacional' : 'reciente'
       const datedNeeds = needEventsBySku.get(sku) || []
       const velocidadDiaria = (forecastDemandBySku.get(sku) || 0) / protectionDays
       const velocidadSemanal = velocidadDiaria * 7
@@ -1104,6 +1067,14 @@ export async function GET(request: Request) {
     enCaminoSinMatch.sort((a, b) => b.unidades - a.unidades)
 
     return NextResponse.json({
+      auditoria: auditRows,
+      validacion: {
+        ...validation,
+        horizonteMeses: 4,
+        errorModelo: validation.actualUnits > 0 ? validation.selectedAbsoluteError / validation.actualUnits : null,
+        errorBase: validation.actualUnits > 0 ? validation.baselineAbsoluteError / validation.actualUnits : null,
+        alcance: 'Demanda por canal con historial suficiente; cortes históricos de cuatro meses. No valida existencias históricas, curvas por talla ni tiendas con historial escaso.',
+      },
       cobertura: {
         fechaLlegadaProduccion: leadTimeEnd.toISOString().slice(0, 10),
         faltanteAntesLlegada: forecast.reduce((sum, row) => sum + row.faltanteAntesLlegada, 0),
@@ -1139,7 +1110,7 @@ export async function GET(request: Request) {
       metodologia: {
         leadTimeBusinessDays,
         businessDayCalendar: 'Colombia: excludes weekends and national holidays',
-        commercialSeasonality: 'same_month_last_year_scaled_by_recent_yoy_growth_when_backtest_wins',
+        commercialSeasonality: 'seasonal_candidates_compete_on_identical_validation_months_no_forced_uplift',
         planningHorizon: `through_${protectionEnd.toISOString().slice(0, 10)}`,
         planningMonths: planningPeriods.map(period => period.month),
         protectionDays,
@@ -1152,13 +1123,9 @@ export async function GET(request: Request) {
         stores: {
           active: stores.length,
           withWarehouse: stores.filter(store => store.siigo_warehouse_id != null).length,
-          missingWarehouseAssumedZeroStock: stores.filter(store => store.siigo_warehouse_id == null).length,
+          missingWarehouseExcluded: stores.filter(store => store.siigo_warehouse_id == null).length,
         },
-        backtest: {
-          baseline: 'one_step_naive',
-          baselineWape: backtestActual > 0 ? baselineAbsError / backtestActual : null,
-          selectedWape: backtestActual > 0 ? selectedAbsError / backtestActual : null,
-        },
+        backtest: { scope: 'demand_only_four_month_rolling_origin', ...validation },
       },
     })
   } catch (err) {
