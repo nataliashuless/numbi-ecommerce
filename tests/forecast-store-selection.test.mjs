@@ -416,3 +416,31 @@ test('EVA is off by default and adds only matched event demand when enabled', as
     assert.equal((await calculate('', '&incluir_eva=true')).feriaEva.demandaIncluida, 0)
   } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
 })
+
+test('exported dated ledger independently reconciles production using cumulative deficits', async () => {
+  const original = { ...tables }
+  try {
+    isolatedSupplyFixture()
+    tables.siigo_product_stock = [stock('P20', '20', 4)]
+    tables.production_orders = [{ id: 'pending', numero: '032', estado: 'pendiente', fecha_entrega: '2027-01-15' }]
+    tables.production_order_items = [{ id: 'line', order_id: 'pending', diseno: 'Prueba', talla: '20', cantidad: 18 }]
+    const result = await calculate('', '&stock_seguridad=0')
+    for (const row of result.forecast) {
+      const ledger = row.conciliacion
+      const dates = new Map()
+      for (const entry of ledger.entradas) dates.set(entry.fecha, (dates.get(entry.fecha) || 0) - entry.pares)
+      for (const need of ledger.necesidades) {
+        assert.equal(need.reservaRecuperable, 0)
+        dates.set(need.fecha, (dates.get(need.fecha) || 0) + need.pares)
+      }
+      let deficit = -ledger.stockInicial, maxBefore = 0, maxAll = 0
+      for (const [date, netNeed] of [...dates].sort(([a], [b]) => a.localeCompare(b))) {
+        deficit += netNeed
+        maxAll = Math.max(maxAll, deficit)
+        if (date < ledger.llegadaProduccion) maxBefore = Math.max(maxBefore, deficit)
+      }
+      assert.equal(row.sugerenciaProduccion, Math.ceil(maxAll - maxBefore - 1e-9))
+      assert.equal(row.faltanteAntesLlegada, Math.ceil(maxBefore - 1e-9))
+    }
+  } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
+})

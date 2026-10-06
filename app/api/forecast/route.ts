@@ -58,6 +58,11 @@ interface VariantForecast {
   primeraFechaFaltante?: string | null
   produccionSinReserva: number
   produccionPorReserva: number
+  conciliacion: {
+    stockInicial: number; llegadaProduccion: string
+    entradas: Array<{ fecha: string; pares: number }>
+    necesidades: Array<{ fecha: string; pares: number; reservaRecuperable: number }>
+  }
   sugerenciaProduccion: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
 }
@@ -520,7 +525,7 @@ export async function GET(request: Request) {
     const newReferenceFallback = comparableMonthlyLevels.length
       ? comparableMonthlyLevels[Math.floor((comparableMonthlyLevels.length - 1) * 0.25)]
       : 0
-    const auditRows: Array<{ referencia: string; canal: string; modelo: string; mesesHistoria: number; meses: string[]; fuentes: string[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }> = []
+    const auditRows: Array<{ referencia: string; canal: string; modelo: string; mesesHistoria: number; meses: string[]; fuentes: string[]; vendidoMes?: number; proyeccionCompleta?: number[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }> = []
     const validation = { previousAbsoluteError: 0, actualUnits: 0, selectedAbsoluteError: 0, baselineAbsoluteError: 0, observations: 0, seriesEvaluadas: 0, seriesSinEvaluar: 0 }
     const validationByChannel = {
       directo: { actual: 0, abs: 0, baselineAbs: 0, series: 0 },
@@ -669,7 +674,7 @@ export async function GET(request: Request) {
       const manualSafety = directExpected / Math.max(1, protectionDays) * Math.max(0, stockSeguridad)
       // Configured days are a hard ceiling, never a floor for statistical inflation.
       const directSafety = Math.floor(manualSafety)
-      auditRows.push({ referencia: reference, canal: directChannel, historial: monthSequence.map((mes, i) => ({ mes, pares: directSeries[i] || 0 })), modelo: 'año anterior × crecimiento observado', mesesHistoria: directFirst >= 0 ? directTraining.length : 0, meses: futureMonthKeys, fuentes: directAnnual.sources, demanda: directPeriodDemand, reserva: directSafety, evidencia: directFirst >= 0 ? 'ventas directas' : 'sin historial cerrado: estimación provisional' })
+      auditRows.push({ referencia: reference, canal: directChannel, historial: monthSequence.map((mes, i) => ({ mes, pares: directSeries[i] || 0 })), modelo: 'año anterior × crecimiento observado', mesesHistoria: directFirst >= 0 ? directTraining.length : 0, meses: futureMonthKeys, fuentes: directAnnual.sources, vendidoMes: directActual, proyeccionCompleta: [directCurrentMonth, ...directFuture], demanda: directPeriodDemand, reserva: directSafety, evidencia: directFirst >= 0 ? 'ventas directas' : 'sin historial cerrado: estimación provisional' })
       const directSafetyProfile = variabilityAdjustedSizeProfile(directSizeSeries, directProfile)
       for (const [sku, units] of allocateToSkus(skus, directSafety, directSafetyProfile)) addTarget(sku, units, protectionEnd)
 
@@ -709,7 +714,7 @@ export async function GET(request: Request) {
         const storeDayLimit = storePeriodDemand.reduce((sum, value) => sum + value, 0)
           / Math.max(1, protectionDays) * Math.max(0, stockSeguridad)
         const storeBuffer = Math.floor(storeDayLimit)
-        auditRows.push({ referencia: reference, canal: store.nombre, historial: monthSequence.map((mes, i) => ({ mes, pares: storeSeries[i] || 0 })), modelo: 'año anterior × crecimiento observado', mesesHistoria: storeTraining.length, meses: futureMonthKeys, fuentes: storeAnnual.sources, demanda: storePeriodDemand, reserva: storeBuffer, evidencia: enoughHistory ? 'ventas de tienda facturadas en Siigo; registros manuales solo sin factura del SKU/mes' : 'historial escaso: participación reciente observada, sin validación individual' })
+        auditRows.push({ referencia: reference, canal: store.nombre, historial: monthSequence.map((mes, i) => ({ mes, pares: storeSeries[i] || 0 })), modelo: 'año anterior × crecimiento observado', mesesHistoria: storeTraining.length, meses: futureMonthKeys, fuentes: storeAnnual.sources, vendidoMes: storeActual, proyeccionCompleta: [storeCurrentMonth, ...storeFuture], demanda: storePeriodDemand, reserva: storeBuffer, evidencia: enoughHistory ? 'ventas de tienda facturadas en Siigo; registros manuales solo sin factura del SKU/mes' : 'historial escaso: participación reciente observada, sin validación individual' })
         const storeSizeSeries = new Map<string, number[]>()
         for (const sku of skus) {
           const size = parseProductName(stockBySku.get(sku)?.product_name || '').size || sku
@@ -1032,6 +1037,11 @@ export async function GET(request: Request) {
         enviosTiendas: dispatchesBySku.get(sku) || [],
         faltanteAntesLlegada,
         primeraFechaFaltante: coverage.firstShortageDate,
+        conciliacion: {
+          stockInicial: planningStock, llegadaProduccion: productionArrival,
+          entradas: matchingPendingLines.filter(line => line.inTransit).map(line => ({ fecha: line.arrival, pares: line.quantity })),
+          necesidades: datedNeeds.map(line => ({ fecha: line.date, pares: line.quantity, reservaRecuperable: line.recoverableSafety || 0 })),
+        },
         produccionSinReserva,
         produccionPorReserva,
         sugerenciaProduccion,

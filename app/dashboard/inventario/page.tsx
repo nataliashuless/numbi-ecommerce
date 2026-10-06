@@ -134,6 +134,7 @@ interface ForecastItem {
   primeraFechaFaltante?: string | null
   produccionSinReserva?: number
   produccionPorReserva?: number
+  conciliacion?: { stockInicial: number; llegadaProduccion: string; entradas: Array<{ fecha: string; pares: number }>; necesidades: Array<{ fecha: string; pares: number; reservaRecuperable: number }> }
   sugerenciaProduccion: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
 }
@@ -161,7 +162,7 @@ interface ForecastData {
   feriaEva?: { incluida: boolean; demandaHistoricaComparable: number; demandaIncluida: number; supuesto: string }
   crecimientoObservado?: Array<{ canal: string; recent: number; previous: number; factor: number; observed: boolean; mesesActuales: string[]; mesesComparables: string[] }>
   validacion?: { revisionReferencias?: Array<{ referencia: string; produccion: number; error: number | null; errorAnterior?: number | null; errorBase: number | null; canalesEvaluados: number; canalesSinEvaluar: number }>; porCanal?: Array<{ canal: string; series: number; error: number | null; errorBase: number | null }>; horizonteMeses: number; errorAnterior?: number | null; errorModelo: number | null; errorBase: number | null; seriesEvaluadas: number; seriesSinEvaluar: number; observations: number; alcance: string }
-  auditoria?: Array<{ referencia: string; canal: string; modelo: string; mesesHistoria: number; meses: string[]; fuentes: string[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }>
+  auditoria?: Array<{ referencia: string; canal: string; modelo: string; mesesHistoria: number; meses: string[]; fuentes: string[]; vendidoMes?: number; proyeccionCompleta?: number[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }>
 
   cobertura?: { fechaLlegadaProduccion: string; faltanteAntesLlegada: number; distribucion: string }
   tiendasForecast?: Array<{ id: string; nombre: string; incluida: boolean; tieneBodega: boolean }>
@@ -517,6 +518,21 @@ export default function InventarioPage() {
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumen), 'Por referencia')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle), 'Detalle por SKU')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(forecastData.forecast.map(row => ({
+      SKU: row.sku, Referencia: row.producto, Talla: row.size,
+      'Stock inicial propio': row.conciliacion?.stockInicial ?? row.stockBodega,
+      'Llegada producción': row.conciliacion?.llegadaProduccion || forecastData.cobertura?.fechaLlegadaProduccion,
+      'Producción calculada': row.sugerenciaProduccion, 'Faltantes anteriores': row.faltanteAntesLlegada || 0,
+    }))), 'Conciliación stock')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(forecastData.forecast.flatMap(row => [
+      ...(row.conciliacion?.entradas || []).map(item => ({ SKU: row.sku, Fecha: item.fecha, Tipo: 'Entrada confirmada', Pares: item.pares, 'Reserva recuperable': 0 })),
+      ...(row.conciliacion?.necesidades || []).map(item => ({ SKU: row.sku, Fecha: item.fecha, Tipo: 'Necesidad prevista', Pares: item.pares, 'Reserva recuperable': item.reservaRecuperable })),
+    ])), 'Movimientos previstos')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((forecastData.auditoria || []).flatMap(row => row.meses.map((mes, i) => ({
+      Referencia: row.referencia, Canal: row.canal, Mes: mes, Fuente: row.fuentes[i],
+      'Mes completo previsto': row.proyeccionCompleta?.[i] ?? row.demanda[i],
+      'Ventas ya realizadas': i === 0 ? row.vendidoMes || 0 : 0, 'Demanda pendiente': row.demanda[i],
+    })))), 'Cálculo de demanda')
     if (forecastData.crecimientoObservado) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(forecastData.crecimientoObservado.map(row => ({
       'Canal / tienda': row.canal, 'Meses actuales': row.mesesActuales.join(', '), 'Meses comparables': row.mesesComparables.join(', '),
       'Pares actuales': row.recent, 'Pares comparables': row.previous, 'Factor aplicado': row.factor,
