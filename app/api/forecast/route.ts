@@ -509,9 +509,18 @@ export async function GET(request: Request) {
       : 0
     const auditRows: Array<{ referencia: string; canal: string; modelo: string; mesesHistoria: number; meses: string[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }> = []
     const validation = { actualUnits: 0, selectedAbsoluteError: 0, baselineAbsoluteError: 0, observations: 0, seriesEvaluadas: 0, seriesSinEvaluar: 0 }
-    const validateSeries = (values: number[]) => {
+    const validationByChannel = {
+      directo: { actual: 0, abs: 0, baselineAbs: 0, series: 0 },
+      tiendas: { actual: 0, abs: 0, baselineAbs: 0, series: 0 },
+    }
+    const validateSeries = (values: number[], channel: 'directo' | 'tiendas') => {
       const check = backtestDemandModel(values, 4)
       if (check.origins < 3) { validation.seriesSinEvaluar++; return }
+      const channelTotal = validationByChannel[channel]
+      channelTotal.actual += check.actualUnits
+      channelTotal.abs += check.selectedAbsoluteError
+      channelTotal.baselineAbs += check.baselineAbsoluteError
+      channelTotal.series++
       validation.actualUnits += check.actualUnits
       validation.selectedAbsoluteError += check.selectedAbsoluteError
       validation.baselineAbsoluteError += check.baselineAbsoluteError
@@ -620,7 +629,7 @@ export async function GET(request: Request) {
         }
       }
       if (directModel.name.startsWith('seasonal')) seasonalReferences.add(reference)
-      if (directFirst >= 0) validateSeries(directTraining)
+      if (directFirst >= 0) validateSeries(directTraining, 'directo')
       else validation.seriesSinEvaluar++
       const directExpected = directPeriodDemand.reduce((sum, value) => sum + value, 0)
       const statisticalSafety = safetyStock(directModel, protectionMonths, directExpected)
@@ -663,7 +672,7 @@ export async function GET(request: Request) {
           ? forecastMonths(storeTraining, storeModel.name, futureMonthsNeeded + 1)
           : aggregateProjection.map(value => value * share)
         if (storeModel.name.startsWith('seasonal')) seasonalReferences.add(reference)
-        if (enoughHistory) validateSeries(storeTraining)
+        if (enoughHistory) validateSeries(storeTraining, 'tiendas')
         else validation.seriesSinEvaluar++
         const storeFuture = storeProjection.slice(1)
         const storeActual = skus.reduce((sum, sku) => sum + (realStoreMonthActual.get(store.id)?.get(sku) || 0), 0)
@@ -1071,6 +1080,7 @@ export async function GET(request: Request) {
       validacion: {
         ...validation,
         horizonteMeses: 4,
+        porCanal: Object.entries(validationByChannel).map(([canal, row]) => ({ canal, series: row.series, error: row.actual > 0 ? row.abs / row.actual : null, errorBase: row.actual > 0 ? row.baselineAbs / row.actual : null })),
         errorModelo: validation.actualUnits > 0 ? validation.selectedAbsoluteError / validation.actualUnits : null,
         errorBase: validation.actualUnits > 0 ? validation.baselineAbsoluteError / validation.actualUnits : null,
         alcance: 'Demanda por canal con historial suficiente; cortes históricos de cuatro meses. No valida existencias históricas, curvas por talla ni tiendas con historial escaso.',

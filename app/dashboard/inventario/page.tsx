@@ -156,7 +156,7 @@ interface ForecastReference {
 }
 
 interface ForecastData {
-  validacion?: { horizonteMeses: number; errorModelo: number | null; errorBase: number | null; seriesEvaluadas: number; seriesSinEvaluar: number; observations: number; alcance: string }
+  validacion?: { porCanal?: Array<{ canal: string; series: number; error: number | null; errorBase: number | null }>; horizonteMeses: number; errorModelo: number | null; errorBase: number | null; seriesEvaluadas: number; seriesSinEvaluar: number; observations: number; alcance: string }
   auditoria?: Array<{ referencia: string; canal: string; modelo: string; mesesHistoria: number; meses: string[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }>
 
   cobertura?: { fechaLlegadaProduccion: string; faltanteAntesLlegada: number; distribucion: string }
@@ -294,6 +294,13 @@ export default function InventarioPage() {
     return out
   }, [forecastData])
   const totalProducirToggle = forecastKpis.totalProducir
+  const seasonalReview = (forecastData?.auditoria || []).filter(row => row.canal === 'Online + WhatsApp').flatMap(row => row.meses.flatMap((month, i) => {
+    if (!['11', '12', '01'].includes(month.slice(5))) return []
+    const previousMonth = `${Number(month.slice(0, 4)) - 1}${month.slice(4)}`
+    const previous = row.historial.find(item => item.mes === previousMonth)?.pares
+    return previous != null && previous > row.demanda[i] ? [{ referencia: row.referencia, mes: month, anterior: previous, proyeccion: row.demanda[i] }] : []
+  })).sort((a, b) => (b.anterior - b.proyeccion) - (a.anterior - a.proyeccion))
+
 
   async function fetchInventario() {
     try {
@@ -359,12 +366,14 @@ export default function InventarioPage() {
       const excluded = Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string') : []
       const res = await fetch(`/api/forecast?dias=${diasAnalisis}&lead_time=${leadTime}&stock_seguridad=${stockSeguridad}&excluir_tiendas=${encodeURIComponent(excluded.join(','))}`)
       if (!res.ok) {
-        throw new Error('Error al cargar forecast')
+        const failure = await res.json().catch(() => null)
+        throw new Error(failure?.error || 'Error al cargar forecast')
       }
       const json = await res.json()
       setForecastData(json)
       setExcludedStoreIds((json.tiendasForecast || []).filter((store: { incluida: boolean }) => !store.incluida).map((store: { id: string }) => store.id))
     } catch (err) {
+      setForecastData(null)
       setStoreSelectionError(err instanceof Error ? err.message : 'No se pudo calcular el forecast')
       console.error('Error fetching forecast:', err)
     } finally {
@@ -1090,8 +1099,17 @@ export default function InventarioPage() {
                   <CardContent className="space-y-3 text-sm">
                     <p>El modelo compara métodos recientes y estacionales sobre los mismos meses. No suma un aumento adicional por Black Friday o Navidad después de elegir el método.</p>
                     <p>{forecastData.validacion.errorModelo == null ? 'No hay suficiente historia para medir el error.' : `Error histórico de demanda a cuatro meses: ${(forecastData.validacion.errorModelo * 100).toFixed(1)} %. Promedio de tres meses como comparación: ${((forecastData.validacion.errorBase || 0) * 100).toFixed(1)} %.`}</p>
+                    {forecastData.validacion.porCanal?.map(row => <p key={row.canal}>{row.canal === 'directo' ? 'Online + WhatsApp' : 'Tiendas'}: {row.error == null ? 'sin evidencia suficiente' : `${(row.error * 100).toFixed(1)} % de error histórico`} ({row.series} series evaluadas).</p>)}
+                    {(forecastData.validacion.errorModelo == null || (forecastData.validacion.errorBase != null && forecastData.validacion.errorModelo >= forecastData.validacion.errorBase)) && <p className="rounded border border-amber-300 bg-amber-50 p-3 font-medium">Estimación pendiente de revisión: este método no ha demostrado mejorar el promedio de tres meses en la prueba a cuatro meses. La cantidad calculada no debe tomarse como una orden de fabricación confirmada.</p>}
                     <p>{forecastData.validacion.seriesEvaluadas} combinaciones de referencia y canal evaluadas; {forecastData.validacion.seriesSinEvaluar} sin validación individual suficiente.</p>
                     <p className="text-[#545454]">{forecastData.validacion.alcance} Las facturas a tiendas son una aproximación cuando no hay ventas al consumidor registradas. La sugerencia es una estimación, no una garantía de ventas.</p>
+                    {seasonalReview.length > 0 && <div className="rounded border border-amber-300 p-3">
+                      <p className="font-medium">Temporada pendiente de validar</p>
+                      <p className="mb-2">Estas referencias tuvieron ventas directas mayores el mismo mes del año pasado. El método reciente puede no representar ese pico. Son ventas mensuales, antes de descontar inventario.</p>
+                      <table className="w-full text-left text-xs"><thead><tr><th className="p-1">Referencia</th><th className="p-1">Mes</th><th className="p-1">Año pasado</th><th className="p-1">Proyección actual</th></tr></thead>
+                      <tbody>{seasonalReview.slice(0, 8).map(row => <tr key={`${row.referencia}-${row.mes}`}><td className="p-1">{row.referencia}</td><td className="p-1">{row.mes}</td><td className="p-1">{row.anterior}</td><td className="p-1">{row.proyeccion}</td></tr>)}</tbody></table>
+                      <p className="mt-2 text-xs">La descarga incluye el historial completo y la demanda mensual de todas las referencias.</p>
+                    </div>}
                     <details>
                       <summary className="cursor-pointer font-medium">Ver demanda mensual y reserva por referencia y canal</summary>
                       <div className="overflow-x-auto mt-3"><table className="w-full text-left text-xs">
@@ -1141,7 +1159,7 @@ export default function InventarioPage() {
                   </Card>
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium text-[#545454]">Producir Sugerido</CardTitle>
+                      <CardTitle className="text-sm font-medium text-[#545454]">Estimación de producción</CardTitle>
                       <Factory className="h-4 w-4 text-[#1A2238]" />
                     </CardHeader>
                     <CardContent>
@@ -1219,7 +1237,7 @@ export default function InventarioPage() {
                                 ))}
                               </div>
                               <p className="text-xs text-[#92400E] mt-2">
-                                Corregí el nombre del diseño en <Link href="/dashboard/inventario/ordenes" className="underline font-medium">Órdenes en camino</Link> para
+                                Revisá los modelos en <Link href="/dashboard/inventario/ordenes" className="underline font-medium">Órdenes en camino</Link> para
                                 que coincida con cómo Siigo nombra el producto, o revisá la talla.
                               </p>
                             </div>
