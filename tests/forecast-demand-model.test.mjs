@@ -15,6 +15,8 @@ import {
   safetyStock,
   selectDemandModel,
   backtestDemandModel,
+  forecastChannelSeasonality,
+  backtestChannelSeasonality,
   forecastLastYear,
   lastYearSafetyModel,
   stabilizedStoreSizeProfile,
@@ -257,4 +259,39 @@ test('annual safety residuals match year-over-year rule and annual backtest has 
     values.forEach((value,i)=>{ error += Math.abs(value-history[origin+i]) })
   }
   assert.equal(report.selectedAbsoluteError,error)
+})
+
+
+test('channel seasonality retains campaign peaks and reconciles recent reference shares', () => {
+  const cycle = [100, 300, 200, 150, 100, 100, 100, 100, 100, 100, 100, 100]
+  const channel = [...cycle, ...cycle]
+  const first = channel.map(value => value * .2)
+  const second = channel.map(value => value * .8)
+  const a = forecastChannelSeasonality(first, channel, 4).values
+  const b = forecastChannelSeasonality(second, channel, 4).values
+  assert.deepEqual(a.map(value => Math.round(value * 1e9) / 1e9), [20, 60, 40, 30])
+  assert.deepEqual(a.map((value, i) => Math.round((value + b[i]) * 1e9) / 1e9), cycle.slice(0, 4))
+  // Older reference mix must not override its observed recent participation.
+  first.fill(90, 0, 12)
+  assert.deepEqual(forecastChannelSeasonality(first, channel, 4).values, a)
+})
+
+test('channel seasonal zeros stay zero; missing history is explicitly a recent fallback', () => {
+  const channel = [100, 0, 200, 150, 100, 100, 100, 100, 100, 100, 100, 100]
+  assert.equal(forecastChannelSeasonality(channel.map(x => x / 2), channel, 4).values[1], 0)
+  const fallback = forecastChannelSeasonality([3, 3, 3], [10, 10, 10], 4)
+  assert.deepEqual(fallback.values, [3, 3, 3, 3])
+  assert.ok(fallback.sources.every(source => source.includes('sin ciclo anual')))
+})
+
+test('seasonal backtest excludes future aggregate sales and keeps identical baseline origins', () => {
+  const values = Array.from({ length: 30 }, (_, i) => 5 + i % 12)
+  const channel = values.map(value => value * 5)
+  const check = backtestChannelSeasonality(values, channel)
+  const changedFuture = [...channel.slice(0, -4), 9000, 8000, 7000, 6000]
+  assert.deepEqual(backtestChannelSeasonality(values, changedFuture), check)
+  const baseline = backtestDemandModel(values)
+  assert.equal(check.actualUnits, baseline.actualUnits)
+  assert.equal(check.origins, baseline.origins)
+  assert.equal(check.baselineAbsoluteError, baseline.baselineAbsoluteError)
 })

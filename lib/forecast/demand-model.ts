@@ -230,6 +230,62 @@ export function backtestDemandModel(values: number[], horizon = 4, historyMonths
   }
 }
 
+// Share the channel's observed calendar pattern across references. Monthly
+// shares use only the last three closed months; the future channel seasonal
+// totals come from the last observed annual cycle. No second holiday uplift.
+export function forecastChannelSeasonality(values: number[], channelValues: number[], months: number) {
+  const history = values.map(value => Math.max(0, Number(value) || 0))
+  const channel = channelValues.map(value => Math.max(0, Number(value) || 0))
+  if (channel.length < 12 || !history.length) return {
+    values: forecastMonths(history, 'ma3', months),
+    sources: Array(months).fill('promedio reciente: canal sin ciclo anual completo') as string[],
+  }
+  const season = channel.slice(-12)
+  const recent = history.slice(-3)
+  const observedShares = recent.flatMap((value, i) => {
+    const channelUnits = season[12 - recent.length + i]
+    return channelUnits > 0 ? [value / channelUnits] : []
+  })
+  if (!observedShares.length) return {
+    values: forecastMonths(history, 'ma3', months),
+    sources: Array(months).fill('promedio reciente: canal sin ventas recientes') as string[],
+  }
+  const share = mean(observedShares)
+  return {
+    values: Array.from({ length: months }, (_, i) => share * season[i % 12]),
+    sources: Array(months).fill('temporada del canal × participación reciente') as string[],
+  }
+}
+
+export function backtestChannelSeasonality(values: number[], channelValues: number[], horizon = 4): RollingDemandBacktest {
+  const steps = Math.max(1, Math.min(4, Math.floor(horizon) || 4))
+  const actual: number[] = [], forecasts: number[] = [], baseline: number[] = []
+  const offset = channelValues.length - values.length
+  let origins = 0
+  for (let origin = Math.max(6, values.length - steps - 11); origin <= values.length - steps; origin++) {
+    const history = values.slice(0, origin)
+    // Slice the aggregate too: including the present channel would leak future sales.
+    forecasts.push(...forecastChannelSeasonality(history, channelValues.slice(0, offset + origin), steps).values)
+    baseline.push(...forecastMonths(history, 'ma3', steps))
+    actual.push(...values.slice(origin, origin + steps))
+    origins++
+  }
+  return { selected: metrics(actual, forecasts), baseline: metrics(actual, baseline), horizon: steps, origins,
+    actualUnits: actual.reduce((sum, value) => sum + value, 0),
+    selectedAbsoluteError: forecasts.reduce((sum, value, i) => sum + Math.abs(value - actual[i]), 0),
+    baselineAbsoluteError: baseline.reduce((sum, value, i) => sum + Math.abs(value - actual[i]), 0) }
+}
+
+export function channelSafetyModel(values: number[], channelValues: number[]): SelectedModel {
+  const actual: number[] = [], forecasts: number[] = []
+  const offset = channelValues.length - values.length
+  for (let origin = Math.max(3, values.length - 12); origin < values.length; origin++) {
+    actual.push(values[origin])
+    forecasts.push(forecastChannelSeasonality(values.slice(0, origin), channelValues.slice(0, offset + origin), 1).values[0])
+  }
+  return { name: 'seasonal', metrics: metrics(actual, forecasts), residuals: actual.map((value, i) => value - forecasts[i]) }
+}
+
 export function safetyStock(selected: SelectedModel, protectionMonths: number, expectedDemand: number): number {
   if (!selected.residuals.length || expectedDemand <= 0) return 0
   const residualMean = mean(selected.residuals)

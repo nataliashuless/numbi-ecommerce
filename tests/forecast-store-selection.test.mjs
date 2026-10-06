@@ -280,8 +280,8 @@ test('endpoint uses previous November December and January and subtracts current
     const result = await calculate('')
     const row = result.auditoria.find(row => row.canal === 'Online + WhatsApp')
     assert.deepEqual(Array.from(row.demanda), [5,36,26,12])
-    assert.deepEqual(Array.from(row.fuentes), Array(4).fill('año anterior'))
-    assert.equal(row.modelo, 'mismo mes año anterior')
+    assert.deepEqual(Array.from(row.fuentes), Array(4).fill('temporada del canal × participación reciente'))
+    assert.equal(row.modelo, 'temporada del canal y participación reciente')
   } finally { Object.assign(tables, original) }
 })
 

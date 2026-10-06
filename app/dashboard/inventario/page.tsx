@@ -158,7 +158,7 @@ interface ForecastReference {
 }
 
 interface ForecastData {
-  validacion?: { revisionReferencias?: Array<{ referencia: string; produccion: number; error: number | null; errorBase: number | null; canalesEvaluados: number; canalesSinEvaluar: number }>; porCanal?: Array<{ canal: string; series: number; error: number | null; errorBase: number | null }>; horizonteMeses: number; errorModelo: number | null; errorBase: number | null; seriesEvaluadas: number; seriesSinEvaluar: number; observations: number; alcance: string }
+  validacion?: { revisionReferencias?: Array<{ referencia: string; produccion: number; error: number | null; errorAnterior?: number | null; errorBase: number | null; canalesEvaluados: number; canalesSinEvaluar: number }>; porCanal?: Array<{ canal: string; series: number; error: number | null; errorBase: number | null }>; horizonteMeses: number; errorAnterior?: number | null; errorModelo: number | null; errorBase: number | null; seriesEvaluadas: number; seriesSinEvaluar: number; observations: number; alcance: string }
   auditoria?: Array<{ referencia: string; canal: string; modelo: string; mesesHistoria: number; meses: string[]; fuentes: string[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }>
 
   cobertura?: { fechaLlegadaProduccion: string; faltanteAntesLlegada: number; distribucion: string }
@@ -506,6 +506,7 @@ export default function InventarioPage() {
     if (forecastData.validacion?.revisionReferencias) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
       forecastData.validacion.revisionReferencias.map(row => ({
         'Referencia': row.referencia, 'Producción estimada': row.produccion,
+        'Error regla anterior (%)': row.errorAnterior == null ? 'Sin evidencia' : Number((row.errorAnterior * 100).toFixed(1)),
         'Error modelo (%)': row.error == null ? 'Sin evidencia' : Number((row.error * 100).toFixed(1)),
         'Error promedio 3 meses (%)': row.errorBase == null ? 'Sin evidencia' : Number((row.errorBase * 100).toFixed(1)),
         'Canales evaluados': row.canalesEvaluados, 'Canales sin evaluar': row.canalesSinEvaluar,
@@ -1111,18 +1112,19 @@ export default function InventarioPage() {
                 {forecastData.validacion && <Card className="mb-6">
                   <CardHeader><CardTitle>Comprobación del forecast</CardTitle></CardHeader>
                   <CardContent className="space-y-3 text-sm">
-                    <p>Base de demanda: ventas del mismo mes del año anterior, por referencia y canal. Noviembre repite noviembre, diciembre repite diciembre y enero repite enero. Sin crecimiento automático ni otro aumento por Black Friday o Navidad.</p>
-                    <p>Si el modelo o la tienda aún no tenía ventas en ese mes, se usa la alternativa indicada en el desglose. Los ceros posteriores a la primera venta sí se conservan.</p>
+                    <p>Base de demanda: temporada histórica del canal, distribuida según la participación de cada referencia y tienda en los tres últimos meses cerrados. Conserva el patrón de noviembre, diciembre y enero del canal, sin un aumento adicional por Black Friday o Navidad.</p>
+                    <p>Cuando el canal no tiene un ciclo anual completo, se usa el promedio reciente indicado en el desglose. Las ventas del mes en curso se descuentan después de proyectar el mes completo.</p>
                     <p>{forecastData.validacion.errorModelo == null ? 'No hay suficiente historia para medir el error.' : `Error histórico de demanda a cuatro meses: ${(forecastData.validacion.errorModelo * 100).toFixed(1)} %. Promedio de tres meses como comparación: ${((forecastData.validacion.errorBase || 0) * 100).toFixed(1)} %.`}</p>
+                    {forecastData.validacion.errorAnterior != null && <p>Error de la regla anterior, repetir la referencia del año pasado, en los mismos cortes: {(forecastData.validacion.errorAnterior * 100).toFixed(1)} %. La comparación es retrospectiva y no una garantía de ventas.</p>}
                     {forecastData.validacion.porCanal?.map(row => <p key={row.canal}>{row.canal === 'directo' ? 'Online + WhatsApp' : 'Tiendas'}: {row.error == null ? 'sin evidencia suficiente' : `${(row.error * 100).toFixed(1)} % de error histórico`} ({row.series} series evaluadas).</p>)}
-                    {(forecastData.validacion.errorModelo == null || (forecastData.validacion.errorBase != null && forecastData.validacion.errorModelo >= forecastData.validacion.errorBase)) && <p className="rounded border border-amber-300 bg-amber-50 p-3 font-medium">Estimación pendiente de revisión: la regla del año anterior no ha demostrado mejorar el promedio de tres meses en la prueba a cuatro meses. La cantidad calculada no debe tomarse como una orden de fabricación confirmada.</p>}
+                    <p className="rounded border border-amber-300 bg-amber-50 p-3 font-medium">Estimación con incertidumbre: compara el error del modelo con el promedio sencillo. Una mejora retrospectiva pequeña no garantiza precisión futura. La cantidad calculada no debe tomarse como una orden de fabricación confirmada.</p>
                     <p>{forecastData.validacion.seriesEvaluadas} combinaciones de referencia y canal evaluadas; {forecastData.validacion.seriesSinEvaluar} sin validación individual suficiente.</p>
                     <p>Reserva limitada a {forecastData.parametros.stockSeguridad} días de demanda media prevista por referencia y canal, redondeada hacia abajo a pares completos. El error histórico no puede superar ese límite; en tiendas la reserva puede ser menor.</p>
                     {forecastData.resumen.totalProduccionSinReserva != null && <p className="rounded bg-amber-50 p-3 font-medium">Desglose de producción: {forecastData.resumen.totalProduccionSinReserva} pares para cubrir la demanda sin reserva + {forecastData.resumen.totalProduccionPorReserva} pares adicionales por reserva de seguridad = {forecastData.resumen.totalProducirSugerido} pares. Ambos cálculos descuentan stock y pedidos según talla y fecha de llegada.</p>}
                     <p className="text-[#545454]">{forecastData.validacion.alcance} Las facturas de Siigo son ventas reales de las tiendas. Las ventas del mes en curso se descuentan de la demanda pendiente, sin volver a descontarlas del stock. La sugerencia es una estimación, no una garantía de ventas.</p>
                     {seasonalReview.length > 0 && <div className="rounded border border-amber-300 p-3">
-                      <p className="font-medium">Temporada pendiente de validar</p>
-                      <p className="mb-2">Estas referencias tuvieron ventas directas mayores el mismo mes del año pasado. Revisa si se está usando una alternativa por falta de historial comparable. Son ventas mensuales, antes de descontar inventario.</p>
+                      <p className="font-medium">Cambios frente a la misma referencia el año pasado</p>
+                      <p className="mb-2">Estas referencias tuvieron ventas directas mayores el mismo mes del año pasado. Ahora la demanda se distribuye según la participación reciente dentro del canal. Son ventas mensuales, antes de descontar inventario.</p>
                       <table className="w-full text-left text-xs"><thead><tr><th className="p-1">Referencia</th><th className="p-1">Mes</th><th className="p-1">Año pasado</th><th className="p-1">Proyección actual</th></tr></thead>
                       <tbody>{seasonalReview.slice(0, 8).map(row => <tr key={`${row.referencia}-${row.mes}`}><td className="p-1">{row.referencia}</td><td className="p-1">{row.mes}</td><td className="p-1">{row.anterior}</td><td className="p-1">{row.proyeccion}</td></tr>)}</tbody></table>
                       <p className="mt-2 text-xs">La descarga incluye el historial completo y la demanda mensual de todas las referencias.</p>
@@ -1131,8 +1133,8 @@ export default function InventarioPage() {
                       <summary className="cursor-pointer font-medium">Revisión por referencia: estimaciones, no órdenes confirmadas</summary>
                       <p className="my-2 text-xs">Comparación sobre los mismos meses históricos. Un error menor que el promedio no garantiza ventas futuras. Los canales sin evidencia suficiente quedan identificados.</p>
                       <div className="overflow-x-auto"><table className="w-full text-left text-xs">
-                        <thead><tr><th className="p-2">Referencia</th><th className="p-2">Producción estimada</th><th className="p-2">Error modelo</th><th className="p-2">Error promedio 3 meses</th><th className="p-2">Canales evaluados / sin evaluar</th></tr></thead>
-                        <tbody>{forecastData.validacion.revisionReferencias?.filter(row => row.produccion > 0).map(row => <tr className="border-t" key={row.referencia}><td className="p-2">{row.referencia}</td><td className="p-2">{row.produccion}</td><td className="p-2">{row.error == null ? 'Sin evidencia' : `${(row.error * 100).toFixed(1)} %`}</td><td className="p-2">{row.errorBase == null ? 'Sin evidencia' : `${(row.errorBase * 100).toFixed(1)} %`}</td><td className="p-2">{row.canalesEvaluados} / {row.canalesSinEvaluar}</td></tr>)}</tbody>
+                        <thead><tr><th className="p-2">Referencia</th><th className="p-2">Producción estimada</th><th className="p-2">Error anterior</th><th className="p-2">Error modelo</th><th className="p-2">Error promedio 3 meses</th><th className="p-2">Canales evaluados / sin evaluar</th></tr></thead>
+                        <tbody>{forecastData.validacion.revisionReferencias?.filter(row => row.produccion > 0).map(row => <tr className="border-t" key={row.referencia}><td className="p-2">{row.referencia}</td><td className="p-2">{row.produccion}</td><td className="p-2">{row.errorAnterior == null ? 'Sin evidencia' : `${(row.errorAnterior * 100).toFixed(1)} %`}</td><td className="p-2">{row.error == null ? 'Sin evidencia' : `${(row.error * 100).toFixed(1)} %`}</td><td className="p-2">{row.errorBase == null ? 'Sin evidencia' : `${(row.errorBase * 100).toFixed(1)} %`}</td><td className="p-2">{row.canalesEvaluados} / {row.canalesSinEvaluar}</td></tr>)}</tbody>
                       </table></div>
                     </details>
                     <details>
