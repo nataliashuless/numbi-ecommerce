@@ -15,6 +15,8 @@ import {
   safetyStock,
   selectDemandModel,
   backtestDemandModel,
+  forecastLastYear,
+  lastYearSafetyModel,
   stabilizedStoreSizeProfile,
   variabilityAdjustedSizeProfile,
 } from '../lib/forecast/demand-model.ts'
@@ -225,4 +227,34 @@ test('rolling four-month diagnostic selects only from past data and compares ide
   assert.equal(report.baselineAbsoluteError, baselineError)
   assert.equal(report.actualUnits, actualUnits)
   assert.equal(backtestDemandModel([1, 2, 3, 4]).origins, 0)
+})
+
+const annualMonths = Array.from({ length: 24 }, (_, i) => new Date(Date.UTC(2024, 9 + i, 1)).toISOString().slice(0, 7))
+test('annual policy uses exact previous year campaign sales without growth or blending', () => {
+  const chocolate = Array(24).fill(8)
+  chocolate[13] = 36; chocolate[14] = 26; chocolate[15] = 12
+  const leo = Array(24).fill(7)
+  leo[13] = 23; leo[14] = 17; leo[15] = 9
+  const targets = ['2026-11', '2026-12', '2027-01']
+  assert.deepEqual(forecastLastYear(chocolate, annualMonths, targets, [8,8,8]).values, [36,26,12])
+  assert.deepEqual(forecastLastYear(leo, annualMonths, targets, [7,7,7]).values, [23,17,9])
+})
+test('annual policy preserves observed zeros and falls back for pre-launch or missing months', () => {
+  const history = [...Array(13).fill(0), 36, 0, ...Array(9).fill(8)]
+  const result = forecastLastYear(history, annualMonths, ['2026-10','2026-11','2026-12'], [8,8,8])
+  assert.deepEqual(result.values, [8,36,0])
+  assert.deepEqual(result.sources, ['alternativa sin mes comparable','año anterior','año anterior'])
+  assert.deepEqual(forecastLastYear([10], ['2026-09'], ['2027-01'], [4]).values, [4])
+})
+test('annual safety residuals match year-over-year rule and annual backtest has no future leakage', () => {
+  const history = [...Array(12).fill(10), ...Array(12).fill(20)]
+  assert.deepEqual(lastYearSafetyModel(history, annualMonths, selectDemandModel(history)).residuals, Array(12).fill(10))
+  const report = backtestDemandModel(history, 4, annualMonths)
+  let error = 0
+  for (let origin=9; origin<=20; origin++) {
+    const train = history.slice(0,origin)
+    const values = forecastLastYear(train, annualMonths.slice(0,origin), annualMonths.slice(origin,origin+4), forecastMonths(train,selectDemandModel(train).name,4)).values
+    values.forEach((value,i)=>{ error += Math.abs(value-history[origin+i]) })
+  }
+  assert.equal(report.selectedAbsoluteError,error)
 })

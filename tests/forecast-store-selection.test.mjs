@@ -265,3 +265,22 @@ test('all pending order items are read beyond the Supabase 1000-row cap', async 
     assert.equal(result.enCamino.matchUnidades, 1001)
   } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
 })
+
+test('endpoint uses previous November December and January and subtracts current-month actual once', async () => {
+  const original = { ...tables }
+  try {
+    tables.tiendas_terceros = []
+    tables.ventas_terceros = []
+    tables.siigo_product_stock = [original.siigo_product_stock[0]]
+    tables.siigo_invoices = Array.from({ length: 24 }, (_, i) => ({
+      ...invoice(`annual-${i}`, '333', i === 13 ? 36 : i === 14 ? 26 : i === 15 ? 12 : 8),
+      date: new Date(Date.UTC(2024, 9 + i, 15)).toISOString().slice(0, 10),
+    }))
+    tables.siigo_invoices.push(invoice('current', '333', 3))
+    const result = await calculate('')
+    const row = result.auditoria.find(row => row.canal === 'Online + WhatsApp')
+    assert.deepEqual(Array.from(row.demanda), [5,36,26,12])
+    assert.deepEqual(Array.from(row.fuentes), Array(4).fill('año anterior'))
+    assert.equal(row.modelo, 'mismo mes año anterior')
+  } finally { Object.assign(tables, original) }
+})

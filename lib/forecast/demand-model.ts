@@ -156,6 +156,35 @@ export function forecastMonths(values: number[], model: ModelName, months: numbe
   return out
 }
 
+// Repeat the exact same calendar month one year earlier, with no growth or
+// second campaign uplift. Pre-launch months are missing evidence, not zero sales.
+export function forecastLastYear(history: number[], historyMonths: string[], targets: string[], fallback: number[]) {
+  const firstSale = history.findIndex(value => value > 0)
+  const sources = targets.map(target => {
+    const previous = `${Number(target.slice(0, 4)) - 1}${target.slice(4)}`
+    const index = historyMonths.indexOf(previous)
+    return firstSale >= 0 && index >= firstSale && index < history.length ? index : -1
+  })
+  return {
+    values: sources.map((index, i) => Math.max(0, index >= 0 ? history[index] : fallback[i] || 0)),
+    sources: sources.map(index => index >= 0 ? 'año anterior' : 'alternativa sin mes comparable'),
+  }
+}
+
+export function lastYearSafetyModel(history: number[], months: string[], fallback: SelectedModel): SelectedModel {
+  const actual: number[] = []
+  const predicted: number[] = []
+  for (let origin = Math.max(12, history.length - 12); origin < history.length; origin++) {
+    const projection = forecastLastYear(history.slice(0, origin), months.slice(0, origin), [months[origin]], [0])
+    if (projection.sources[0] !== 'año anterior') continue
+    actual.push(history[origin])
+    predicted.push(projection.values[0])
+  }
+  // Reserve diagnostics must refer to the annual rule, not the recent model
+  // that it replaces. With no annual errors yet, only the explicit days reserve applies.
+  return { ...fallback, name: 'seasonal', metrics: metrics(actual, predicted), residuals: predicted.map((value, i) => actual[i] - value) }
+}
+
 export interface RollingDemandBacktest {
   selected: BacktestMetrics
   baseline: BacktestMetrics
@@ -169,7 +198,7 @@ export interface RollingDemandBacktest {
 // Nested rolling-origin evaluation: model selection only sees the history
 // before each origin, and both policies predict the same next full horizon.
 // Overlapping origins are repeated planning exercises, not independent samples.
-export function backtestDemandModel(values: number[], horizon = 4): RollingDemandBacktest {
+export function backtestDemandModel(values: number[], horizon = 4, historyMonths?: string[]): RollingDemandBacktest {
   const clean = values.map(value => Math.max(0, Number(value) || 0))
   const steps = Math.max(1, Math.min(4, Math.floor(horizon) || 4))
   const actual: number[] = []
@@ -181,7 +210,11 @@ export function backtestDemandModel(values: number[], horizon = 4): RollingDeman
   for (let origin = firstOrigin; origin <= lastOrigin; origin++) {
     const training = clean.slice(0, origin)
     const selected = selectDemandModel(training)
-    selectedForecasts.push(...forecastMonths(training, selected.name, steps))
+    const fallback = forecastMonths(training, selected.name, steps)
+    const predictions = historyMonths
+      ? forecastLastYear(training, historyMonths.slice(0, origin), historyMonths.slice(origin, origin + steps), fallback).values
+      : fallback
+    selectedForecasts.push(...predictions)
     baselineForecasts.push(...forecastMonths(training, 'ma3', steps))
     actual.push(...clean.slice(origin, origin + steps))
     origins += 1

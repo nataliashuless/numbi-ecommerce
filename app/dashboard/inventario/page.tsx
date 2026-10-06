@@ -157,7 +157,7 @@ interface ForecastReference {
 
 interface ForecastData {
   validacion?: { porCanal?: Array<{ canal: string; series: number; error: number | null; errorBase: number | null }>; horizonteMeses: number; errorModelo: number | null; errorBase: number | null; seriesEvaluadas: number; seriesSinEvaluar: number; observations: number; alcance: string }
-  auditoria?: Array<{ referencia: string; canal: string; modelo: string; mesesHistoria: number; meses: string[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }>
+  auditoria?: Array<{ referencia: string; canal: string; modelo: string; mesesHistoria: number; meses: string[]; fuentes: string[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }>
 
   cobertura?: { fechaLlegadaProduccion: string; faltanteAntesLlegada: number; distribucion: string }
   tiendasForecast?: Array<{ id: string; nombre: string; incluida: boolean; tieneBodega: boolean }>
@@ -1097,15 +1097,16 @@ export default function InventarioPage() {
                 {forecastData.validacion && <Card className="mb-6">
                   <CardHeader><CardTitle>Comprobación del forecast</CardTitle></CardHeader>
                   <CardContent className="space-y-3 text-sm">
-                    <p>El modelo compara métodos recientes y estacionales sobre los mismos meses. No suma un aumento adicional por Black Friday o Navidad después de elegir el método.</p>
+                    <p>Base de demanda: ventas del mismo mes del año anterior, por referencia y canal. Noviembre repite noviembre, diciembre repite diciembre y enero repite enero. Sin crecimiento automático ni otro aumento por Black Friday o Navidad.</p>
+                    <p>Si el modelo o la tienda aún no tenía ventas en ese mes, se usa la alternativa indicada en el desglose. Los ceros posteriores a la primera venta sí se conservan.</p>
                     <p>{forecastData.validacion.errorModelo == null ? 'No hay suficiente historia para medir el error.' : `Error histórico de demanda a cuatro meses: ${(forecastData.validacion.errorModelo * 100).toFixed(1)} %. Promedio de tres meses como comparación: ${((forecastData.validacion.errorBase || 0) * 100).toFixed(1)} %.`}</p>
                     {forecastData.validacion.porCanal?.map(row => <p key={row.canal}>{row.canal === 'directo' ? 'Online + WhatsApp' : 'Tiendas'}: {row.error == null ? 'sin evidencia suficiente' : `${(row.error * 100).toFixed(1)} % de error histórico`} ({row.series} series evaluadas).</p>)}
-                    {(forecastData.validacion.errorModelo == null || (forecastData.validacion.errorBase != null && forecastData.validacion.errorModelo >= forecastData.validacion.errorBase)) && <p className="rounded border border-amber-300 bg-amber-50 p-3 font-medium">Estimación pendiente de revisión: este método no ha demostrado mejorar el promedio de tres meses en la prueba a cuatro meses. La cantidad calculada no debe tomarse como una orden de fabricación confirmada.</p>}
+                    {(forecastData.validacion.errorModelo == null || (forecastData.validacion.errorBase != null && forecastData.validacion.errorModelo >= forecastData.validacion.errorBase)) && <p className="rounded border border-amber-300 bg-amber-50 p-3 font-medium">Estimación pendiente de revisión: la regla del año anterior no ha demostrado mejorar el promedio de tres meses en la prueba a cuatro meses. La cantidad calculada no debe tomarse como una orden de fabricación confirmada.</p>}
                     <p>{forecastData.validacion.seriesEvaluadas} combinaciones de referencia y canal evaluadas; {forecastData.validacion.seriesSinEvaluar} sin validación individual suficiente.</p>
                     <p className="text-[#545454]">{forecastData.validacion.alcance} Las facturas a tiendas son una aproximación cuando no hay ventas al consumidor registradas. La sugerencia es una estimación, no una garantía de ventas.</p>
                     {seasonalReview.length > 0 && <div className="rounded border border-amber-300 p-3">
                       <p className="font-medium">Temporada pendiente de validar</p>
-                      <p className="mb-2">Estas referencias tuvieron ventas directas mayores el mismo mes del año pasado. El método reciente puede no representar ese pico. Son ventas mensuales, antes de descontar inventario.</p>
+                      <p className="mb-2">Estas referencias tuvieron ventas directas mayores el mismo mes del año pasado. Revisa si se está usando una alternativa por falta de historial comparable. Son ventas mensuales, antes de descontar inventario.</p>
                       <table className="w-full text-left text-xs"><thead><tr><th className="p-1">Referencia</th><th className="p-1">Mes</th><th className="p-1">Año pasado</th><th className="p-1">Proyección actual</th></tr></thead>
                       <tbody>{seasonalReview.slice(0, 8).map(row => <tr key={`${row.referencia}-${row.mes}`}><td className="p-1">{row.referencia}</td><td className="p-1">{row.mes}</td><td className="p-1">{row.anterior}</td><td className="p-1">{row.proyeccion}</td></tr>)}</tbody></table>
                       <p className="mt-2 text-xs">La descarga incluye el historial completo y la demanda mensual de todas las referencias.</p>
@@ -1114,7 +1115,7 @@ export default function InventarioPage() {
                       <summary className="cursor-pointer font-medium">Ver demanda mensual y reserva por referencia y canal</summary>
                       <div className="overflow-x-auto mt-3"><table className="w-full text-left text-xs">
                         <thead><tr><th className="p-2">Referencia / canal</th><th className="p-2">Historial cerrado</th><th className="p-2">Demanda pendiente por mes</th><th className="p-2">Reserva</th></tr></thead>
-                        <tbody>{forecastData.auditoria?.map((row, i) => <tr key={i} className="border-t"><td className="p-2">{row.referencia} · {row.canal}<span className="block text-[#545454]">{row.evidencia}</span></td><td className="p-2">{row.mesesHistoria} meses</td><td className="p-2">{row.meses.map((month, index) => `${month}: ${row.demanda[index]}`).join(' · ')}</td><td className="p-2">{row.reserva}</td></tr>)}</tbody>
+                        <tbody>{forecastData.auditoria?.map((row, i) => <tr key={i} className="border-t"><td className="p-2">{row.referencia} · {row.canal}<span className="block text-[#545454]">{row.evidencia}</span></td><td className="p-2">{row.mesesHistoria} meses</td><td className="p-2">{row.meses.map((month, index) => `${month}: ${row.demanda[index]} (${row.fuentes?.[index] || row.modelo})`).join(' · ')}</td><td className="p-2">{row.reserva}</td></tr>)}</tbody>
                       </table></div>
                     </details>
                   </CardContent>
