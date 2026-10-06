@@ -158,6 +158,7 @@ interface ForecastReference {
 }
 
 interface ForecastData {
+  crecimientoObservado?: Array<{ canal: string; recent: number; previous: number; factor: number; observed: boolean; mesesActuales: string[]; mesesComparables: string[] }>
   validacion?: { revisionReferencias?: Array<{ referencia: string; produccion: number; error: number | null; errorAnterior?: number | null; errorBase: number | null; canalesEvaluados: number; canalesSinEvaluar: number }>; porCanal?: Array<{ canal: string; series: number; error: number | null; errorBase: number | null }>; horizonteMeses: number; errorAnterior?: number | null; errorModelo: number | null; errorBase: number | null; seriesEvaluadas: number; seriesSinEvaluar: number; observations: number; alcance: string }
   auditoria?: Array<{ referencia: string; canal: string; modelo: string; mesesHistoria: number; meses: string[]; fuentes: string[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }>
 
@@ -298,11 +299,11 @@ export default function InventarioPage() {
     return out
   }, [forecastData])
   const totalProducirToggle = forecastKpis.totalProducir
-  const seasonalReview = (forecastData?.auditoria || []).filter(row => row.canal === 'Online + WhatsApp').flatMap(row => row.meses.flatMap((month, i) => {
+  const seasonalReview = (forecastData?.auditoria || []).filter(row => ['Shopify', 'WhatsApp'].includes(row.canal)).flatMap(row => row.meses.flatMap((month, i) => {
     if (!['11', '12', '01'].includes(month.slice(5))) return []
     const previousMonth = `${Number(month.slice(0, 4)) - 1}${month.slice(4)}`
     const previous = row.historial.find(item => item.mes === previousMonth)?.pares
-    return previous != null && previous > row.demanda[i] ? [{ referencia: row.referencia, mes: month, anterior: previous, proyeccion: row.demanda[i] }] : []
+    return previous != null && previous > row.demanda[i] ? [{ referencia: row.referencia, canal: row.canal, mes: month, anterior: previous, proyeccion: row.demanda[i] }] : []
   })).sort((a, b) => (b.anterior - b.proyeccion) - (a.anterior - a.proyeccion))
 
 
@@ -503,6 +504,11 @@ export default function InventarioPage() {
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumen), 'Por referencia')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle), 'Detalle por SKU')
+    if (forecastData.crecimientoObservado) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(forecastData.crecimientoObservado.map(row => ({
+      'Canal / tienda': row.canal, 'Meses actuales': row.mesesActuales.join(', '), 'Meses comparables': row.mesesComparables.join(', '),
+      'Pares actuales': row.recent, 'Pares comparables': row.previous, 'Factor aplicado': row.factor,
+      'Variación (%)': row.observed ? Number(((row.factor - 1) * 100).toFixed(2)) : 'No calculable: sin ajuste',
+    }))), 'Crecimiento observado')
     if (forecastData.validacion?.revisionReferencias) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
       forecastData.validacion.revisionReferencias.map(row => ({
         'Referencia': row.referencia, 'Producción estimada': row.produccion,
@@ -1112,21 +1118,25 @@ export default function InventarioPage() {
                 {forecastData.validacion && <Card className="mb-6">
                   <CardHeader><CardTitle>Comprobación del forecast</CardTitle></CardHeader>
                   <CardContent className="space-y-3 text-sm">
-                    <p>Base de demanda: temporada histórica del canal, distribuida según la participación de cada referencia y tienda en los tres últimos meses cerrados. Conserva el patrón de noviembre, diciembre y enero del canal, sin un aumento adicional por Black Friday o Navidad.</p>
-                    <p>Cuando el canal no tiene un ciclo anual completo, se usa el promedio reciente indicado en el desglose. Las ventas del mes en curso se descuentan después de proyectar el mes completo.</p>
+                    <p>Base de demanda: ventas de cada referencia del mismo mes del año pasado × crecimiento observado. Shopify, WhatsApp y cada tienda se calculan por separado. Black Friday y Navidad ya están incluidos en el histórico: no se añade otro aumento.</p>
+                    <p>Crecimiento observado = pares vendidos en los últimos tres meses completos ÷ pares de esos mismos meses del año anterior − 1. Una caída también se aplica. Sin base comparable se usa 0 % de ajuste, identificado como no calculable; si falta el mes histórico de la referencia, se usa su promedio reciente sin multiplicarlo otra vez.</p>
                     <p>{forecastData.validacion.errorModelo == null ? 'No hay suficiente historia para medir el error.' : `Error histórico de demanda a cuatro meses: ${(forecastData.validacion.errorModelo * 100).toFixed(1)} %. Promedio de tres meses como comparación: ${((forecastData.validacion.errorBase || 0) * 100).toFixed(1)} %.`}</p>
-                    {forecastData.validacion.errorAnterior != null && <p>Error de la regla anterior, repetir la referencia del año pasado, en los mismos cortes: {(forecastData.validacion.errorAnterior * 100).toFixed(1)} %. La comparación es retrospectiva y no una garantía de ventas.</p>}
+                    {forecastData.validacion.errorAnterior != null && <p>Comparación sin crecimiento, repetir la referencia del año pasado, en los mismos cortes: {(forecastData.validacion.errorAnterior * 100).toFixed(1)} %. La comparación es retrospectiva y no una garantía de ventas.</p>}
                     {forecastData.validacion.porCanal?.map(row => <p key={row.canal}>{row.canal === 'directo' ? 'Online + WhatsApp' : 'Tiendas'}: {row.error == null ? 'sin evidencia suficiente' : `${(row.error * 100).toFixed(1)} % de error histórico`} ({row.series} series evaluadas).</p>)}
                     <p className="rounded border border-amber-300 bg-amber-50 p-3 font-medium">Estimación con incertidumbre: compara el error del modelo con el promedio sencillo. Una mejora retrospectiva pequeña no garantiza precisión futura. La cantidad calculada no debe tomarse como una orden de fabricación confirmada.</p>
+                    <details open><summary className="cursor-pointer font-medium">Crecimiento observado aplicado</summary>
+                      <p className="my-2 text-xs">Meses actuales: {forecastData.crecimientoObservado?.[0]?.mesesActuales.join(', ')}. Comparación: {forecastData.crecimientoObservado?.[0]?.mesesComparables.join(', ') || 'sin período completo'}.</p>
+                      <table className="w-full text-left text-xs"><thead><tr><th className="p-2">Canal / tienda</th><th className="p-2">Pares actuales</th><th className="p-2">Pares año pasado</th><th className="p-2">Variación aplicada</th></tr></thead><tbody>{forecastData.crecimientoObservado?.map(row => <tr key={row.canal} className="border-t"><td className="p-2">{row.canal}</td><td className="p-2">{row.recent}</td><td className="p-2">{row.previous}</td><td className="p-2">{row.observed ? `${((row.factor - 1) * 100).toFixed(1)} %` : 'No calculable: sin ajuste'}</td></tr>)}</tbody></table>
+                    </details>
                     <p>{forecastData.validacion.seriesEvaluadas} combinaciones de referencia y canal evaluadas; {forecastData.validacion.seriesSinEvaluar} sin validación individual suficiente.</p>
-                    <p>Reserva limitada a {forecastData.parametros.stockSeguridad} días de demanda media prevista por referencia y canal, redondeada hacia abajo a pares completos. El error histórico no puede superar ese límite; en tiendas la reserva puede ser menor.</p>
+                    <p>Reserva limitada a {forecastData.parametros.stockSeguridad} días de demanda media prevista por referencia y canal, redondeada hacia abajo a pares completos. El error histórico no puede aumentar ese límite.</p>
                     {forecastData.resumen.totalProduccionSinReserva != null && <p className="rounded bg-amber-50 p-3 font-medium">Desglose de producción: {forecastData.resumen.totalProduccionSinReserva} pares para cubrir la demanda sin reserva + {forecastData.resumen.totalProduccionPorReserva} pares adicionales por reserva de seguridad = {forecastData.resumen.totalProducirSugerido} pares. Ambos cálculos descuentan stock y pedidos según talla y fecha de llegada.</p>}
                     <p className="text-[#545454]">{forecastData.validacion.alcance} Las facturas de Siigo son ventas reales de las tiendas. Las ventas del mes en curso se descuentan de la demanda pendiente, sin volver a descontarlas del stock. La sugerencia es una estimación, no una garantía de ventas.</p>
                     {seasonalReview.length > 0 && <div className="rounded border border-amber-300 p-3">
                       <p className="font-medium">Cambios frente a la misma referencia el año pasado</p>
-                      <p className="mb-2">Estas referencias tuvieron ventas directas mayores el mismo mes del año pasado. Ahora la demanda se distribuye según la participación reciente dentro del canal. Son ventas mensuales, antes de descontar inventario.</p>
+                      <p className="mb-2">Estas referencias tuvieron ventas directas mayores el mismo mes del año pasado. Ahora se aplica la variación observada del canal o de la tienda. Son ventas mensuales, antes de descontar inventario.</p>
                       <table className="w-full text-left text-xs"><thead><tr><th className="p-1">Referencia</th><th className="p-1">Mes</th><th className="p-1">Año pasado</th><th className="p-1">Proyección actual</th></tr></thead>
-                      <tbody>{seasonalReview.slice(0, 8).map(row => <tr key={`${row.referencia}-${row.mes}`}><td className="p-1">{row.referencia}</td><td className="p-1">{row.mes}</td><td className="p-1">{row.anterior}</td><td className="p-1">{row.proyeccion}</td></tr>)}</tbody></table>
+                      <tbody>{seasonalReview.slice(0, 8).map(row => <tr key={`${row.referencia}-${row.canal}-${row.mes}`}><td className="p-1">{row.referencia} · {row.canal}</td><td className="p-1">{row.mes}</td><td className="p-1">{row.anterior}</td><td className="p-1">{row.proyeccion}</td></tr>)}</tbody></table>
                       <p className="mt-2 text-xs">La descarga incluye el historial completo y la demanda mensual de todas las referencias.</p>
                     </div>}
                     <details open>

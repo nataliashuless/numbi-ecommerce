@@ -17,6 +17,9 @@ import {
   backtestDemandModel,
   forecastChannelSeasonality,
   backtestChannelSeasonality,
+  observedGrowth,
+  forecastObservedGrowth,
+  backtestObservedGrowth,
   forecastLastYear,
   lastYearSafetyModel,
   stabilizedStoreSizeProfile,
@@ -294,4 +297,29 @@ test('seasonal backtest excludes future aggregate sales and keeps identical base
   assert.equal(check.actualUnits, baseline.actualUnits)
   assert.equal(check.origins, baseline.origins)
   assert.equal(check.baselineAbsoluteError, baseline.baselineAbsoluteError)
+})
+
+
+test('observed growth compares identical closed quarters and multiplies the historical month only once', () => {
+  const channel = Array(24).fill(100)
+  channel.splice(21, 3, 150, 150, 150)
+  const reference = Array(24).fill(10)
+  reference[13] = 30
+  assert.deepEqual(observedGrowth(channel), { recent: 450, previous: 300, factor: 1.5, observed: true })
+  assert.deepEqual(forecastObservedGrowth(reference, channel, 4).values, [15, 45, 15, 15])
+  channel.splice(21, 3, 50, 50, 50)
+  assert.equal(observedGrowth(channel).factor, .5)
+  channel.splice(9, 3, 0, 0, 0)
+  assert.equal(observedGrowth(channel).observed, false)
+  assert.equal(observedGrowth(channel).factor, 1)
+  assert.equal(observedGrowth([100, 100, 100]).observed, false)
+  assert.deepEqual(forecastObservedGrowth([4, 4, 4], Array(24).fill(10), 4).values, [4, 4, 4, 4])
+})
+
+test('observed growth backtest never reads future growth data', () => {
+  const values = Array.from({ length: 30 }, (_, i) => i % 12 + 2)
+  const channel = values.map(value => value * 10)
+  const original = backtestObservedGrowth(values, channel)
+  channel.splice(26, 4, 99999, 99999, 99999, 99999)
+  assert.deepEqual(backtestObservedGrowth(values, channel), original)
 })

@@ -286,6 +286,48 @@ export function channelSafetyModel(values: number[], channelValues: number[]): S
   return { name: 'seasonal', metrics: metrics(actual, forecasts), residuals: actual.map((value, i) => value - forecasts[i]) }
 }
 
+// Closed-month YoY growth: same three calendar months, one year apart.
+// Missing/zero denominator means unknown growth, never infinity or a made-up lift.
+export function observedGrowth(channel: number[]) {
+  const recent = channel.slice(-3).reduce((sum, value) => sum + Math.max(0, value), 0)
+  const previous = channel.length >= 15 ? channel.slice(-15, -12).reduce((sum, value) => sum + Math.max(0, value), 0) : 0
+  return { recent, previous, factor: channel.length >= 15 && previous > 0 ? recent / previous : 1,
+    observed: channel.length >= 15 && previous > 0 }
+}
+
+export function forecastObservedGrowth(values: number[], channel: number[], months: number) {
+  const growth = observedGrowth(channel)
+  const firstSale = values.findIndex(value => value > 0)
+  const recent = mean(values.slice(-3))
+  const sources: string[] = []
+  const projection = Array.from({ length: months }, (_, i) => {
+    const index = values.length - 12 + i
+    if (firstSale >= 0 && index >= firstSale && index < values.length) {
+      sources.push(growth.observed ? 'año anterior × crecimiento observado' : 'año anterior: crecimiento sin base comparable')
+      return Math.max(0, values[index]) * growth.factor
+    }
+    sources.push('sin mes comparable: promedio reciente, sin crecimiento adicional')
+    return recent
+  })
+  return { values: projection, sources, growth }
+}
+
+export function backtestObservedGrowth(values: number[], channel: number[], horizon = 4): RollingDemandBacktest {
+  const steps = Math.max(1, Math.min(4, Math.floor(horizon) || 4))
+  const actual: number[] = [], forecasts: number[] = [], baseline: number[] = []
+  const offset = channel.length - values.length
+  let origins = 0
+  for (let origin = Math.max(6, values.length - steps - 11); origin <= values.length - steps; origin++) {
+    forecasts.push(...forecastObservedGrowth(values.slice(0, origin), channel.slice(0, offset + origin), steps).values)
+    baseline.push(...forecastMonths(values.slice(0, origin), 'ma3', steps))
+    actual.push(...values.slice(origin, origin + steps)); origins++
+  }
+  return { selected: metrics(actual, forecasts), baseline: metrics(actual, baseline), horizon: steps, origins,
+    actualUnits: actual.reduce((sum, value) => sum + value, 0),
+    selectedAbsoluteError: forecasts.reduce((sum, value, i) => sum + Math.abs(value - actual[i]), 0),
+    baselineAbsoluteError: baseline.reduce((sum, value, i) => sum + Math.abs(value - actual[i]), 0) }
+}
+
 export function safetyStock(selected: SelectedModel, protectionMonths: number, expectedDemand: number): number {
   if (!selected.residuals.length || expectedDemand <= 0) return 0
   const residualMean = mean(selected.residuals)

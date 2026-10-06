@@ -278,10 +278,10 @@ test('endpoint uses previous November December and January and subtracts current
     }))
     tables.siigo_invoices.push(invoice('current', '333', 3))
     const result = await calculate('')
-    const row = result.auditoria.find(row => row.canal === 'Online + WhatsApp')
+    const row = result.auditoria.find(row => row.canal === 'WhatsApp')
     assert.deepEqual(Array.from(row.demanda), [5,36,26,12])
-    assert.deepEqual(Array.from(row.fuentes), Array(4).fill('temporada del canal × participación reciente'))
-    assert.equal(row.modelo, 'temporada del canal y participación reciente')
+    assert.deepEqual(Array.from(row.fuentes), Array(4).fill('año anterior × crecimiento observado'))
+    assert.equal(row.modelo, 'año anterior × crecimiento observado')
   } finally { Object.assign(tables, original) }
 })
 
@@ -365,5 +365,28 @@ test('inclusive horizon covers October 5 through January 31 and reference audit 
     assert.equal(missing.error, null, 'no evidence must not look like zero forecast error')
     assert.equal(missing.canalesEvaluados, 0)
     assert.ok(missing.canalesSinEvaluar > 0)
+  } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
+})
+
+
+test('Shopify WhatsApp and individual stores use separate observed growth excluding the open month', async () => {
+  const original = { ...tables }
+  try {
+    isolatedSupplyFixture()
+    tables.tiendas_terceros = stores
+    tables.siigo_product_stock.push(stock('P20', '20', 0, 30), stock('P20', '20', 0, 31))
+    tables.shopify_orders = [{ id: 1, order_number: 1234 }]
+    const histories = [['333', 200, '#1234'], ['444', 50, ''], ['111', 150, ''], ['222', 100, '']]
+    tables.siigo_invoices = histories.flatMap(([nit, recent, observations]) => steadyHistory(nit, 'P20', 100).map((inv, i) => ({ ...inv, observations, items: [{ code: 'P20', quantity: i >= 21 ? recent : 100 }] })))
+    tables.siigo_invoices.push({ ...invoice('current', '333', 1000), observations: '#1234' })
+    const result = await calculate()
+    assert.equal(result.crecimientoObservado.find(row => row.canal === 'Shopify').factor, 2)
+    assert.equal(result.crecimientoObservado.find(row => row.canal === 'WhatsApp').factor, .5)
+    assert.equal(result.crecimientoObservado.find(row => row.canal === 'A').factor, 1.5)
+    assert.equal(result.crecimientoObservado.find(row => row.canal === 'B').factor, 1)
+    assert.deepEqual(Array.from(result.auditoria.find(row => row.canal === 'Shopify').demanda), [0, 200, 200, 200])
+    assert.deepEqual(Array.from(result.auditoria.find(row => row.canal === 'WhatsApp').demanda), [50, 50, 50, 50])
+    assert.deepEqual(Array.from(result.crecimientoObservado[0].mesesActuales), ['2026-07', '2026-08', '2026-09'])
+    assert.deepEqual(Array.from(result.crecimientoObservado[0].mesesComparables), ['2025-07', '2025-08', '2025-09'])
   } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
 })
