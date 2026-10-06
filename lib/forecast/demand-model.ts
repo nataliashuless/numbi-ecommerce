@@ -312,6 +312,21 @@ export function forecastObservedGrowth(values: number[], channel: number[], mont
   return { values: projection, sources, growth }
 }
 
+// Conservative production policy: absent annual evidence stays outside automatic production.
+export function forecastComparableObservedGrowth(values: number[], channel: number[], months: number) {
+  const result = forecastObservedGrowth(values, channel, months)
+  const excludedForecast = result.values.map((value, i) => result.sources[i].startsWith('año anterior') ? 0 : value)
+  return { ...result, excludedForecast,
+    values: result.values.map((value, i) => result.sources[i].startsWith('año anterior') ? value : 0) }
+}
+
+// Actual observed shares only; no inferred lost sales and no equal-share demand.
+export function observedSizeProfile(series: Map<string, number[]>): Map<string, number> {
+  const totals = new Map([...series].map(([size, values]) => [size, values.reduce((sum, value) => sum + Math.max(0, value), 0)]))
+  const total = [...totals.values()].reduce((sum, value) => sum + value, 0)
+  return new Map([...totals].map(([size, value]) => [size, total > 0 ? value / total : 0]))
+}
+
 export function backtestObservedGrowth(values: number[], channel: number[], horizon = 4): RollingDemandBacktest {
   const steps = Math.max(1, Math.min(4, Math.floor(horizon) || 4))
   const actual: number[] = [], forecasts: number[] = [], baseline: number[] = []
@@ -510,6 +525,7 @@ export function coverageAtArrival(
   inbound: Array<{ quantity: number; arrival: string }>,
   needs: Array<{ quantity: number; date: string; recoverableSafety?: number }>,
   productionArrival: string,
+  rounding: 'up' | 'nearest' = 'up',
 ) {
   let shortageBeforeArrival = 0
   let firstShortageDate: string | null = null
@@ -563,7 +579,7 @@ export function coverageAtArrival(
     }
     projectedStock -= need.quantity
   }
-  return { production: Math.max(0, Math.ceil(production - 1e-9)), shortageBeforeArrival: Math.max(0, Math.ceil(shortageBeforeArrival - 1e-9)), firstShortageDate }
+  return { production: Math.max(0, rounding === 'nearest' ? Math.round(production + 1e-9) : Math.ceil(production - 1e-9)), shortageBeforeArrival: Math.max(0, Math.ceil(shortageBeforeArrival - 1e-9)), firstShortageDate }
 }
 
 export function productionRequiredAtArrival(...args: Parameters<typeof coverageAtArrival>): number {

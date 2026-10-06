@@ -439,8 +439,20 @@ test('exported dated ledger independently reconciles production using cumulative
         maxAll = Math.max(maxAll, deficit)
         if (date < ledger.llegadaProduccion) maxBefore = Math.max(maxBefore, deficit)
       }
-      assert.equal(row.sugerenciaProduccion, Math.ceil(maxAll - maxBefore - 1e-9))
+      assert.equal(row.sugerenciaProduccion, Math.round(maxAll - maxBefore + 1e-9))
       assert.equal(row.faltanteAntesLlegada, Math.ceil(maxBefore - 1e-9))
     }
   } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
+})
+
+test('recent-only reference is visible for review but cannot trigger automatic production', async () => {
+  const previous = tables.siigo_invoices
+  try {
+    tables.siigo_invoices = [{ ...invoice('new-only', '333', 30), date: '2026-09-15' }]
+    const result = await calculate('a,b', '&stock_seguridad=0')
+    const row = result.auditoria.find(row => row.referencia === 'Prueba' && row.canal === 'WhatsApp')
+    assert.ok(row.demandaSinComparable.some(value => value > 0))
+    assert.ok(row.demanda.every(value => value === 0))
+    assert.equal(result.forecast.find(row => row.sku === 'P20').sugerenciaProduccion, 0)
+  } finally { tables.siigo_invoices = previous }
 })

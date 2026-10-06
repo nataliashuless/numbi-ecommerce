@@ -2,6 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   addBusinessDays,
+  forecastComparableObservedGrowth,
+  observedSizeProfile,
   coverageAtArrival,
   dailyDemand,
   correctedSizeProfile,
@@ -332,4 +334,26 @@ test('observed growth backtest never reads future growth data', () => {
   assert.equal(established.selectedAbsoluteError, 0)
   const missingQuarter = backtestObservedGrowth(Array(24).fill(10), [...Array(12).fill(0), ...Array(12).fill(100)])
   assert.equal(missingQuarter.origins, 0)
+})
+
+test('conservative forecast keeps annual peaks and separates recent-only demand', () => {
+  const annual = forecastComparableObservedGrowth(Array(24).fill(12), Array(24).fill(100), 4)
+  assert.deepEqual(annual.values, [12, 12, 12, 12])
+  assert.deepEqual(annual.excludedForecast, [0, 0, 0, 0])
+  const recent = forecastComparableObservedGrowth([3, 6, 9], Array(24).fill(100), 4)
+  assert.deepEqual(recent.values, [0, 0, 0, 0])
+  assert.deepEqual(recent.excludedForecast, [6, 6, 6, 6])
+})
+test('observed size shares neither fill sales gaps nor invent unsold sizes', () => {
+  const shares = observedSizeProfile(new Map([['20', [2, 0, 2]], ['21', [2, 2, 2]], ['22', [0, 0, 0]]]))
+  assert.equal(shares.get('20'), 0.4)
+  assert.equal(shares.get('21'), 0.6)
+  assert.equal(shares.get('22'), 0)
+})
+test('nearest production rounding avoids automatic upward bias with dated supply', () => {
+  const needs = [{ date: '2026-12-22', quantity: 3.3 }]
+  assert.equal(coverageAtArrival(0, [], needs, '2026-12-22', 'nearest').production, 3)
+  assert.equal(coverageAtArrival(0, [], needs, '2026-12-22').production, 4)
+  assert.equal(coverageAtArrival(0, [{arrival:'2026-12-22',quantity:3}], needs, '2026-12-22', 'nearest').production, 0)
+  assert.equal(coverageAtArrival(0, [], [{date:'2026-12-22',quantity:0.5}], '2026-12-22', 'nearest').production, 1)
 })
