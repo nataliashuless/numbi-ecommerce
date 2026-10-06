@@ -323,3 +323,13 @@ test('observed growth backtest never reads future growth data', () => {
   channel.splice(26, 4, 99999, 99999, 99999, 99999)
   assert.deepEqual(backtestObservedGrowth(values, channel), original)
 })
+
+ test('annual backtest excludes pre-launch and missing growth comparison periods', () => {
+  const short = backtestObservedGrowth(Array(16).fill(10), Array(16).fill(100))
+  assert.equal(short.origins, 0)
+  const established = backtestObservedGrowth(Array(24).fill(10), Array(24).fill(100))
+  assert.ok(established.origins > 0)
+  assert.equal(established.selectedAbsoluteError, 0)
+  const missingQuarter = backtestObservedGrowth(Array(24).fill(10), [...Array(12).fill(0), ...Array(12).fill(100)])
+  assert.equal(missingQuarter.origins, 0)
+})

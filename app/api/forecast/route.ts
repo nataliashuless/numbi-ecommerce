@@ -550,15 +550,13 @@ export async function GET(request: Request) {
     }
     const validateSeries = (values: number[], channel: 'directo' | 'tiendas', reference: string, growthHistory: number[]) => {
       const check = backtestObservedGrowth(values, growthHistory, 4)
-      const previous = backtestDemandModel(values, 4, monthSequence.slice(-values.length))
-      recordCheck(reference, check, previous.selectedAbsoluteError)
+      recordCheck(reference, check)
       if (check.origins < 3) { validation.seriesSinEvaluar++; return }
       const channelTotal = validationByChannel[channel]
       channelTotal.actual += check.actualUnits
       channelTotal.abs += check.selectedAbsoluteError
       channelTotal.baselineAbs += check.baselineAbsoluteError
       channelTotal.series++
-      validation.previousAbsoluteError += previous.selectedAbsoluteError
       validation.actualUnits += check.actualUnits
       validation.selectedAbsoluteError += check.selectedAbsoluteError
       validation.baselineAbsoluteError += check.baselineAbsoluteError
@@ -1169,17 +1167,17 @@ export async function GET(request: Request) {
             referencia: row.reference,
             produccion: row.sugerenciaProduccion,
             error: check?.actual ? check.error / check.actual : null,
-            errorAnterior: check?.actual ? check.previousError / check.actual : null,
+            errorAnterior: null,
             errorBase: check?.actual ? check.baselineError / check.actual : null,
             canalesEvaluados: check?.evaluated || 0,
             canalesSinEvaluar: check?.missing || 0,
           }
         }).sort((a, b) => b.produccion - a.produccion),
         porCanal: Object.entries(validationByChannel).map(([canal, row]) => ({ canal, series: row.series, error: row.actual > 0 ? row.abs / row.actual : null, errorBase: row.actual > 0 ? row.baselineAbs / row.actual : null })),
-        errorAnterior: validation.actualUnits > 0 ? validation.previousAbsoluteError / validation.actualUnits : null,
+        errorAnterior: null,
         errorModelo: validation.actualUnits > 0 ? validation.selectedAbsoluteError / validation.actualUnits : null,
         errorBase: validation.actualUnits > 0 ? validation.baselineAbsoluteError / validation.actualUnits : null,
-        alcance: 'Mismo mes del año anterior por referencia con variación interanual de los últimos tres meses cerrados de Shopify, WhatsApp o cada tienda; cortes históricos de cuatro meses. No valida existencias históricas, curvas por talla ni tiendas con historial escaso.',
+        alcance: 'Mismo mes del año anterior por referencia con variación interanual de los últimos tres meses cerrados de Shopify, WhatsApp o cada tienda; cortes históricos de cuatro meses solo cuando existen los mismos meses del año anterior y ambos trimestres completos de crecimiento. Los períodos sin base comparable se excluyen; no equivalen a error cero. No valida existencias históricas, curvas por talla ni tiendas con historial escaso.',
       },
       cobertura: {
         fechaLlegadaProduccion: leadTimeEnd.toISOString().slice(0, 10),

@@ -317,7 +317,16 @@ export function backtestObservedGrowth(values: number[], channel: number[], hori
   const actual: number[] = [], forecasts: number[] = [], baseline: number[] = []
   const offset = channel.length - values.length
   let origins = 0
+  const firstReferenceSale = values.findIndex(value => value > 0)
+  const firstChannelSale = channel.findIndex(value => value > 0)
   for (let origin = Math.max(6, values.length - steps - 11); origin <= values.length - steps; origin++) {
+    // Evaluate only annual comparisons with an observed reference month and
+    // both complete three-month growth windows after the channel began.
+    // Missing pre-launch history is not a comparable zero-sales period.
+    const channelCut = offset + origin
+    if (firstReferenceSale < 0 || origin - 12 < firstReferenceSale ||
+      firstChannelSale < 0 || channelCut - 15 <= firstChannelSale ||
+      channel.slice(channelCut - 15, channelCut - 12).reduce((sum, value) => sum + value, 0) <= 0) continue
     forecasts.push(...forecastObservedGrowth(values.slice(0, origin), channel.slice(0, offset + origin), steps).values)
     baseline.push(...forecastMonths(values.slice(0, origin), 'ma3', steps))
     actual.push(...values.slice(origin, origin + steps)); origins++
