@@ -58,6 +58,8 @@ interface VariantForecast {
   enviosTiendas: StoreDispatch[]
   faltanteAntesLlegada: number
   primeraFechaFaltante?: string | null
+  produccionSinReserva: number
+  produccionPorReserva: number
   sugerenciaProduccion: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
 }
@@ -293,13 +295,6 @@ export async function GET(request: Request) {
       realStoreSales.push(...(page as StoreSale[]).filter(sale => stores.some(store => store.id === sale.tienda_id)))
       if (page.length < 1000) break
     }
-    const realStoreSalesBySkuMonth = new Map<string, number>()
-    for (const sale of realStoreSales) {
-      if (!sale.producto_sku) continue
-      const key = `${sale.tienda_id}|${sale.producto_sku}|${sale.fecha.slice(0, 7)}`
-      realStoreSalesBySkuMonth.set(key, (realStoreSalesBySkuMonth.get(key) || 0) + Math.max(0, Number(sale.cantidad) || 0))
-    }
-
     // Classify the full invoice history, including Shopify orders older than
     // the recent sales window. Supabase caps each response at 1,000 records.
     const shopOrderNumbers = new Set<number>()
@@ -349,6 +344,19 @@ export async function GET(request: Request) {
     const invoices = uniqueInvoices.filter(inv => inv.date >= startDateStr && inv.date <= endDateStr)
     const seasonalInvoices = uniqueInvoices.filter(inv => inv.date >= seasonalStartStr && inv.date <= seasonalEndStr)
 
+    // Siigo invoices are actual store sales. Prefer the invoiced SKU/month;
+    // manual store records only fill months without invoices, never add both.
+    const invoicedStoreMonths = new Set<string>()
+    for (const inv of uniqueInvoices) {
+      const store = identificationKeys(inv.customer_identification).map(nit => storeByNit.get(nit)).find(Boolean)
+      if (!store || excludedStoreIds.has(store.id) || inv.assigned_feria_id != null) continue
+      for (const item of inv.items || []) {
+        if (item.code && item.code !== 'ENVIO') invoicedStoreMonths.add(`${store.id}|${item.code}|${inv.date.slice(0, 7)}`)
+      }
+    }
+    const supplementalStoreSales = realStoreSales.filter(sale =>
+      !invoicedStoreMonths.has(`${sale.tienda_id}|${sale.producto_sku}|${sale.fecha.slice(0, 7)}`))
+
     // 4. Aggregate sales per SKU per channel
     type Sales = { shopify: number; whatsapp: number; tiendas: number; ferias: number }
     const ventasPorSku = new Map<string, Sales>()
@@ -367,9 +375,6 @@ export async function GET(request: Request) {
 
       for (const it of inv.items || []) {
         if (!it.code || it.code === 'ENVIO') continue
-        // A real store sell-through record replaces the Siigo replenishment
-        // proxy for the same SKU/month; never add both.
-        if (invoiceStore && realStoreSalesBySkuMonth.has(`${invoiceStore.id}|${it.code}|${inv.date.slice(0, 7)}`)) continue
         let s = ventasPorSku.get(it.code)
         if (!s) {
           s = { shopify: 0, whatsapp: 0, tiendas: 0, ferias: 0 }
@@ -378,7 +383,7 @@ export async function GET(request: Request) {
         s[channel] += it.quantity || 0
       }
     }
-    for (const sale of realStoreSales) {
+    for (const sale of supplementalStoreSales) {
       if (!sale.producto_sku || sale.fecha < startDateStr || sale.fecha > endDateStr) continue
       const current = ventasPorSku.get(sale.producto_sku) || { shopify: 0, whatsapp: 0, tiendas: 0, ferias: 0 }
       current.tiendas += Math.max(0, Number(sale.cantidad) || 0)
@@ -397,10 +402,7 @@ export async function GET(request: Request) {
       }
     }
 
-    // Complete monthly history by SKU. Store invoices are the available
-    // replenishment proxy because ventas_terceros/consignaciones currently have
-    // no rows. They are already part of Siigo invoices, so no second store
-    // signal is added (which would duplicate demand).
+    // Complete monthly actual sales history, with Siigo as the primary source.
     const monthKey = (date: string) => date.slice(0, 7)
     const monthSequence: string[] = []
     const firstInvoiceMonth = uniqueInvoices.length
@@ -416,14 +418,12 @@ export async function GET(request: Request) {
     const skuMonthly = new Map<string, number[]>()
     const directSkuMonthly = new Map<string, number[]>()
     const storeSkuMonthly = new Map<string, Map<string, number[]>>()
-    const realStoreSkuMonthly = new Map<string, Map<string, number[]>>()
     for (const sku of stockBySku.keys()) {
       skuMonthly.set(sku, Array(monthSequence.length).fill(0))
       directSkuMonthly.set(sku, Array(monthSequence.length).fill(0))
     }
     for (const store of stores) {
       storeSkuMonthly.set(store.id, new Map([...stockBySku.keys()].map(sku => [sku, Array(monthSequence.length).fill(0)])))
-      realStoreSkuMonthly.set(store.id, new Map([...stockBySku.keys()].map(sku => [sku, Array(monthSequence.length).fill(0)])))
     }
     for (const inv of uniqueInvoices) {
       const index = monthIndex.get(monthKey(inv.date))
@@ -442,7 +442,6 @@ export async function GET(request: Request) {
       const invoiceStore = matchedStore
       for (const it of inv.items || []) {
         if (!it.code || it.code === 'ENVIO' || !stockBySku.has(it.code)) continue
-        if (invoiceStore && realStoreSalesBySkuMonth.has(`${invoiceStore.id}|${it.code}|${monthKey(inv.date)}`)) continue
         const qty = Math.max(0, Number(it.quantity) || 0)
         const series = skuMonthly.get(it.code)!
         series[index] += qty
@@ -452,7 +451,7 @@ export async function GET(request: Request) {
         } else directSkuMonthly.get(it.code)![index] += qty
       }
     }
-    for (const sale of realStoreSales) {
+    for (const sale of supplementalStoreSales) {
       if (!sale.producto_sku || !stockBySku.has(sale.producto_sku)) continue
       const index = monthIndex.get(monthKey(sale.fecha))
       if (index == null) continue
@@ -460,23 +459,17 @@ export async function GET(request: Request) {
       skuMonthly.get(sale.producto_sku)![index] += qty
       const storeSeries = storeSkuMonthly.get(sale.tienda_id)?.get(sale.producto_sku)
       if (storeSeries) storeSeries[index] += qty
-      const realSeries = realStoreSkuMonthly.get(sale.tienda_id)?.get(sale.producto_sku)
-      if (realSeries) realSeries[index] += qty
     }
 
     // Train only on completed months. Actual month-to-date sales are kept
     // separately and subtracted from this month's forecast, never from stock.
     const directMonthActual = new Map([...directSkuMonthly].map(([sku, series]) => [sku, series.at(-1) || 0]))
-    const realStoreMonthActual = new Map([...realStoreSkuMonthly].map(([id, rows]) =>
-      [id, new Map([...rows].map(([sku, series]) => [sku, series.at(-1) || 0]))],
-    ))
     const currentStoreObserved = new Map([...storeSkuMonthly].map(([id, rows]) =>
       [id, new Map([...rows].map(([sku, series]) => [sku, series.at(-1) || 0]))],
     ))
     monthSequence.pop()
     for (const rows of [skuMonthly, directSkuMonthly]) for (const series of rows.values()) series.pop()
     for (const rows of storeSkuMonthly.values()) for (const series of rows.values()) series.pop()
-    for (const rows of realStoreSkuMonthly.values()) for (const series of rows.values()) series.pop()
     const elapsedDays = Number(endDateStr.slice(8, 10))
     const calendarDays = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate()
 
@@ -490,6 +483,7 @@ export async function GET(request: Request) {
       list.push(sku)
       skusByReference.set(reference, list)
     }
+    const needsWithoutReserve = new Map<string, Array<{ date: string; quantity: number }>>()
     const needEventsBySku = new Map<string, Array<{ date: string; quantity: number; recoverableSafety?: number }>>()
     const dispatchesBySku = new Map<string, StoreDispatch[]>()
     const forecastDemandBySku = new Map<string, number>()
@@ -629,6 +623,9 @@ export async function GET(request: Request) {
           const periodStart = period.futureIndex == null ? endDateStr : `${period.month}-01`
           for (const daily of dailyDemand(units, periodStart, periodEnd)) {
             addTarget(sku, daily.quantity, new Date(`${daily.date}T12:00:00Z`))
+            const baseNeeds = needsWithoutReserve.get(sku) || []
+            baseNeeds.push(daily)
+            needsWithoutReserve.set(sku, baseNeeds)
           }
         }
       }
@@ -684,23 +681,22 @@ export async function GET(request: Request) {
         if (enoughHistory) validateSeries(storeTraining, 'tiendas')
         else validation.seriesSinEvaluar++
         const storeFuture = storeProjection.slice(1)
-        const storeActual = skus.reduce((sum, sku) => sum + (realStoreMonthActual.get(store.id)?.get(sku) || 0), 0)
-        const hasRealMonth = realStoreSales.some(sale => sale.tienda_id === store.id && sale.fecha.startsWith(lastHistoryMonth) && skus.includes(sale.producto_sku || ''))
+        const storeActual = skus.reduce((sum, sku) => sum + (currentStoreObserved.get(store.id)?.get(sku) || 0), 0)
         const storeCurrentMonth = storeFirst < 0 && storeActual > 0
           ? proratePartialMonth(storeActual, elapsedDays, calendarDays)
           : storeProjection[0] || 0
-        // Store shipment invoices are a replenishment proxy, not actual sales.
-        // Only recorded sell-through can be subtracted as month-to-date sales.
+        // Invoice sales already reduced Siigo stock: subtract them only from
+        // the remaining monthly demand, exactly once, in every calendar month.
         const storePeriodDemand = planningPeriods.map(period => Math.max(0, Math.round(
           period.futureIndex == null
-            ? hasRealMonth ? remainingMonthDemand(storeCurrentMonth, storeActual) : storeCurrentMonth * period.fraction
+            ? remainingMonthDemand(storeCurrentMonth, storeActual)
             : storeFuture[period.futureIndex] || 0,
         )))
         const monthlyExpected = storeFuture[0] || storeCurrentMonth
         const storeBuffer = Math.round(enoughHistory || storeAnnual.sources.includes('año anterior')
           ? safetyStock(storeModel, 1, monthlyExpected)
           : safetyStock(aggregateModel, 1, aggregateFuture[0] || 0) * share)
-        auditRows.push({ referencia: reference, canal: store.nombre, historial: monthSequence.map((mes, i) => ({ mes, pares: storeSeries[i] || 0 })), modelo: storeAnnual.sources.every(source => source === 'año anterior') ? 'mismo mes año anterior' : 'año anterior cuando existe; alternativa de tienda', mesesHistoria: storeTraining.length, meses: futureMonthKeys, fuentes: storeAnnual.sources, demanda: storePeriodDemand, reserva: storeBuffer, evidencia: enoughHistory ? 'historial de tienda (ventas o despachos como aproximación)' : 'historial escaso: proporción de tiendas, sin validación individual' })
+        auditRows.push({ referencia: reference, canal: store.nombre, historial: monthSequence.map((mes, i) => ({ mes, pares: storeSeries[i] || 0 })), modelo: storeAnnual.sources.every(source => source === 'año anterior') ? 'mismo mes año anterior' : 'año anterior cuando existe; alternativa de tienda', mesesHistoria: storeTraining.length, meses: futureMonthKeys, fuentes: storeAnnual.sources, demanda: storePeriodDemand, reserva: storeBuffer, evidencia: enoughHistory ? 'ventas de tienda facturadas en Siigo; registros manuales solo sin factura del SKU/mes' : 'historial escaso: proporción de tiendas, sin validación individual' })
         const storeSizeSeries = new Map<string, number[]>()
         for (const sku of skus) {
           const size = parseProductName(stockBySku.get(sku)?.product_name || '').size || sku
@@ -762,6 +758,12 @@ export async function GET(request: Request) {
             safetyAllocation.get(sku) || 0,
             initialStock,
           )
+          const baseReplenishments = monthlyStoreReplenishments(demandBySku.get(sku) || [], 0, initialStock)
+          const baseNeeds = needsWithoutReserve.get(sku) || []
+          baseReplenishments.forEach((quantity, index) => baseNeeds.push({
+            date: index === 0 ? endDateStr : `${planningPeriods[index].month}-01`, quantity,
+          }))
+          needsWithoutReserve.set(sku, baseNeeds)
           const firstDemand = demandBySku.get(sku)?.[0] || 0
           const safetyUnits = safetyAllocation.get(sku) || 0
           const safetyShortfallAfterDemand = Math.max(0, safetyUnits - Math.max(0, initialStock - firstDemand))
@@ -937,6 +939,11 @@ export async function GET(request: Request) {
         productionArrival,
       )
       const sugerenciaProduccion = coverage.production
+      // Counterfactual with identical sales, sizes, stock and arrival dates;
+      // only direct/store reserves are removed. This does not change policy.
+      const produccionSinReserva = coverageAtArrival(planningStock,
+        matchingPendingLines.filter(line => line.inTransit), needsWithoutReserve.get(sku) || [], productionArrival).production
+      const produccionPorReserva = sugerenciaProduccion - produccionSinReserva
       const faltanteAntesLlegada = coverage.shortageBeforeArrival
       if (coverage.firstShortageDate) diasHastaAgotamiento = Math.max(0, Math.round((Date.parse(coverage.firstShortageDate) - Date.parse(endDateStr)) / 86400000))
       const enCamino = matchingPendingLines.reduce(
@@ -978,6 +985,8 @@ export async function GET(request: Request) {
         enviosTiendas: dispatchesBySku.get(sku) || [],
         faltanteAntesLlegada,
         primeraFechaFaltante: coverage.firstShortageDate,
+        produccionSinReserva,
+        produccionPorReserva,
         sugerenciaProduccion,
         prioridad,
       })
@@ -1061,6 +1070,8 @@ export async function GET(request: Request) {
       altos: forecast.filter(f => f.prioridad === 'alta').length,
       medios: forecast.filter(f => f.prioridad === 'media').length,
       bajos: forecast.filter(f => f.prioridad === 'baja').length,
+      totalProduccionSinReserva: forecast.reduce((sum, f) => sum + f.produccionSinReserva, 0),
+      totalProduccionPorReserva: forecast.reduce((sum, f) => sum + f.produccionPorReserva, 0),
       totalProducirSugerido: forecast.reduce((sum, f) => sum + f.sugerenciaProduccion, 0),
       totalVentasPeriodo: forecast.reduce((sum, f) => sum + f.ventasTotal, 0),
       totalVentasOnline: forecast.reduce((sum, f) => sum + f.ventasShopify, 0),
@@ -1136,9 +1147,7 @@ export async function GET(request: Request) {
         historyStart: firstInvoiceMonth,
         historyMonths: monthSequence.length,
         stockoutHistory: 'inferred_size_gaps_only_no_historical_stock_snapshots',
-        storeDemand: realStoreSales.length
-          ? 'real_sell_through_replaces_same_sku_month_replenishment_proxy'
-          : 'siigo_store_invoices_as_replenishment_proxy_no_double_count',
+        storeDemand: 'siigo_invoices_are_actual_sales_manual_fallback_without_same_sku_month_invoice',
         stores: {
           active: stores.length,
           withWarehouse: stores.filter(store => store.siigo_warehouse_id != null).length,

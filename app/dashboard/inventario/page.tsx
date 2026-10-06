@@ -132,6 +132,8 @@ interface ForecastItem {
   enviosTiendas?: StoreDispatch[]
   faltanteAntesLlegada?: number
   primeraFechaFaltante?: string | null
+  produccionSinReserva?: number
+  produccionPorReserva?: number
   sugerenciaProduccion: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
 }
@@ -178,6 +180,8 @@ interface ForecastData {
     altos: number
     medios: number
     bajos: number
+    totalProduccionSinReserva?: number
+    totalProduccionPorReserva?: number
     totalProducirSugerido: number
     totalVentasPeriodo: number
     totalVentasOnline: number
@@ -400,7 +404,7 @@ export default function InventarioPage() {
     }
     const suggestFor = (f: ForecastItem): number => f.sugerenciaProduccion
 
-    // The downloaded workbook is an actionable production order: omit SKUs
+    // Export the production estimate for review: omit SKUs
     // that do not need units and sort references alphabetically.
     const orderedForecast = forecastData.forecast
       .filter(f => suggestFor(f) > 0)
@@ -434,6 +438,8 @@ export default function InventarioPage() {
       'Velocidad diaria': Number(f.velocidadDiaria.toFixed(2)),
       'Velocidad semanal': Number(f.velocidadSemanal.toFixed(2)),
       'Días hasta agotamiento': f.diasHastaAgotamiento ?? '∞',
+      'Producción sin reserva': f.produccionSinReserva ?? '',
+      'Producción adicional por reserva': f.produccionPorReserva ?? '',
       'Sugerencia producción': suggestFor(f),
       'Prioridad': PRIORIDAD_LABEL[f.prioridad] || f.prioridad,
     }))
@@ -1103,7 +1109,8 @@ export default function InventarioPage() {
                     {forecastData.validacion.porCanal?.map(row => <p key={row.canal}>{row.canal === 'directo' ? 'Online + WhatsApp' : 'Tiendas'}: {row.error == null ? 'sin evidencia suficiente' : `${(row.error * 100).toFixed(1)} % de error histórico`} ({row.series} series evaluadas).</p>)}
                     {(forecastData.validacion.errorModelo == null || (forecastData.validacion.errorBase != null && forecastData.validacion.errorModelo >= forecastData.validacion.errorBase)) && <p className="rounded border border-amber-300 bg-amber-50 p-3 font-medium">Estimación pendiente de revisión: la regla del año anterior no ha demostrado mejorar el promedio de tres meses en la prueba a cuatro meses. La cantidad calculada no debe tomarse como una orden de fabricación confirmada.</p>}
                     <p>{forecastData.validacion.seriesEvaluadas} combinaciones de referencia y canal evaluadas; {forecastData.validacion.seriesSinEvaluar} sin validación individual suficiente.</p>
-                    <p className="text-[#545454]">{forecastData.validacion.alcance} Las facturas a tiendas son una aproximación cuando no hay ventas al consumidor registradas. La sugerencia es una estimación, no una garantía de ventas.</p>
+                    {forecastData.resumen.totalProduccionSinReserva != null && <p className="rounded bg-amber-50 p-3 font-medium">Desglose de producción: {forecastData.resumen.totalProduccionSinReserva} pares para cubrir la demanda sin reserva + {forecastData.resumen.totalProduccionPorReserva} pares adicionales por reserva de seguridad = {forecastData.resumen.totalProducirSugerido} pares. Ambos cálculos descuentan stock y pedidos según talla y fecha de llegada.</p>}
+                    <p className="text-[#545454]">{forecastData.validacion.alcance} Las facturas de Siigo son ventas reales de las tiendas. Las ventas del mes en curso se descuentan de la demanda pendiente, sin volver a descontarlas del stock. La sugerencia es una estimación, no una garantía de ventas.</p>
                     {seasonalReview.length > 0 && <div className="rounded border border-amber-300 p-3">
                       <p className="font-medium">Temporada pendiente de validar</p>
                       <p className="mb-2">Estas referencias tuvieron ventas directas mayores el mismo mes del año pasado. Revisa si se está usando una alternativa por falta de historial comparable. Son ventas mensuales, antes de descontar inventario.</p>

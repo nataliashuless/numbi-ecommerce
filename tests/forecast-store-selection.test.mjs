@@ -66,7 +66,7 @@ test('store selection excludes invoices and sell-through without reclassifying d
   const all = await calculate('')
   const onlyB = await calculate('a')
   const none = await calculate('a,b')
-  assert.equal(all.forecast.find(row => row.sku === 'P20').ventasTiendas, 207)
+  assert.equal(all.forecast.find(row => row.sku === 'P20').ventasTiendas, 300)
   assert.equal(onlyB.forecast.find(row => row.sku === 'P20').ventasTiendas, 200)
   assert.equal(none.forecast.find(row => row.sku === 'P20').ventasTiendas, 0)
   for (const result of [all, onlyB, none]) {
@@ -283,4 +283,45 @@ test('endpoint uses previous November December and January and subtracts current
     assert.deepEqual(Array.from(row.fuentes), Array(4).fill('año anterior'))
     assert.equal(row.modelo, 'mismo mes año anterior')
   } finally { Object.assign(tables, original) }
+})
+
+
+test('Siigo store invoices reduce current demand once; manual duplicates cannot replace invoices', async () => {
+  const original = { ...tables }
+  try {
+    isolatedSupplyFixture()
+    tables.tiendas_terceros = [stores[0]]
+    tables.siigo_product_stock = [stock('P20', '20', 80), stock('P20', '20', 10, 30)]
+    tables.siigo_invoices = [...steadyHistory('111', 'P20', 100), invoice('current', '111', 20)]
+    tables.ventas_terceros = [{ tienda_id: 'a', producto_sku: 'P20', fecha: date, cantidad: 7 }]
+    const result = await calculate()
+    const audit = result.auditoria.find(row => row.canal === 'A')
+    assert.deepEqual(Array.from(audit.demanda), [80, 100, 100, 100])
+    assert.equal(result.forecast[0].stockBodega, 80)
+    assert.equal(result.forecast[0].ventasTiendas, 320)
+    assert.equal(result.resumen.totalProducirSugerido,
+      result.resumen.totalProduccionSinReserva + result.resumen.totalProduccionPorReserva)
+    assert.ok(result.forecast.every(row => row.produccionPorReserva >= 0))
+    tables.siigo_invoices.at(-1).items[0].quantity = 120
+    const over = await calculate()
+    assert.equal(over.auditoria.find(row => row.canal === 'A').demanda[0], 0)
+    assert.equal(over.forecast[0].stockBodega, 80)
+    tables.siigo_invoices.pop()
+    const manualFallback = await calculate()
+    assert.equal(manualFallback.auditoria.find(row => row.canal === 'A').demanda[0], 93)
+  } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
+})
+
+
+test('production breakdown isolates safety with the same sales and dated supply', async () => {
+  const original = { ...tables }
+  try {
+    isolatedSupplyFixture()
+    const noReserve = await calculate('', '&stock_seguridad=0')
+    const reserve = await calculate('', '&stock_seguridad=30')
+    assert.equal(noReserve.resumen.totalProduccionPorReserva, 0)
+    assert.equal(reserve.resumen.totalProduccionSinReserva, noReserve.resumen.totalProducirSugerido)
+    assert.ok(reserve.resumen.totalProduccionPorReserva > 0)
+    assert.equal(reserve.resumen.totalProducirSugerido, reserve.resumen.totalProduccionSinReserva + reserve.resumen.totalProduccionPorReserva)
+  } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
 })
