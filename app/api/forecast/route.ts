@@ -154,7 +154,7 @@ export async function GET(request: Request) {
     ? Math.min(365, Math.max(1, requestedLeadTime))
     : DEFAULT_PRODUCTION_LEAD_BUSINESS_DAYS
   const incluirEva = searchParams.get('incluir_eva') === 'true'
-  const stockSeguridad = parseInt(searchParams.get('stock_seguridad') || '7')
+  const stockSeguridad = parseInt(searchParams.get('stock_seguridad') || '0')
 
   const supabase = getAdminClient()
 

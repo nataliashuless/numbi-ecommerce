@@ -276,7 +276,7 @@ export default function InventarioPage() {
   // Forecast parameters
   const [diasAnalisis, setDiasAnalisis] = useState('90')
   const [leadTime, setLeadTime] = useState('52')
-  const [stockSeguridad, setStockSeguridad] = useState('7')
+  const [stockSeguridad, setStockSeguridad] = useState('0')
   // Store stock is already netted independently by location in the backend.
   // Never pool it here or subtract it a second time from production needs.
   const incluirConsignado = false
