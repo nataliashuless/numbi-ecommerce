@@ -18,6 +18,7 @@ import {
   hasCompleteOnlineSalesCoverage,
   hasCompleteShopifyCoverage,
   onlineMarketingChannel,
+  marketingProductItems,
   replaceSalesWithSiigoOnline,
 } from '@/lib/marketing/siigo-sales'
 import {
@@ -136,14 +137,17 @@ export async function GET(request: Request) {
       product_code: string | null
       warehouse_id: number
       quantity: number
+      account_group_id: number | null
     }>((from, to) => supabase
       .from('siigo_product_stock')
-      .select('product_code, warehouse_id, quantity')
-      .eq('account_group_id', PRODUCT_ACCOUNT_GROUP_ID)
+      .select('product_code, warehouse_id, quantity, account_group_id')
       .range(from, to))
 
     const stockBySku = new Map<string, StockBySku>()
+    const retailProductCodes = new Set(stockRows.filter(row => row.account_group_id === PRODUCT_ACCOUNT_GROUP_ID).map(row => (row.product_code || '').trim()))
+    const nonRetailProductCodes = new Set(stockRows.filter(row => row.account_group_id !== null && row.account_group_id !== PRODUCT_ACCOUNT_GROUP_ID).map(row => (row.product_code || '').trim()).filter(code => code && !retailProductCodes.has(code)))
     for (const row of stockRows) {
+      if (row.account_group_id !== PRODUCT_ACCOUNT_GROUP_ID) continue
       const sku = (row.product_code || '').trim()
       if (!sku) continue
       const stock = stockBySku.get(sku) || { sku, own: 0, total: 0 }
@@ -225,7 +229,7 @@ export async function GET(request: Request) {
       if (total <= 0 || (Number(invoice.credited_amount) || 0) >= total) continue
       const channel = onlineMarketingChannel(invoice, onlineSalesContext)
       if (!channel) continue
-      const productItems = (invoice.items || []).filter(item => item.code && item.code !== 'ENVIO' && (Number(item.quantity) || 0) > 0)
+      const productItems = marketingProductItems(invoice, nonRetailProductCodes)
       const invoiceItemTotal = productItems.reduce((sum, item) => {
         const quantity = Math.max(0, Number(item.quantity) || 0)
         return sum + Math.max(0, Number(item.total) || quantity * (Number(item.price) || 0))
@@ -376,7 +380,7 @@ export async function GET(request: Request) {
         `Los pedidos anteriores a julio de 2025 provienen de ${HISTORICAL_ORDERS_SOURCE}; desde julio de 2025 provienen de Shopify.`,
         `El archivo histórico tiene ${HISTORICAL_ORDER_MISSING_DATES.length} fechas sin dato (${HISTORICAL_ORDER_MISSING_DATES.join(', ')}); esos días no se interpretan como cero y los periodos que los incluyen no se consideran comparables.`,
         'AOV, unidades, clientes, productos, tallas y conversión provienen de Shopify y no deben interpretarse como el detalle completo de las ventas Siigo.',
-        'La gráfica mensual de unidades usa las líneas de factura Siigo. Bebé/Pequeños Caminantes corresponde a tallas 19–22 e Infantil/Exploradores a tallas 23–29, igual que las categorías de Shopify.',
+        'La gráfica mensual usa la fecha de factura Siigo, no la fecha del pedido o pago. Excluye envíos y códigos clasificados como materias primas u otros grupos distintos de producto terminado. Shopify se identifica por cruce de pedido o registro automático Moship; se excluyen ventas con notas explícitas de feria, incluso facturadas después del evento.',
         'Las notas crédito parciales no descuentan unidades porque no existe un cruce confiable por línea.',
         'Las ventas por diseño distribuyen proporcionalmente la venta neta de cada factura entre sus líneas de producto; así se conservan descuentos y notas crédito a nivel de factura.',
         'Los filtros ecommerce no modifican el total de ventas online identificado en Siigo.',

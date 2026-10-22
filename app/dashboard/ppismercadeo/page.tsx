@@ -533,7 +533,7 @@ function CategoryChannelUnitsChart({ report }: { report: MarketingExecutiveRepor
     <SectionTitle eyebrow="Categoría y canal" title="Unidades vendidas mes a mes" badge="Fuente: Siigo" />
     <Card className="border-0 shadow-sm">
       <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div><CardTitle className="text-lg text-[#172239]">Shuless.co vs WhatsApp</CardTitle><p className="mt-1 text-xs text-slate-500">Unidades facturadas cada mes. No son ventas en pesos.</p></div>
+        <div><CardTitle className="text-lg text-[#172239]">Shuless.co vs WhatsApp</CardTitle><p className="mt-1 text-xs text-slate-500">Unidades vendidas por mes de facturación Siigo. No es cantidad de pedidos.</p></div>
         <label className="flex items-center gap-2 text-sm font-semibold text-[#172239]">Categoría<select value={category} onChange={event => setRequestedCategory(event.target.value)} className="h-10 rounded-lg border bg-white px-3 font-normal"><option value={allProducts}>Todos los productos</option>{categories.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
       </CardHeader>
       <CardContent>
@@ -554,7 +554,7 @@ function CategoryChannelUnitsChart({ report }: { report: MarketingExecutiveRepor
             </BarChart>
           </ResponsiveContainer>
         </div>}
-        <p className="mt-3 text-xs text-slate-500">Bebé / Pequeños Caminantes: tallas 19–22. Infantil / Exploradores: tallas 23–29. Shuless.co se identifica por el pedido web; WhatsApp corresponde a facturas online directas. Tiendas y ferias no participan.</p>
+        <p className="mt-3 text-xs text-slate-500">Bebé / Pequeños Caminantes: tallas 19–22. Infantil / Exploradores: tallas 23–29. Shuless.co se identifica por el pedido Shopify o registro automático Moship; WhatsApp corresponde a facturas directas restantes. Se excluyen tiendas, ferias, envíos y materias primas. El mes usa la fecha de factura, que puede ser posterior al pedido o pago.</p>
       </CardContent>
     </Card>
   </section>

@@ -73,7 +73,18 @@ export function onlineMarketingChannel(
 
   const orderNumber = shopifyOrderNumber(invoice.observations)
   if (orderNumber !== null && context.shopifyOrderNumbers.has(orderNumber)) return 'web'
+  // Moship records the Shopify order explicitly, even if the order cache is incomplete.
+  if (orderNumber !== null && /registro\s+autom[aá]tico\s+moship\s+api\s+para\s+el\s+pedido/i.test(invoice.observations || '')) return 'web'
+  // Fair sales are often invoiced after the event and have no manual assignment yet.
+  if (/\bferia\b|\bplaytime\b/i.test(invoice.observations || '')) return null
   return isFeriaDate ? null : 'whatsapp'
+}
+
+export function marketingProductItems(invoice: CachedSiigoInvoice, nonRetailProductCodes: Set<string>) {
+  return (invoice.items || []).filter(item => {
+    const code = (item.code || '').trim()
+    return code && code !== 'ENVIO' && !nonRetailProductCodes.has(code) && (Number(item.quantity) || 0) > 0
+  })
 }
 
 export function replaceSalesWithSiigoOnline(
