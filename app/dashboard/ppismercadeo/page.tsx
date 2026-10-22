@@ -365,8 +365,10 @@ export default function MarketingPage() {
         <SimpleExecutiveSummary report={report} spend={spend} previousSpend={previousSpend} mer={mer} insights={insights} actions={simpleActions.slice(0, 3)} onOpenDetails={() => setShowDetails(true)} comparisonReliable={comparisonReliable} />
         {view === 'ytd' && <YtdComparison report={report} spend={spend} previousSpend={previousSpend} mer={mer} previousMer={previousMer} comparisonReliable={comparisonReliable} />}
         <CategoryChannelUnitsChart report={report} />
-        <DesignSalesChart report={report} />
-        <SizeSalesChart report={report} />
+        <div className="grid items-stretch gap-6 lg:grid-cols-2">
+          <DesignSalesChart report={report} />
+          <SizeSalesChart report={report} />
+        </div>
 
         <div className="flex justify-center">
           <Button variant="outline" size="lg" onClick={() => setShowDetails(!showDetails)} className="min-w-64 bg-white">
@@ -430,13 +432,13 @@ function SizeSalesChart({ report }: { report: MarketingExecutiveReport }) {
     .map((row, index) => ({ ...row, color: colors[row.name] || (row.name === 'Otras tallas' ? '#c5cee2' : DESIGN_COLORS[index % DESIGN_COLORS.length]) }))
   const total = data.reduce((sum, row) => sum + row.value, 0)
 
-  return <section className="space-y-4" aria-labelledby="size-sales-title">
+  return <section className="flex min-w-0 flex-col gap-4" aria-labelledby="size-sales-title">
     <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#168fc6]">Concentración de ventas</p><h2 id="size-sales-title" className="text-2xl font-bold text-[#172239]">Ventas por talla</h2></div>
-    <Card className="border-0 shadow-sm">
+    <Card className="flex-1 border-0 shadow-sm">
       <CardHeader><CardTitle className="text-lg text-[#172239]">Participación de cada talla</CardTitle><p className="text-xs text-slate-500">{readableRange(report.periods.current.start, report.periods.current.end)} · Ventas Shopify antes de IVA.</p></CardHeader>
       <CardContent>
-        {total <= 0 ? <p className="py-16 text-center text-sm text-slate-500">Dato no disponible para el periodo seleccionado.</p> : <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(240px,0.65fr)] lg:items-center">
-          <div className="h-[320px] min-w-0 sm:h-[460px]">
+        {total <= 0 ? <p className="py-16 text-center text-sm text-slate-500">Dato no disponible para el periodo seleccionado.</p> : <div className="grid min-w-0 gap-6">
+          <div className="h-[320px] min-w-0 sm:h-[360px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={data} dataKey="value" nameKey="name" startAngle={90} endAngle={-270} outerRadius="90%" stroke="none" labelLine={false} label={({ cx, cy, midAngle, innerRadius, outerRadius, percent: share }) => {
@@ -451,7 +453,7 @@ function SizeSalesChart({ report }: { report: MarketingExecutiveReport }) {
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1" aria-label="Participación de ventas por talla">{data.map(row => <li key={row.name} className="flex items-center justify-between gap-4 text-sm"><span className="flex items-center gap-3"><span className="h-5 w-5 shrink-0 rounded-full" style={{ backgroundColor: row.color }} /><span className="font-semibold text-[#183675]">{row.name}</span></span><span className="font-semibold text-slate-600">{percent(row.value / total)}</span></li>)}</ul>
+          <ul className="grid gap-3 sm:grid-cols-2" aria-label="Participación de ventas por talla">{data.map(row => <li key={row.name} className="flex items-center justify-between gap-4 text-sm"><span className="flex items-center gap-3"><span className="h-5 w-5 shrink-0 rounded-full" style={{ backgroundColor: row.color }} /><span className="font-semibold text-[#183675]">{row.name}</span></span><span className="font-semibold text-slate-600">{percent(row.value / total)}</span></li>)}</ul>
         </div>}
         <p className="mt-3 text-xs text-slate-500">Participación sobre el valor vendido de las tallas con ventas netas positivas. Respeta los filtros del reporte. Las nueve tallas principales se muestran individualmente; las demás se agrupan como “Otras tallas”.</p>
       </CardContent>
@@ -475,16 +477,16 @@ function DesignSalesChart({ report }: { report: MarketingExecutiveReport }) {
   const data = remaining > 0 ? [...top, { name: 'Otros diseños', value: remaining }] : top
   const total = data.reduce((sum, row) => sum + row.value, 0)
 
-  return <section className="space-y-4">
+  return <section className="flex min-w-0 flex-col gap-4">
     <SectionTitle eyebrow="Concentración de ventas" title="Ventas por diseño" badge="Antes de IVA · Siigo" />
-    <Card className="border-0 shadow-sm">
-      <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <Card className="flex-1 border-0 shadow-sm">
+      <CardHeader className="gap-4">
         <div><CardTitle className="text-lg text-[#172239]">Participación de cada diseño</CardTitle><p className="mt-1 text-xs text-slate-500">{year === currentYear ? `${year} acumulado hasta ${readableDate(report.periods.current.end)}` : `Año calendario ${year}`}.</p></div>
         <div className="flex flex-wrap gap-3"><label className="flex items-center gap-2 text-sm font-semibold text-[#172239]">Año<select value={year} onChange={event => setRequestedYear(event.target.value)} className="h-10 rounded-lg border bg-white px-3 font-normal">{years.map(item => <option key={item} value={item}>{item}</option>)}</select></label><label className="flex items-center gap-2 text-sm font-semibold text-[#172239]">Categoría<select value={category} onChange={event => setRequestedCategory(event.target.value)} className="h-10 rounded-lg border bg-white px-3 font-normal"><option value={allCategories}>Todas las categorías</option>{categories.map(item => <option key={item} value={item}>{item}</option>)}</select></label></div>
       </CardHeader>
       <CardContent>
-        {data.length === 0 || total <= 0 ? <p className="py-16 text-center text-sm text-slate-500">Dato no disponible para el periodo seleccionado.</p> : <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(240px,0.65fr)] lg:items-center">
-          <div className="h-[390px] w-full">
+        {data.length === 0 || total <= 0 ? <p className="py-16 text-center text-sm text-slate-500">Dato no disponible para el periodo seleccionado.</p> : <div className="grid min-w-0 gap-6">
+          <div className="h-[320px] min-w-0 sm:h-[360px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="82%" labelLine={false} label={({ percent }) => percent !== undefined && percent >= 0.04 ? `${(percent * 100).toFixed(1)}%` : ''}>
@@ -494,7 +496,7 @@ function DesignSalesChart({ report }: { report: MarketingExecutiveReport }) {
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">{data.map((row, index) => <div key={row.name} className="flex items-center justify-between gap-4 rounded-lg border px-3 py-2 text-sm"><span className="flex min-w-0 items-center gap-2"><span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: DESIGN_COLORS[index % DESIGN_COLORS.length] }} /><span className="truncate font-medium text-[#172239]">{row.name}</span></span><span className="shrink-0 text-xs font-semibold text-slate-500">{percent(row.value / total)}</span></div>)}</div>
+          <div className="grid gap-2 sm:grid-cols-2">{data.map((row, index) => <div key={row.name} className="flex items-center justify-between gap-4 rounded-lg border px-3 py-2 text-sm"><span className="flex min-w-0 items-center gap-2"><span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: DESIGN_COLORS[index % DESIGN_COLORS.length] }} /><span className="truncate font-medium text-[#172239]">{row.name}</span></span><span className="shrink-0 text-xs font-semibold text-slate-500">{percent(row.value / total)}</span></div>)}</div>
         </div>}
         <p className="mt-3 text-xs text-slate-500">Se muestran los 10 diseños con mayores ventas; los demás se agrupan como “Otros diseños”. Ventas online antes de IVA, con notas crédito descontadas.</p>
       </CardContent>
