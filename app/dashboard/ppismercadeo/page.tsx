@@ -366,6 +366,7 @@ export default function MarketingPage() {
         {view === 'ytd' && <YtdComparison report={report} spend={spend} previousSpend={previousSpend} mer={mer} previousMer={previousMer} comparisonReliable={comparisonReliable} />}
         <CategoryChannelUnitsChart report={report} />
         <DesignSalesChart report={report} />
+        <SizeSalesChart report={report} />
 
         <div className="flex justify-center">
           <Button variant="outline" size="lg" onClick={() => setShowDetails(!showDetails)} className="min-w-64 bg-white">
@@ -410,6 +411,53 @@ export default function MarketingPage() {
 }
 
 const DESIGN_COLORS = ['#7378f4', '#17356f', '#f7bb1b', '#ff5a2a', '#1f9d55', '#147d77', '#c62828', '#ea7ba7', '#40523d', '#70b7ec', '#a965ef']
+
+function SizeSalesChart({ report }: { report: MarketingExecutiveReport }) {
+  const colors: Record<string, string> = {
+    '21': '#7c7aff', '22': '#183675', '20': '#f8c817', '23': '#ff5a24',
+    '24': '#189b50', '19': '#147872', '25': '#c92128', '27': '#f184b1', '26': '#3d5339',
+  }
+  const buckets = new Map<string, number>()
+  for (const row of report.current.sizes) {
+    const name = row.size.trim() || 'Sin talla'
+    buckets.set(name, (buckets.get(name) || 0) + row.sales)
+  }
+  const sorted = Array.from(buckets, ([name, value]) => ({ name, value }))
+    .filter(row => row.value > 0).sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, 'es', { numeric: true }))
+  const top = sorted.slice(0, 9)
+  const remaining = sorted.slice(9).reduce((sum, row) => sum + row.value, 0)
+  const data = [...top, ...(remaining > 0 ? [{ name: 'Otras tallas', value: remaining }] : [])]
+    .map((row, index) => ({ ...row, color: colors[row.name] || (row.name === 'Otras tallas' ? '#c5cee2' : DESIGN_COLORS[index % DESIGN_COLORS.length]) }))
+  const total = data.reduce((sum, row) => sum + row.value, 0)
+
+  return <section className="space-y-4" aria-labelledby="size-sales-title">
+    <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#168fc6]">Concentración de ventas</p><h2 id="size-sales-title" className="text-2xl font-bold text-[#172239]">Ventas por talla</h2></div>
+    <Card className="border-0 shadow-sm">
+      <CardHeader><CardTitle className="text-lg text-[#172239]">Participación de cada talla</CardTitle><p className="text-xs text-slate-500">{readableRange(report.periods.current.start, report.periods.current.end)} · Ventas Shopify antes de IVA.</p></CardHeader>
+      <CardContent>
+        {total <= 0 ? <p className="py-16 text-center text-sm text-slate-500">Dato no disponible para el periodo seleccionado.</p> : <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(240px,0.65fr)] lg:items-center">
+          <div className="h-[320px] min-w-0 sm:h-[460px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={data} dataKey="value" nameKey="name" startAngle={90} endAngle={-270} outerRadius="90%" stroke="none" labelLine={false} label={({ cx, cy, midAngle, innerRadius, outerRadius, percent: share }) => {
+                  if (share === undefined || share < 0.04) return null
+                  const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.72
+                  const angle = -(midAngle ?? 0) * Math.PI / 180
+                  return <text x={Number(cx) + radius * Math.cos(angle)} y={Number(cy) + radius * Math.sin(angle)} textAnchor="middle" dominantBaseline="central" fill="#172239" fontWeight={700} fontSize={15}>{percent(share)}</text>
+                }}>
+                  {data.map(row => <Cell key={row.name} fill={row.color} />)}
+                </Pie>
+                <Tooltip formatter={(value, name) => [currency(Number(value)), `Talla ${name}`]} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1" aria-label="Participación de ventas por talla">{data.map(row => <li key={row.name} className="flex items-center justify-between gap-4 text-sm"><span className="flex items-center gap-3"><span className="h-5 w-5 shrink-0 rounded-full" style={{ backgroundColor: row.color }} /><span className="font-semibold text-[#183675]">{row.name}</span></span><span className="font-semibold text-slate-600">{percent(row.value / total)}</span></li>)}</ul>
+        </div>}
+        <p className="mt-3 text-xs text-slate-500">Participación sobre el valor vendido de las tallas con ventas netas positivas. Respeta los filtros del reporte. Las nueve tallas principales se muestran individualmente; las demás se agrupan como “Otras tallas”.</p>
+      </CardContent>
+    </Card>
+  </section>
+}
 
 function DesignSalesChart({ report }: { report: MarketingExecutiveReport }) {
   const allCategories = '__all__'
