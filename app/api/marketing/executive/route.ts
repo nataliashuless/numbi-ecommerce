@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAdminClient, requireAuth } from '@/lib/auth-helpers'
 import { withoutIva } from '@/lib/siigo-values'
+import { MARKETING_WEEKDAYS, marketingWeekday, normalizeMarketingCity } from '@/lib/marketing/distributions'
 import {
   addMonths,
   addProductComparisons,
@@ -223,6 +224,9 @@ export async function GET(request: Request) {
     )
     const categoryChannelBuckets = new Map<string, { month: string; category: string; web: number; whatsapp: number }>()
     const orderDates = new Map(orders.filter(order => order.raw?.order_number).map(order => [Number(order.raw!.order_number), isoDateInTimeZone(order.created_at)]))
+    const ordersByNumber = new Map(orders.filter(order => order.raw?.order_number).map(order => [Number(order.raw!.order_number), order]))
+    const weekdayUnits = new Map(MARKETING_WEEKDAYS.map(name => [name, 0]))
+    const cityUnits = new Map<string, number>()
     const saleDateCoverage = { undatedInvoices: 0, undatedUnits: 0 }
     const designSalesBuckets = new Map<string, { year: string; design: string; category: string; sales: number }>()
     for (const invoice of siigoInvoices) {
@@ -240,6 +244,14 @@ export async function GET(request: Request) {
         saleDateCoverage.undatedUnits += productItems.reduce((sum, item) => sum + Number(item.quantity), 0)
       }
       if (!belongsToCurrentPeriod && !belongsToDesignHistory) continue
+      if (belongsToCurrentPeriod && productItems.length > 0) {
+        const units = productItems.reduce((sum, item) => sum + Number(item.quantity), 0)
+        const weekday = marketingWeekday(saleDate!)
+        weekdayUnits.set(weekday, (weekdayUnits.get(weekday) || 0) + units)
+        const orderNumber = Number((invoice.observations || '').match(/#(\d+)/)?.[1])
+        const city = normalizeMarketingCity(ordersByNumber.get(orderNumber)?.raw?.shipping_address?.city)
+        cityUnits.set(city, (cityUnits.get(city) || 0) + units)
+      }
       const invoiceItemTotal = productItems.reduce((sum, item) => {
         const quantity = Math.max(0, Number(item.quantity) || 0)
         return sum + Math.max(0, Number(item.total) || quantity * (Number(item.price) || 0))
@@ -353,6 +365,8 @@ export async function GET(request: Request) {
       categoryChannelUnits: Array.from(categoryChannelBuckets.values()).sort((a, b) =>
         a.month.localeCompare(b.month) || a.category.localeCompare(b.category, 'es'),
       ),
+      salesByWeekday: Array.from(weekdayUnits, ([name, units]) => ({ name, units })).sort((a, b) => b.units - a.units),
+      salesByCity: Array.from(cityUnits, ([name, units]) => ({ name, units })).sort((a, b) => b.units - a.units || a.name.localeCompare(b.name, 'es')),
       saleDateCoverage,
       designSales: Array.from(designSalesBuckets.values()).sort((a, b) =>
         b.year.localeCompare(a.year) || b.sales - a.sales,

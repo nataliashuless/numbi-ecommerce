@@ -369,6 +369,7 @@ export default function MarketingPage() {
           <DesignSalesChart report={report} />
           <SizeSalesChart report={report} />
         </div>
+        <WeekdayCityCharts report={report} />
 
         <div className="flex justify-center">
           <Button variant="outline" size="lg" onClick={() => setShowDetails(!showDetails)} className="min-w-64 bg-white">
@@ -413,6 +414,47 @@ export default function MarketingPage() {
 }
 
 const DESIGN_COLORS = ['#7378f4', '#17356f', '#f7bb1b', '#ff5a2a', '#1f9d55', '#147d77', '#c62828', '#ea7ba7', '#40523d', '#70b7ec', '#a965ef']
+
+function WeekdayCityCharts({ report }: { report: MarketingExecutiveReport }) {
+  const weekdays = report.salesByWeekday || []
+  const cities = report.salesByCity || []
+  const total = weekdays.reduce((sum, row) => sum + row.units, 0)
+  const namedCities = cities.filter(row => row.name !== 'Sin ciudad registrada')
+  const top = namedCities.slice(0, 8)
+  const otherUnits = namedCities.slice(8).reduce((sum, row) => sum + row.units, 0)
+  const cityData = [...top, ...(otherUnits > 0 ? [{ name: 'Otras ciudades', units: otherUnits }] : []), ...cities.filter(row => row.name === 'Sin ciudad registrada')]
+  return <section className="space-y-4">
+    <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#168fc6]">Cuándo y dónde compran</p><h2 className="text-2xl font-bold text-[#172239]">Distribución de ventas</h2><p className="mt-1 text-xs text-slate-500">{readableRange(report.periods.current.start, report.periods.current.end)}</p></div><div className="rounded-xl border bg-white px-5 py-3"><p className="text-xs font-semibold uppercase text-slate-500">Gran total · unidades</p><p className="text-3xl font-bold text-[#183675]">{number(total)}</p></div></div>
+    <div className="grid items-stretch gap-6 lg:grid-cols-2">
+      <SalesDistributionChart title="Ventas por día de semana" data={weekdays} detail="Unidades con factura, por fecha real de venta en Colombia. Usa la misma base de Shopify y WhatsApp que la gráfica mensual; excluye ventas sin fecha verificable." />
+      <SalesDistributionChart title="Ventas por ciudad" data={cityData} detail="Ciudad de envío del pedido Shopify vinculado a la factura. Se unifican variantes como Bogotá y Bogota. Las ventas sin ciudad disponible, incluidas las de WhatsApp sin pedido vinculado, aparecen como “Sin ciudad registrada”." />
+    </div>
+  </section>
+}
+
+function SalesDistributionChart({ title, data, detail }: { title: string; data: Array<{ name: string; units: number }>; detail: string }) {
+  const total = data.reduce((sum, row) => sum + row.units, 0)
+  const color = (name: string, index: number) => name === 'Sin ciudad registrada' || name === 'Otras ciudades' ? '#c5cee2' : DESIGN_COLORS[index % DESIGN_COLORS.length]
+  return <Card className="min-w-0 border-0 shadow-sm">
+    <CardHeader><CardTitle className="text-xl text-[#172239]">{title}</CardTitle><p className="text-xs text-slate-500">Participación por unidades vendidas</p></CardHeader>
+    <CardContent>
+      {total <= 0 ? <p className="py-16 text-center text-sm text-slate-500">Dato no disponible para el período seleccionado.</p> : <>
+        <div className="h-[320px] min-w-0 sm:h-[360px]">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+            <PieChart>
+              <Pie data={data.filter(row => row.units > 0)} dataKey="units" nameKey="name" startAngle={90} endAngle={-270} outerRadius="85%" labelLine={false} label={({ percent: share }) => share !== undefined && share >= 0.04 ? percent(share) : ''}>
+                {data.filter(row => row.units > 0).map(row => <Cell key={row.name} fill={color(row.name, data.indexOf(row))} />)}
+              </Pie>
+              <Tooltip formatter={(value, name) => [`${number(Number(value))} unidades · ${percent(Number(value) / total)}`, String(name)]} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <ul className="grid gap-3 sm:grid-cols-2" aria-label={title}>{data.map((row, index) => <li key={row.name} className="flex items-start justify-between gap-2 text-sm"><span className="flex min-w-0 items-start gap-2"><span className="mt-1 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color(row.name, index) }} /><span className="font-medium text-[#183675]">{row.name}</span></span><span className="shrink-0 text-xs text-slate-500">{number(row.units)} · {percent(row.units / total)}</span></li>)}</ul>
+      </>}
+      <p className="mt-5 text-xs leading-5 text-slate-500">{detail}</p>
+    </CardContent>
+  </Card>
+}
 
 function SizeSalesChart({ report }: { report: MarketingExecutiveReport }) {
   const colors: Record<string, string> = {

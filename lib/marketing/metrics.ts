@@ -29,6 +29,7 @@ export interface ShopifyLineItemRaw {
 }
 
 export interface ShopifyOrderRaw {
+  shipping_address?: { city?: string | null; province?: string | null } | null
   order_number?: number
   created_at?: string
   processed_at?: string
@@ -164,6 +165,8 @@ export interface MarketingExecutiveReport {
   yearAgo: PeriodMetrics | null
   trend: Array<{ month: string; sales: number; orders: number; units: number; aov: number; newCustomers: number }>
   categoryChannelUnits: Array<{ month: string; category: string; web: number; whatsapp: number }>
+  salesByWeekday: Array<{ name: string; units: number }>
+  salesByCity: Array<{ name: string; units: number }>
   saleDateCoverage: { undatedInvoices: number; undatedUnits: number }
   designSales: Array<{ year: string; design: string; category: string; sales: number }>
   comparisons: Record<string, MetricComparison>
