@@ -7,6 +7,7 @@ import {
   aggregatePeriod,
   buildPeriods,
   comparison,
+  isoDateInTimeZone,
   type CachedShopifyOrder,
   type MarketingExecutiveReport,
   type MarketingFilters,
@@ -19,6 +20,7 @@ import {
   hasCompleteShopifyCoverage,
   onlineMarketingChannel,
   marketingProductItems,
+  marketingSaleDate,
   replaceSalesWithSiigoOnline,
 } from '@/lib/marketing/siigo-sales'
 import {
@@ -117,7 +119,8 @@ export async function GET(request: Request) {
         .from('siigo_invoices')
         .select('id, date, total, credited_amount, customer_identification, assigned_feria_id, observations, items, raw')
         .gte('date', siigoQueryStart)
-        .lte('date', periods.current.end)
+        // Include later invoices: their evidenced sale can belong to the selected period.
+        .lte('date', isoDateInTimeZone(new Date()))
         .order('date', { ascending: true })
         .range(from, to)),
       supabase.from('shopify_orders_sync_state').select('earliest_at, latest_at').eq('id', 1).maybeSingle(),
@@ -219,17 +222,24 @@ export async function GET(request: Request) {
       || (date >= periods.previous.start && date <= periods.previous.end),
     )
     const categoryChannelBuckets = new Map<string, { month: string; category: string; web: number; whatsapp: number }>()
+    const orderDates = new Map(orders.filter(order => order.raw?.order_number).map(order => [Number(order.raw!.order_number), isoDateInTimeZone(order.created_at)]))
+    const saleDateCoverage = { undatedInvoices: 0, undatedUnits: 0 }
     const designSalesBuckets = new Map<string, { year: string; design: string; category: string; sales: number }>()
     for (const invoice of siigoInvoices) {
       const date = invoice.date.slice(0, 10)
-      const belongsToCurrentPeriod = date >= periods.current.start && date <= periods.current.end
+      const saleDate = marketingSaleDate(invoice, orderDates)
+      const belongsToCurrentPeriod = saleDate !== null && saleDate >= periods.current.start && saleDate <= periods.current.end
       const belongsToDesignHistory = date >= designHistoryStart && date <= periods.current.end
-      if (!belongsToCurrentPeriod && !belongsToDesignHistory) continue
       const total = Number(invoice.total) || 0
       if (total <= 0 || (Number(invoice.credited_amount) || 0) >= total) continue
       const channel = onlineMarketingChannel(invoice, onlineSalesContext)
       if (!channel) continue
       const productItems = marketingProductItems(invoice, nonRetailProductCodes)
+      if (!saleDate && date >= periods.current.start && date <= periods.current.end && productItems.length > 0) {
+        saleDateCoverage.undatedInvoices += 1
+        saleDateCoverage.undatedUnits += productItems.reduce((sum, item) => sum + Number(item.quantity), 0)
+      }
+      if (!belongsToCurrentPeriod && !belongsToDesignHistory) continue
       const invoiceItemTotal = productItems.reduce((sum, item) => {
         const quantity = Math.max(0, Number(item.quantity) || 0)
         return sum + Math.max(0, Number(item.total) || quantity * (Number(item.price) || 0))
@@ -239,7 +249,7 @@ export async function GET(request: Request) {
         const quantity = Math.max(0, Number(item.quantity) || 0)
         const category = categoryFromDescription(item.description || '')
         if (belongsToCurrentPeriod) {
-          const month = date.slice(0, 7)
+          const month = saleDate!.slice(0, 7)
           const key = `${month}\u0000${category}`
           const bucket = categoryChannelBuckets.get(key) || { month, category, web: 0, whatsapp: 0 }
           bucket[channel] += quantity
@@ -343,6 +353,7 @@ export async function GET(request: Request) {
       categoryChannelUnits: Array.from(categoryChannelBuckets.values()).sort((a, b) =>
         a.month.localeCompare(b.month) || a.category.localeCompare(b.category, 'es'),
       ),
+      saleDateCoverage,
       designSales: Array.from(designSalesBuckets.values()).sort((a, b) =>
         b.year.localeCompare(a.year) || b.sales - a.sales,
       ),
@@ -380,7 +391,7 @@ export async function GET(request: Request) {
         `Los pedidos anteriores a julio de 2025 provienen de ${HISTORICAL_ORDERS_SOURCE}; desde julio de 2025 provienen de Shopify.`,
         `El archivo histórico tiene ${HISTORICAL_ORDER_MISSING_DATES.length} fechas sin dato (${HISTORICAL_ORDER_MISSING_DATES.join(', ')}); esos días no se interpretan como cero y los periodos que los incluyen no se consideran comparables.`,
         'AOV, unidades, clientes, productos, tallas y conversión provienen de Shopify y no deben interpretarse como el detalle completo de las ventas Siigo.',
-        'La gráfica mensual usa la fecha de factura Siigo, no la fecha del pedido o pago. Excluye envíos y códigos clasificados como materias primas u otros grupos distintos de producto terminado. Shopify se identifica por cruce de pedido o registro automático Moship; se excluyen ventas con notas explícitas de feria, incluso facturadas después del evento.',
+        'La gráfica mensual usa la fecha del pedido Shopify en Colombia o una fecha única de venta/pago en las notas Siigo. Las facturas sin fecha de venta verificable se informan por separado y no se asignan al mes de facturación. Excluye envíos, materias primas, tiendas y ferias, incluso facturadas después del evento.',
         'Las notas crédito parciales no descuentan unidades porque no existe un cruce confiable por línea.',
         'Las ventas por diseño distribuyen proporcionalmente la venta neta de cada factura entre sus líneas de producto; así se conservan descuentos y notas crédito a nivel de factura.',
         'Los filtros ecommerce no modifican el total de ventas online identificado en Siigo.',
@@ -391,7 +402,7 @@ export async function GET(request: Request) {
       formulas: [
         { metric: 'Ventas online netas antes de IVA', formula: '(Total factura Siigo - notas crédito aplicadas) / 1,19. Online = WooCommerce histórico (Mercado Pago) + Shopify (número de pedido) + WhatsApp (facturas directas no clasificadas como tienda o feria).', source: 'Siigo + identificación Shopify' },
         { metric: 'Pedidos online', formula: 'Suma diaria del archivo histórico antes de julio de 2025 + pedidos Shopify desde julio de 2025. Las fechas vacías se mantienen como dato faltante.', source: `${HISTORICAL_ORDERS_SOURCE} + Shopify` },
-        { metric: 'Unidades vendidas por mes, categoría y canal', formula: 'Suma de cantidades facturadas por mes. Categorías: Bebé/Pequeños Caminantes = tallas 19–22; Infantil/Exploradores = tallas 23–29. Shuless.co = factura con pedido web identificado; WhatsApp = factura online directa.', source: 'Siigo + categorías Shopify' },
+        { metric: 'Unidades vendidas por mes, categoría y canal', formula: 'Cantidades de producto facturado asignadas a la fecha del pedido Shopify (Colombia) o fecha única de venta/pago documentada en Siigo. Sin fecha verificable: excluidas de los meses e informadas por separado. No incluye pedidos aún sin factura.', source: 'Siigo + pedidos Shopify' },
         { metric: 'Ventas por diseño', formula: 'Venta online neta antes de IVA de cada factura, distribuida entre sus líneas según la participación de cada producto. Se descuentan notas crédito y se excluyen envíos, tiendas y ferias.', source: 'Siigo' },
         { metric: 'AOV ecommerce', formula: 'Ventas Shopify antes de IVA / pedidos Shopify con venta neta positiva.', source: 'Shopify' },
         { metric: 'Variación', formula: '(Periodo actual - periodo anterior) / valor absoluto del periodo anterior.', source: 'Cálculo interno' },

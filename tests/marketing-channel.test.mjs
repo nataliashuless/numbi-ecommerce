@@ -42,3 +42,25 @@ test('units exclude raw materials, shipping, missing codes and nonpositive quant
   assert.equal(actual.length, 2)
   assert.equal(actual.reduce((sum, item) => sum + item.quantity, 0), 3)
 })
+
+test('sale date uses the matched Shopify purchase date instead of invoice date', () => {
+  assert.equal(exports.marketingSaleDate(invoice({ observations: 'Pedido #2987', date: '2026-10-02' }), new Map([[2987, '2026-09-30']])), '2026-09-30')
+})
+test('late invoices are assigned to the documented sale month in both Spanish date orders', () => {
+  for (const observations of ['Compra FADA 22 Shuless Agosto 28 Via Nequi', 'Compra el 27 de agosto via BOLD', 'Pago 04/08/2026', 'Agosto 4 2026\n4 Pares Shuless']) {
+    assert.match(exports.marketingSaleDate(invoice({ date: '2026-09-16', observations }), new Map()), /^2026-08-/)
+  }
+})
+test('missing, invalid, future and conflicting dates never fall back to invoice date', () => {
+  for (const observations of ['', 'White 29 descuento 10%', '31 de febrero 2026', '28 de agosto 2027', '12 de diciembre y 19 de diciembre', 'Registro automático Moship API para el pedido #2420']) {
+    assert.equal(exports.marketingSaleDate(invoice({ observations }), new Map()), null, observations)
+  }
+})
+test('missing year resolves to the most recent past date, including previous December', () => {
+  assert.equal(exports.marketingSaleDate(invoice({ date: '2026-01-21', observations: 'Dic 28' }), new Map()), '2025-12-28')
+  assert.equal(exports.marketingSaleDate(invoice({ date: '2026-01-31', observations: '7 Enero 2025' }), new Map()), '2025-01-07')
+})
+
+test('shoe sizes on a previous line cannot be mistaken for a day of month', () => {
+  assert.equal(exports.marketingSaleDate(invoice({ date: '2026-09-16', observations: 'Sharky 21\nAgosto 20 2026\nNequi' }), new Map()), '2026-08-20')
+})

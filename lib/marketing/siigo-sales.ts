@@ -47,6 +47,33 @@ function shopifyOrderNumber(observations: string | null): number | null {
   return match ? Number(match[1]) : null
 }
 
+/** Return only evidenced sale dates; never silently substitute the invoice date. */
+export function marketingSaleDate(invoice: CachedSiigoInvoice, orderDates: Map<number, string>): string | null {
+  const orderNumber = shopifyOrderNumber(invoice.observations)
+  if (orderNumber !== null && orderDates.has(orderNumber)) return orderDates.get(orderNumber)!
+  const text = (invoice.observations || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/&amp;/g, '&').replace(/&#x2f;|&#47;/g, '/')
+  const invoiceDate = invoice.date.slice(0, 10)
+  const months: Record<string, number> = { ene: 1, enero: 1, feb: 2, febrero: 2, mar: 3, marzo: 3, abr: 4, abril: 4, may: 5, mayo: 5, jun: 6, junio: 6, jul: 7, julio: 7, ago: 8, agosto: 8, sep: 9, sept: 9, septiembre: 9, setiembre: 9, oct: 10, octubre: 10, nov: 11, noviembre: 11, dic: 12, diciembre: 12 }
+  const dates = new Set<string>()
+  let invalid = false
+  function add(day: number, month: number, explicitYear?: string) {
+    let year = explicitYear ? Number(explicitYear) : Number(invoiceDate.slice(0, 4))
+    if (explicitYear?.length === 2) year += 2000
+    const format = () => `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    if (!explicitYear && format() > invoiceDate) year -= 1
+    const date = format()
+    const parsed = new Date(`${date}T12:00:00Z`)
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date || date > invoiceDate || year < 2020) { invalid = true; return }
+    dates.add(date)
+  }
+  for (const match of text.matchAll(/\b(\d{1,2})[/-](\d{1,2})[/-](\d{4}|\d{2})\b/g)) add(Number(match[1]), Number(match[2]), match[3])
+  const monthPattern = Object.keys(months).sort((a, b) => b.length - a.length).join('|')
+  for (const match of text.matchAll(new RegExp(`\\b(\\d{1,2})[ \t]+(?:de[ \t]+)?(${monthPattern})\\b\\.?[ \t]*(?:(?:de|del)[ \t]+)?(20\\d{2})?`, 'g'))) add(Number(match[1]), months[match[2]], match[3])
+  for (const match of text.matchAll(new RegExp(`\\b(${monthPattern})\\b\\.?[ \t]+(\\d{1,2})\\b(?:[ \t]+(?:(?:de|del)[ \t]+)?(20\\d{2}))?`, 'g'))) add(Number(match[2]), months[match[1]], match[3])
+  return !invalid && dates.size === 1 ? [...dates][0] : null
+}
+
 export function isOnlineMarketingInvoice(
   invoice: CachedSiigoInvoice,
   context: OnlineSalesClassificationContext,

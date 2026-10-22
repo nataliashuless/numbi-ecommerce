@@ -533,10 +533,11 @@ function CategoryChannelUnitsChart({ report }: { report: MarketingExecutiveRepor
     <SectionTitle eyebrow="Categoría y canal" title="Unidades vendidas mes a mes" badge="Fuente: Siigo" />
     <Card className="border-0 shadow-sm">
       <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div><CardTitle className="text-lg text-[#172239]">Shuless.co vs WhatsApp</CardTitle><p className="mt-1 text-xs text-slate-500">Unidades vendidas por mes de facturación Siigo. No es cantidad de pedidos.</p></div>
+        <div><CardTitle className="text-lg text-[#172239]">Shuless.co vs WhatsApp</CardTitle><p className="mt-1 text-xs text-slate-500">Unidades con factura, por fecha real de venta. No es cantidad de pedidos.</p></div>
         <label className="flex items-center gap-2 text-sm font-semibold text-[#172239]">Categoría<select value={category} onChange={event => setRequestedCategory(event.target.value)} className="h-10 rounded-lg border bg-white px-3 font-normal"><option value={allProducts}>Todos los productos</option>{categories.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
       </CardHeader>
       <CardContent>
+        {report.saleDateCoverage?.undatedUnits > 0 && <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Sin fecha de venta verificable: {number(report.saleDateCoverage.undatedUnits)} unidades en {number(report.saleDateCoverage.undatedInvoices)} facturas emitidas en el período (todas las categorías). No se asignan a ningún mes hasta confirmar la fecha.</p>}
         {categories.length === 0 ? <p className="py-16 text-center text-sm text-slate-500">Dato no disponible para el periodo seleccionado.</p> : <div className="h-[340px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 24, right: 12, left: 0, bottom: 4 }}>
@@ -554,7 +555,7 @@ function CategoryChannelUnitsChart({ report }: { report: MarketingExecutiveRepor
             </BarChart>
           </ResponsiveContainer>
         </div>}
-        <p className="mt-3 text-xs text-slate-500">Bebé / Pequeños Caminantes: tallas 19–22. Infantil / Exploradores: tallas 23–29. Shuless.co se identifica por el pedido Shopify o registro automático Moship; WhatsApp corresponde a facturas directas restantes. Se excluyen tiendas, ferias, envíos y materias primas. El mes usa la fecha de factura, que puede ser posterior al pedido o pago.</p>
+        <p className="mt-3 text-xs text-slate-500">Bebé / Pequeños Caminantes: tallas 19–22. Infantil / Exploradores: tallas 23–29. Fecha de venta: pedido Shopify en hora de Colombia o fecha única de venta/pago documentada en las notas Siigo. Incluye facturas posteriores cuya venta corresponde al período. Se excluyen tiendas, ferias, envíos y materias primas. Los pedidos sin factura y las ventas sin fecha verificable no se incluyen en las barras.</p>
       </CardContent>
     </Card>
   </section>
