@@ -513,10 +513,15 @@ function DesignSalesChart({ report }: { report: MarketingExecutiveReport }) {
   const category = requestedCategory === allCategories || categories.includes(requestedCategory) ? requestedCategory : allCategories
   const year = years.includes(requestedYear) ? requestedYear : years[0] || currentYear
   const filtered = report.designSales.filter(row => row.year === year && (category === allCategories || row.category === category))
-  const sorted = [...filtered].sort((a, b) => b.sales - a.sales)
-  const top = sorted.slice(0, 10).map(row => ({ name: row.design, value: row.sales }))
-  const remaining = sorted.slice(10).reduce((sum, row) => sum + row.sales, 0)
-  const data = remaining > 0 ? [...top, { name: 'Otros diseños', value: remaining }] : top
+  const designs = new Map<string, { name: string; value: number }>()
+  for (const row of filtered) {
+    const key = row.design.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+    const design = designs.get(key) || { name: row.design, value: 0 }
+    design.value += row.sales
+    designs.set(key, design)
+  }
+  const data = Array.from(designs.values()).filter(row => row.value > 0).sort((a, b) => b.value - a.value)
+  const designColor = (index: number) => DESIGN_COLORS[index] || `hsl(${(index * 137.508) % 360} 55% 48%)`
   const total = data.reduce((sum, row) => sum + row.value, 0)
 
   return <section className="flex min-w-0 flex-col gap-4">
@@ -532,15 +537,15 @@ function DesignSalesChart({ report }: { report: MarketingExecutiveReport }) {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="82%" labelLine={false} label={({ percent }) => percent !== undefined && percent >= 0.04 ? `${(percent * 100).toFixed(1)}%` : ''}>
-                  {data.map((row, index) => <Cell key={row.name} fill={DESIGN_COLORS[index % DESIGN_COLORS.length]} />)}
+                  {data.map((row, index) => <Cell key={row.name} fill={designColor(index)} />)}
                 </Pie>
                 <Tooltip formatter={(value, name) => [currency(Number(value)), String(name)]} />
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">{data.map((row, index) => <div key={row.name} className="flex items-center justify-between gap-4 rounded-lg border px-3 py-2 text-sm"><span className="flex min-w-0 items-center gap-2"><span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: DESIGN_COLORS[index % DESIGN_COLORS.length] }} /><span className="truncate font-medium text-[#172239]">{row.name}</span></span><span className="shrink-0 text-xs font-semibold text-slate-500">{percent(row.value / total)}</span></div>)}</div>
+          <div className="grid max-h-[360px] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">{data.map((row, index) => <div key={row.name} className="flex items-center justify-between gap-4 rounded-lg border px-3 py-2 text-sm"><span className="flex min-w-0 items-center gap-2"><span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: designColor(index) }} /><span className="break-words font-medium text-[#172239]">{row.name}</span></span><span className="shrink-0 text-xs font-semibold text-slate-500">{percent(row.value / total)}</span></div>)}</div>
         </div>}
-        <p className="mt-3 text-xs text-slate-500">Se muestran los 10 diseños con mayores ventas; los demás se agrupan como “Otros diseños”. Ventas online antes de IVA, con notas crédito descontadas.</p>
+        <p className="mt-3 text-xs text-slate-500">Cada diseño aparece con su nombre y porcentaje, ordenado de mayor a menor venta. Desplázate por la leyenda para verlos todos. Ventas online antes de IVA, con notas crédito descontadas.</p>
       </CardContent>
     </Card>
   </section>
