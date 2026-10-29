@@ -8,4 +8,7 @@ export const marketingBusinessChannelRules = {
   mercadoPagoWooCommerceOnly: true,
   directPaymentsWhatsAppOnly: true,
   confirmedStoreInvoiceNames: new Set(['FV-2-2710', 'FV-2-2596']),
+  // Individual exceptions confirmed as Paraíso; do not infer a cash rule for other invoices.
+  confirmedParaisoInvoiceNames: new Set(['FV-2-2071', 'FV-2-2083', 'FV-2-2090', 'FV-2-2126', 'FV-2-2317', 'FV-2-2358', 'FV-2-2366', 'FV-2-2369', 'FV-2-1953']),
+  confirmedWhatsappInvoiceNames: new Set(['FV-2-4347']),
 }

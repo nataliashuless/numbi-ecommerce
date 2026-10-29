@@ -60,3 +60,11 @@ test('a consumer purchase at a shop is excluded individually but never turns all
   assert.equal(classifyMarketingInvoice(receipt, ctx).channel, 'tienda')
   assert.equal(classifyMarketingInvoice(inv({ customer_identification: '12345', observations: 'Pedido #100' }), { ...ctx, historicalStoreEvidence: evidence }).channel, 'shopify')
 })
+
+ test('final individual exceptions follow owner confirmation without classifying all cash as physical retail', async () => {
+  const { marketingBusinessChannelRules } = await import('../lib/marketing/business-channel-rules.ts')
+  const confirmed = { ...ctx, ...marketingBusinessChannelRules }
+  for (const name of marketingBusinessChannelRules.confirmedParaisoInvoiceNames) assert.equal(classifyMarketingInvoice(inv({ name }), confirmed).channel, 'tienda')
+  assert.equal(classifyMarketingInvoice(inv({ name: 'FV-2-4347' }), confirmed).channel, 'whatsapp')
+  assert.equal(classifyMarketingInvoice(inv({ observations: 'Pago efectivo' }), confirmed).channel, 'pending')
+})

@@ -1,6 +1,6 @@
 import type { CachedSiigoInvoice, OnlineSalesClassificationContext } from './siigo-sales'
 export type ReconciledChannel = 'woocommerce' | 'shopify' | 'whatsapp' | 'tienda' | 'feria' | 'pending'
-export interface ReconciliationContext extends OnlineSalesClassificationContext { whatsappInvoiceIds?: Set<string>; firstShopifyOrderDate?: string | null; mercadoPagoWooCommerceOnly?: boolean; historicalStoreEvidence?: Map<string, string>; directPaymentsWhatsAppOnly?: boolean; confirmedStoreInvoiceNames?: Set<string> }
+export interface ReconciliationContext extends OnlineSalesClassificationContext { whatsappInvoiceIds?: Set<string>; firstShopifyOrderDate?: string | null; mercadoPagoWooCommerceOnly?: boolean; historicalStoreEvidence?: Map<string, string>; directPaymentsWhatsAppOnly?: boolean; confirmedStoreInvoiceNames?: Set<string>; confirmedParaisoInvoiceNames?: Set<string>; confirmedWhatsappInvoiceNames?: Set<string> }
 export function normalizeCustomerId(value: string) { return value.toUpperCase().replace(/[^A-Z0-9]/g, '') }
 export function historicalStoreEvidence(invoices: CachedSiigoInvoice[]) {
   const evidence = new Map<string, string>()
@@ -16,6 +16,8 @@ export function historicalStoreEvidence(invoices: CachedSiigoInvoice[]) {
 export function classifyMarketingInvoice(invoice: CachedSiigoInvoice, context: ReconciliationContext): { channel: ReconciledChannel; reason: string } {
   const text = (invoice.observations || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   if (invoice.name && context.confirmedStoreInvoiceNames?.has(invoice.name)) return { channel: 'tienda', reason: 'Corrección confirmada por la dueña el 2026-10-29: factura Activetress asignada erróneamente a feria' }
+  if (invoice.name && context.confirmedParaisoInvoiceNames?.has(invoice.name)) return { channel: 'tienda', reason: 'Venta del punto Paraíso confirmada por la dueña el 2026-10-29; excluida de online' }
+  if (invoice.name && context.confirmedWhatsappInvoiceNames?.has(invoice.name)) return { channel: 'whatsapp', reason: 'Venta WhatsApp confirmada individualmente por la dueña el 2026-10-29' }
   const historicStore = context.historicalStoreEvidence?.get(normalizeCustomerId(invoice.customer_identification || ''))
   if (historicStore && invoice.assigned_feria_id) return { channel: 'tienda', reason: `${historicStore}; la evidencia de venta a distribuidor corrige la etiqueta de feria solo en esta conciliación` }
   if (invoice.assigned_feria_id) return { channel: 'feria', reason: 'Factura asignada a una feria' }
