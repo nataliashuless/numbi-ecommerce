@@ -9,6 +9,6 @@ export const marketingBusinessChannelRules = {
   directPaymentsWhatsAppOnly: true,
   confirmedStoreInvoiceNames: new Set(['FV-2-2710', 'FV-2-2596']),
   // Individual exceptions confirmed as Paraíso; do not infer a cash rule for other invoices.
-  confirmedParaisoInvoiceNames: new Set(['FV-2-2071', 'FV-2-2083', 'FV-2-2090', 'FV-2-2126', 'FV-2-2317', 'FV-2-2358', 'FV-2-2366', 'FV-2-2369', 'FV-2-1953']),
+  confirmedParaisoInvoiceNames: new Set(['FV-2-2071', 'FV-2-2083', 'FV-2-2090', 'FV-2-2126', 'FV-2-2317', 'FV-2-2358', 'FV-2-2366', 'FV-2-2369', 'FV-2-1953', 'FV-2-1920', 'FV-2-1923', 'FV-2-1929', 'FV-2-1959', 'FV-2-1958', 'FV-2-2340', 'FV-2-2341']),
   confirmedWhatsappInvoiceNames: new Set(['FV-2-4347']),
 }
