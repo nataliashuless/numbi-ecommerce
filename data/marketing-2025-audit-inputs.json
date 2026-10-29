@@ -1,0 +1,1115 @@
+{
+  "targets": [
+    {
+      "row": 40,
+      "invoiceCandidates": [],
+      "buyerHash": null,
+      "nameHash": "e0154439c15be3830165a1fbf416631fbdcb1ca596ec0fb9e5fa9300b8f945c5",
+      "emailHash": null,
+      "shipping": 7000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 394,
+      "invoiceCandidates": [
+        "FV-2-1765",
+        "FV-2-1766"
+      ],
+      "buyerHash": "8cdc9315aadcf47f5212f0c37516f20c3c50b03276a5712dde42f609e3e5ab5a",
+      "nameHash": "fbbda771c8cd3b5a5dbb3404f6dba2803813854f9589a042c35d6b561ade4e92",
+      "emailHash": "82efd4e0153c385bb1a21b0585567e3bee527e87d2f674b506aaea7a3072df03",
+      "shipping": 16500.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 395,
+      "invoiceCandidates": [],
+      "buyerHash": "105c06205ae508f0c0453024e6db5e6ca8bc119ad2defef018db8171468033e7",
+      "nameHash": "24bf1e0f66bef55aaa16a7c86b166e456578ea9c41a98c713a7d80992e9f392e",
+      "emailHash": "0b8039699c157d706e2228d137a72bef53449c07dc0df45598b566bd27005e99",
+      "shipping": 0.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 396,
+      "invoiceCandidates": [],
+      "buyerHash": "105c06205ae508f0c0453024e6db5e6ca8bc119ad2defef018db8171468033e7",
+      "nameHash": "24bf1e0f66bef55aaa16a7c86b166e456578ea9c41a98c713a7d80992e9f392e",
+      "emailHash": "0b8039699c157d706e2228d137a72bef53449c07dc0df45598b566bd27005e99",
+      "shipping": 0.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 442,
+      "invoiceCandidates": [],
+      "buyerHash": "1b373132a7e1b7115a590ca9652382500bc8c7c87e291d66227a304a6e4047e5",
+      "nameHash": "2b63adeae9cdabcd7a5e33ba36b2ed9450335d22bb425ebd7d9b473621d48e00",
+      "emailHash": "c42e084c9cb4d1cdcdfcbe9df5b4deef9b6fe075c718364c4716d72014b3abdb",
+      "shipping": 16500.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 466,
+      "invoiceCandidates": [
+        "FV-2-1812"
+      ],
+      "buyerHash": "a3970e6f189d44fdd82410bd0bb6d07acce51f53c074e90d39ab72d167491a10",
+      "nameHash": "1c9d9d64387a3bd35307f4108e2f81e3d92b5fc50a3ef57ad038f5c0b1099a7b",
+      "emailHash": "eec9174558b451c328996d820b67a009a87f52d2b3137ccef0e07f0be18f3be1",
+      "shipping": 16500.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 491,
+      "invoiceCandidates": [],
+      "buyerHash": "63239ee98b188dffcc35bfa500cb462f2e08ebd943e6bc02e5e9dd31d33d411f",
+      "nameHash": "08e08923c85337b1bfe499f079d20a8dd5616b7a430885d44008a8f259626f47",
+      "emailHash": "08ab39abd936971060c725b8dd56ef834d6c58fb29efaa21de3badaad519d29b",
+      "shipping": 16500.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 537,
+      "invoiceCandidates": [],
+      "buyerHash": "e1c14a7575f4b1f5f75e92e6923f33fd7ac99dcc10125d4f7a58a4898ed97467",
+      "nameHash": "aaa7b7ee7dfe4056364ea6cc5999f0cce5ab73b8952a7d7db8ee778e0bb79b11",
+      "emailHash": "a26b88e54c98fce193753bc31e7cf6c830afab25677cb4166e927d8c3bbad59c",
+      "shipping": 9000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 562,
+      "invoiceCandidates": [],
+      "buyerHash": "e2d79a22f9be80dfd20272dab3600aee8428f8dadf5041e3279a9a9d21d41c55",
+      "nameHash": "febe68f10a04923cb2880b860571acef1df4d57545a1350c60de356cda348eb3",
+      "emailHash": "04bec1213635bca163269bfc228083e45973957a19a92ea147da28f67ac9e8b7",
+      "shipping": 9000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 566,
+      "invoiceCandidates": [
+        "FV-2-1980"
+      ],
+      "buyerHash": "528906983ce63ebde6f09951f574efbd124f8db5420d1a7d8ba25f37373ca616",
+      "nameHash": "744e3d12fedb2dfd13dc581302a3901197f8fbe03a61602147ed7b0330d998be",
+      "emailHash": "c1ce73a9d21cd91f031ce8628ec622b8e875caafdda6b481019eab3cc4753273",
+      "shipping": 0.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 590,
+      "invoiceCandidates": [
+        "FV-2-1967"
+      ],
+      "buyerHash": "6aafd9e2251c8822c7566d7896894538fc7785399a94c1ce785041d2d271f1f8",
+      "nameHash": "f827d75154a79de63750cd31349c6c9541bbe23cd2ba8cb9cf081725232b1013",
+      "emailHash": "5aef229c5c56b4c6a2c2725b8563c6218c347b75a3f3b65a42f9389572dd0933",
+      "shipping": 16500.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 651,
+      "invoiceCandidates": [],
+      "buyerHash": "c9649ede8b45e5e525c8e839a9fa4febc7f1296a857b2470f413218afa65eae0",
+      "nameHash": "e167f5ccd2f4c0df5934996525c41e4d84d6a4916ae1b5ca6e72a35c8621ff83",
+      "emailHash": "3bd208b19b24b03ac7a8a6fe20e93621495e588dcffc6ac9ede22557a682e27d",
+      "shipping": 16000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 690,
+      "invoiceCandidates": [],
+      "buyerHash": "4c2bb2dc47a4a9cd34773174ff2298f5cb9235f72a8cf675e460a2c908ef8012",
+      "nameHash": "d59fc948bdbe6b3e237b8e2ad407224217fbd3c42c1acee7e9a4f2ece67b28e4",
+      "emailHash": "dacdd24faa1fbda7dc7850cee2af08ee896f753733a355927783a40c6b996869",
+      "shipping": 16500.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 693,
+      "invoiceCandidates": [],
+      "buyerHash": "6fdec206777ac3a3fac5ae0b7e04993bd0da2b9ea25eae03f2ca0ccb786347bd",
+      "nameHash": "4030eec85794371bec4807fff35c0164dc53e787d63efd359d903702ed9f48c5",
+      "emailHash": "6cb3a297b3c4f45c0a90b2fe0b66c225e41308f689608aed2849e3e3b721553e",
+      "shipping": 9000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 707,
+      "invoiceCandidates": [],
+      "buyerHash": "4a352b03ccb712e015acf86e68d986202ea72e9982401008a3c3664c4c611478",
+      "nameHash": "7b36a2d25c7ef3a8df35936f8eb9f38f59c0f4f887afefd47ed2ca7508741147",
+      "emailHash": null,
+      "shipping": 0.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 708,
+      "invoiceCandidates": [],
+      "buyerHash": "cbe313f8168fca5f006b9f8411916768aba5f73ae04fd6522c10611bb49a79f3",
+      "nameHash": "3d1d0dab66fab4beecaeab65722162b149cf97c6d8a8e3c441332d2ea29e88b4",
+      "emailHash": "9c6343d3c82dc91e821bac7590c039c25d0261fb3952b149e71ae65967931147",
+      "shipping": 9000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 718,
+      "invoiceCandidates": [],
+      "buyerHash": "5f15567ce5806403a724982a6c90d54b96562cded49c53cf928a6fde5e831342",
+      "nameHash": "6fa1bb7b8f2eead14595259e34272417fd602a58fcbe923dd0f882dbe4f3a0a2",
+      "emailHash": "f8f739cf2a3ce13f9a0a58a58bc775482b88b2cbe827cae00f2f519b544cb78b",
+      "shipping": 16500.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 733,
+      "invoiceCandidates": [],
+      "buyerHash": "81c93a8c2b71fb8a275937790c7c0196c6953f4104d15b8f3eb2942c71d9a51e",
+      "nameHash": "11c12460a927bf401ddc150e198a175744289e711f598cbbb4e5509c2b26a445",
+      "emailHash": "e89306fa80b3a4d8063b3baeff215dbdf283a7c76fbd232f1007428fc34b073a",
+      "shipping": 16500.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 772,
+      "invoiceCandidates": [],
+      "buyerHash": "6ff6364100ba6a073434816d47639fc44c0493a151fd3b90723212d9d040b072",
+      "nameHash": "ec4f287302922c51db4ed5b3aa237ed69ed5c612801d08559d293f2695c04623",
+      "emailHash": "bcef6ea4050092588c78303408a65921d1e7b2e375c07e419c016305040d271e",
+      "shipping": 0,
+      "explicitRefund": true,
+      "explicitFair": false
+    },
+    {
+      "row": 773,
+      "invoiceCandidates": [],
+      "buyerHash": "6ff6364100ba6a073434816d47639fc44c0493a151fd3b90723212d9d040b072",
+      "nameHash": "ec4f287302922c51db4ed5b3aa237ed69ed5c612801d08559d293f2695c04623",
+      "emailHash": "bcef6ea4050092588c78303408a65921d1e7b2e375c07e419c016305040d271e",
+      "shipping": 9000.0,
+      "explicitRefund": true,
+      "explicitFair": false
+    },
+    {
+      "row": 807,
+      "invoiceCandidates": [
+        "FV-2-2303"
+      ],
+      "buyerHash": "8ac3c23e7d1e9bb868a27f8f494df27755504731e44bdeb221ff518be01a756e",
+      "nameHash": "701ba2fe05002d7c2fd11628905f9f14cc7b131d54dbf8668d8af30de312e90b",
+      "emailHash": "4619fdfdc2ab7108bea2097be1e41a0334773607c851f20b085428294b6eaca1",
+      "shipping": 16500.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 943,
+      "invoiceCandidates": [
+        "FV-2-2637",
+        "FV-2-2786"
+      ],
+      "buyerHash": "82f7d195e5c11b5f4419b10abf6314f1b1d5bef77df22af9582ba723008ecb19",
+      "nameHash": "6e5105f1002b57fcb30e6e22406e007fe8b36964e281be5435417ece328dd3f1",
+      "emailHash": "089dac6899b859f134981acfc53f4de7c857af4ca42bc17833c4d429cc77324d",
+      "shipping": 9000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 946,
+      "invoiceCandidates": [],
+      "buyerHash": "d65d4fd5fbe2c774324dc220fd38ae179dc9fd08e3403bf7ac674c124676e402",
+      "nameHash": "7eccba1ee26aefe54969030955ee77d1bb36d049553c2b549aeee8adff1a8835",
+      "emailHash": "2ca05cf4812a13b9c6edeebb3daa8dcb1da1c28cb8288d481ffc379e46df1dc7",
+      "shipping": 0.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 951,
+      "invoiceCandidates": [],
+      "buyerHash": "d4a37484e590326bd8fb28f4007de021e60f9b586e1175a7cc064f48302e1090",
+      "nameHash": "9cd76f316c383a369a006123362d6f9145c100b4d3b3dc2d118fb851e2287619",
+      "emailHash": "d9171bfc60b587c7c4d1f4919b34023b8d3626171b999225b3266d6fcc70f3c1",
+      "shipping": 9000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 965,
+      "invoiceCandidates": [],
+      "buyerHash": "c6c0bdda274c293f1aa35ddf95b87ec6fecbfc05ac36707105f1552adbf404f5",
+      "nameHash": "d77335f8baf845a0f2d40db1c552515d1f7abc60ea8bfc0b4d23bea3b3203fd3",
+      "emailHash": "e39c9397b69373ff7e7092411801c3d0523c1d21441c9b85903083202a41572a",
+      "shipping": 0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1023,
+      "invoiceCandidates": [
+        "FV-2-2536"
+      ],
+      "buyerHash": null,
+      "nameHash": "e49eb38c1679a593b9d8496514d00931675c1d794e1f9dd5176355db706e3e9c",
+      "emailHash": "e3877a4eea0af2122af8a49317d165d4709606d81376c2a387aad1a06c715e1c",
+      "shipping": 0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1024,
+      "invoiceCandidates": [
+        "FV-2-2537"
+      ],
+      "buyerHash": "f730ce0b1a2386435e7a7bf7b12f36e283802fee1b6d710502304eb452c4983b",
+      "nameHash": "e983835626e84cd82a4695c8c5ea660b088d76496d5cd0368aa7588276b1f55b",
+      "emailHash": "6e5cfed46813f58dcff2201488c126d1f213e3d903b0fc6bb244bdca4b193d55",
+      "shipping": 0,
+      "explicitRefund": false,
+      "explicitFair": true
+    },
+    {
+      "row": 1028,
+      "invoiceCandidates": [],
+      "buyerHash": "610ac062378f498457a97841737f1055426f2e1504e674a453919bb6b754c498",
+      "nameHash": "3b28974ba0487aeecdf916c2e36b9297c455fe6b4f8b28eb21f73da1ef831f7c",
+      "emailHash": "c9ae2ed0f84b6b66b298a5e6852391194d8f00c5d570fc054e9def523ea6a8c9",
+      "shipping": 16500.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1041,
+      "invoiceCandidates": [
+        "FV-2-2553"
+      ],
+      "buyerHash": "5edef6115a7ae56d67b702a04dbabbe21e3ce826f5aa5a61376a602510861e94",
+      "nameHash": "60687fafc8b9eb86e5ae7c4932d66f3c6488f7e30e00dd35acd7843094b02a15",
+      "emailHash": "d34947debf5215c47c734cc831139a3465d3ad736a930ec603cd8104ac858c53",
+      "shipping": 0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1042,
+      "invoiceCandidates": [
+        "FV-2-2553"
+      ],
+      "buyerHash": "5edef6115a7ae56d67b702a04dbabbe21e3ce826f5aa5a61376a602510861e94",
+      "nameHash": "60687fafc8b9eb86e5ae7c4932d66f3c6488f7e30e00dd35acd7843094b02a15",
+      "emailHash": "d34947debf5215c47c734cc831139a3465d3ad736a930ec603cd8104ac858c53",
+      "shipping": 16500.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1108,
+      "invoiceCandidates": [],
+      "buyerHash": "746fba71f7ff294eddb69ac56874022f3c9d7405ae92f3125c385edf16e9d974",
+      "nameHash": "8608d62b7169787d94b54b6b7708b0b45a3b51d55df11d40e0aa066e7c892926",
+      "emailHash": "eef1397caa9f9596f938241bbc470f63c8d6c2f262734948984839a53d562ae4",
+      "shipping": 16500.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1116,
+      "invoiceCandidates": [],
+      "buyerHash": null,
+      "nameHash": "0477d307c4c00e5bc62fa60a3ca47c55fd6d7f1bc123da2af72185488a9d85dd",
+      "emailHash": "11f46e2167124ab3d0c19205e954613e0cf340d692ba1cff9086f22a4de4854e",
+      "shipping": 0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1152,
+      "invoiceCandidates": [
+        "FV-2-2690"
+      ],
+      "buyerHash": "ca0fde843ac68af88be9189a050f5481696d0beb9d97f65361eb30fd44241a63",
+      "nameHash": "d874d539e23053bc7cda5063ff6cd68886a5efcf30a9cab315cd6c3acc4909aa",
+      "emailHash": "b641c78ec35680ca045f8202a76b3a3a8b45682b1c7a55dc942fa5b32cb364ab",
+      "shipping": 9000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1155,
+      "invoiceCandidates": [],
+      "buyerHash": null,
+      "nameHash": "f3735c7ed1873d123f024c149f9798d5d1f1ba306c607eb8af76c214a3f556e7",
+      "emailHash": null,
+      "shipping": 0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1157,
+      "invoiceCandidates": [
+        "FV-2-2690"
+      ],
+      "buyerHash": "ca0fde843ac68af88be9189a050f5481696d0beb9d97f65361eb30fd44241a63",
+      "nameHash": "d874d539e23053bc7cda5063ff6cd68886a5efcf30a9cab315cd6c3acc4909aa",
+      "emailHash": "b641c78ec35680ca045f8202a76b3a3a8b45682b1c7a55dc942fa5b32cb364ab",
+      "shipping": 9000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1174,
+      "invoiceCandidates": [
+        "FV-2-2715"
+      ],
+      "buyerHash": "1b007ff4b9d76a8f0d9d1b81bfbbaef20a0f2be6422e8987197b1fcd8410bbb6",
+      "nameHash": "f4824e09421e4153119ddaf7b8c6700010c68a04c1ad72d7a220464914237ee4",
+      "emailHash": "4b0c7b48a2ba85e93c3e8d0bc6a385c42af3010131b4cea814ba0456098a6ed2",
+      "shipping": 16500.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1185,
+      "invoiceCandidates": [
+        "FV-2-2776"
+      ],
+      "buyerHash": "1a07f818a96ab40dc3c6c6d5b052eb56eae1cf5dc1b8fbe53169090cd1c328d2",
+      "nameHash": "4aa6bddc57a0618bab4c065280b95cfc9bf43766efc18115b40c9f000fb557b8",
+      "emailHash": "1fe39d509b27ab51711e20539b584db187a987bd5909ba100afc5690f77bba0d",
+      "shipping": 16500.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1199,
+      "invoiceCandidates": [],
+      "buyerHash": "069843d195bb3d5413a276c7762053409605b481bab2f0cbeb13df05bead7154",
+      "nameHash": "628acad9822dbfe3aa5da089ff4f7460f67b873ac428881e806ad0e0d5d1717f",
+      "emailHash": "eeddf80385429880cc444da3263c2a5cd7b199eb0806f55eefdf77e02452cc35",
+      "shipping": 16500.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1232,
+      "invoiceCandidates": [
+        "FV-2-2771"
+      ],
+      "buyerHash": "bc81deece1c0d01808459515458609ec0f22543795ffdb3d972c7bf3951a3e0e",
+      "nameHash": "b2dce83e6c2abebea57bec1c460558f27ab946d655da291a74276bba664e9b76",
+      "emailHash": "00d5546e05c47fa9cea3b7ff2c2594c9dc76ec385b163f4092224a18df8af943",
+      "shipping": 9000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1235,
+      "invoiceCandidates": [
+        "FV-2-2771"
+      ],
+      "buyerHash": "bc81deece1c0d01808459515458609ec0f22543795ffdb3d972c7bf3951a3e0e",
+      "nameHash": "b2dce83e6c2abebea57bec1c460558f27ab946d655da291a74276bba664e9b76",
+      "emailHash": "00d5546e05c47fa9cea3b7ff2c2594c9dc76ec385b163f4092224a18df8af943",
+      "shipping": 9000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1367,
+      "invoiceCandidates": [
+        "FV-2-2914"
+      ],
+      "buyerHash": "898129ef19840891f3dd7d24361f06357090c4f555c8c6b656052f15bf349373",
+      "nameHash": "5ccf0b647dcc30416ae14592b2f5b6bb0e4b89635d013cf758b926867585e806",
+      "emailHash": "c2dfce1fdd0d90d7aaee6e88f8b2e666b74ba871b0f3ed523d85d693761fcc49",
+      "shipping": 9000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1374,
+      "invoiceCandidates": [
+        "FV-2-3105"
+      ],
+      "buyerHash": "041c4e961d6f08a31009fb3affc56c35dc12a23f3b43394867d9e29613206134",
+      "nameHash": "8a7dbc984a3244dd5799b3c0e7e4c90adce7048e4e6d74d67c332611c2dbe96a",
+      "emailHash": "4aa3b69fd070db42759893a615d5352071bae651614f4945e11ae783fce58699",
+      "shipping": 8000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1387,
+      "invoiceCandidates": [
+        "FV-2-2934"
+      ],
+      "buyerHash": "4b4a80e92b979cc09366b36bd9483369849733996b55a93ace04076b3c58d1fb",
+      "nameHash": "fb76ec1cb66527a6de8a03fcb4d170980ae841310597c5a55f2ad0862f773bd8",
+      "emailHash": "bfcb9a0cf64ba70f0c6563b1011bf5b60f1e9de802f7b920626764b5b780f75b",
+      "shipping": 16500.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1389,
+      "invoiceCandidates": [
+        "FV-2-3291"
+      ],
+      "buyerHash": "041c4e961d6f08a31009fb3affc56c35dc12a23f3b43394867d9e29613206134",
+      "nameHash": "8a7dbc984a3244dd5799b3c0e7e4c90adce7048e4e6d74d67c332611c2dbe96a",
+      "emailHash": "4aa3b69fd070db42759893a615d5352071bae651614f4945e11ae783fce58699",
+      "shipping": 8000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1410,
+      "invoiceCandidates": [],
+      "buyerHash": "7c9a0b508ef95885bc06f4d4ae16be64e6d4fe9681007e2a2d19da0698c7488c",
+      "nameHash": "abe2648e584c49a336ffdc37f7ea94ef77f1e35ecdd82184062795b9724a7bdb",
+      "emailHash": "e005e242668561602873979612f221f3f13717a16d7661ce0ee5516b9a18fd55",
+      "shipping": 0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1448,
+      "invoiceCandidates": [
+        "FV-2-2951"
+      ],
+      "buyerHash": "4e31260b350a87582fa2ee558b517bb944e2c3ca537636e3fe2a9e3f9b71d5cd",
+      "nameHash": "0814321e60fe7e7c7a0e81b5500b06ce3e624b182ca7831deefc7697bd4f24de",
+      "emailHash": "91961731041808f9740b88256f08d080f72d0b82f9a562c9e7fa29f2dc01df95",
+      "shipping": 9000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1491,
+      "invoiceCandidates": [],
+      "buyerHash": "461dde9c8b0e31ed2ba385e8608a78e9ea113a86095124d3dfa30eea14c188b7",
+      "nameHash": "5caeb689b1fa649f256f625f4e419b6327e562966709400a4fac1431ace4c9fa",
+      "emailHash": "9f9f9a5115116145990dc4fbca6e2c58cc66352a245660ebe388f00196153a0f",
+      "shipping": 9000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1513,
+      "invoiceCandidates": [],
+      "buyerHash": "ba29311b0dc3fb5ae70f6e457ac530439c714724fd41d39936b7e52837f4425f",
+      "nameHash": "b39016a82e503975dc72ba5f1fa07e4382f75ab5faeb96dad801b984520005da",
+      "emailHash": "8c775840bd4ed03ad05c1512af85709ad3d06c6a5887c239aa5f9029889e0f6a",
+      "shipping": 16500.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1524,
+      "invoiceCandidates": [
+        "FV-2-3009"
+      ],
+      "buyerHash": "ebf0d85a2d2888bfd3f3d7f18b9f332252825a5deba47b78fcb4afc252d1c336",
+      "nameHash": "d090197e2ec2b89ffe88e17060930e34ebb78274b0c59073bc2a1fabd8efd864",
+      "emailHash": "365369691577fb1f01d2a68ebfeab87223a62aa0efdaa9b6f9746a8a06f18ff9",
+      "shipping": 9000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1617,
+      "invoiceCandidates": [
+        "FV-2-3085"
+      ],
+      "buyerHash": "1e08fb3e90a89ec7f5ead1afa16d604fdf5f8afe728b5fef0e37b526fbe81177",
+      "nameHash": "467ade4512cd7f04d66804783faeda699aecf3de18a819b9c42885b6441a893f",
+      "emailHash": "35db512db9c5ff65e91f1ff218e3621a939d34e020d8fc6140332a2150646d5b",
+      "shipping": 16500.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1650,
+      "invoiceCandidates": [
+        "FV-2-3363"
+      ],
+      "buyerHash": "55066acbf60604e8772b6ec594e40d5a0004856eba8a7c10852a01ae4867e734",
+      "nameHash": "3989520dc914fd7988b3ae77f7ffc01d241396f0c748dc6ea65eec4afe285180",
+      "emailHash": "f0cba7c771bae16ce2508c4485e5c73645af3c0689063dcdc0b802cc5e10030d",
+      "shipping": 9000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    },
+    {
+      "row": 1768,
+      "invoiceCandidates": [],
+      "buyerHash": "7498434048274de55d013efcede6d395218d25e9e0be21ae6550cb21c6bf46c7",
+      "nameHash": "616f6ea06757d1fe855caf763f7a11f7c69b0ab599df1c2b0c671823c40ffca5",
+      "emailHash": "85105b14a09016c2a12a7e69dbfd98609ece47936c49c6a909dc6c42a8ad3679",
+      "shipping": 9000.0,
+      "explicitRefund": false,
+      "explicitFair": false
+    }
+  ],
+  "fairInvoiceNames": [
+    "FV-2-1746",
+    "FV-2-1747",
+    "FV-2-1748",
+    "FV-2-1749",
+    "FV-2-1750",
+    "FV-2-1751",
+    "FV-2-1752",
+    "FV-2-1753",
+    "FV-2-1754",
+    "FV-2-1756",
+    "FV-2-1757",
+    "FV-2-1758",
+    "FV-2-1759",
+    "FV-2-1760",
+    "FV-2-1761",
+    "FV-2-1762",
+    "FV-2-1763",
+    "FV-2-1764",
+    "FV-2-1767",
+    "FV-2-1768",
+    "FV-2-1769",
+    "FV-2-1770",
+    "FV-2-1771",
+    "FV-2-1772",
+    "FV-2-1773",
+    "FV-2-1774",
+    "FV-2-1775",
+    "FV-2-1776",
+    "FV-2-1777",
+    "FV-2-1778",
+    "FV-2-1779",
+    "FV-2-1780",
+    "FV-2-1781",
+    "FV-2-1782",
+    "FV-2-1783",
+    "FV-2-1784",
+    "FV-2-1786",
+    "FV-2-1787",
+    "FV-2-1788",
+    "FV-2-1789",
+    "FV-2-1790",
+    "FV-2-1791",
+    "FV-2-1792",
+    "FV-2-1793",
+    "FV-2-1849",
+    "FV-2-1850",
+    "FV-2-1851",
+    "FV-2-1802",
+    "FV-2-1801",
+    "FV-2-1800",
+    "FV-2-1798",
+    "FV-2-1852",
+    "FV-2-1799",
+    "FV-2-1804",
+    "FV-2-1853",
+    "FV-2-1809",
+    "FV-2-1808",
+    "FV-2-1803",
+    "FV-2-1807",
+    "FV-2-1806",
+    "FV-2-1810",
+    "FV-2-1811",
+    "FV-2-1813",
+    "FV-2-1814",
+    "FV-2-1815",
+    "FV-2-1817",
+    "FV-2-1816",
+    "FV-2-1818",
+    "FV-2-1819",
+    "FV-2-1820",
+    "FV-2-1823",
+    "FV-2-1824",
+    "FV-2-1825",
+    "FV-2-1840",
+    "FV-2-1841",
+    "FV-2-1847",
+    "FV-2-2572",
+    "FV-2-2579",
+    "FV-2-2582",
+    "FV-2-2573",
+    "FV-2-2635",
+    "FV-2-2636",
+    "FV-2-2638",
+    "FV-2-2652",
+    "FV-2-2643",
+    "FV-2-2650",
+    "FV-2-3292",
+    "FV-2-3293",
+    "FV-2-3288",
+    "FV-2-3342",
+    "FV-2-3343",
+    "FV-2-3346",
+    "FV-2-3353",
+    "FV-2-3354",
+    "FV-2-3357",
+    "FV-2-3358",
+    "FV-2-3359",
+    "FV-2-3361",
+    "FV-2-3377",
+    "FV-2-3378",
+    "FV-2-3380"
+  ],
+  "fairInvoiceRows": [
+    {
+      "row": 375,
+      "invoice": "FV-2-1746"
+    },
+    {
+      "row": 376,
+      "invoice": "FV-2-1747"
+    },
+    {
+      "row": 377,
+      "invoice": "FV-2-1748"
+    },
+    {
+      "row": 378,
+      "invoice": "FV-2-1749"
+    },
+    {
+      "row": 379,
+      "invoice": "FV-2-1750"
+    },
+    {
+      "row": 380,
+      "invoice": "FV-2-1751"
+    },
+    {
+      "row": 381,
+      "invoice": "FV-2-1752"
+    },
+    {
+      "row": 382,
+      "invoice": "FV-2-1753"
+    },
+    {
+      "row": 383,
+      "invoice": "FV-2-1754"
+    },
+    {
+      "row": 385,
+      "invoice": "FV-2-1756"
+    },
+    {
+      "row": 386,
+      "invoice": "FV-2-1757"
+    },
+    {
+      "row": 387,
+      "invoice": "FV-2-1758"
+    },
+    {
+      "row": 388,
+      "invoice": "FV-2-1759"
+    },
+    {
+      "row": 389,
+      "invoice": "FV-2-1760"
+    },
+    {
+      "row": 390,
+      "invoice": "FV-2-1761"
+    },
+    {
+      "row": 391,
+      "invoice": "FV-2-1762"
+    },
+    {
+      "row": 392,
+      "invoice": "FV-2-1763"
+    },
+    {
+      "row": 393,
+      "invoice": "FV-2-1764"
+    },
+    {
+      "row": 397,
+      "invoice": "FV-2-1767"
+    },
+    {
+      "row": 398,
+      "invoice": "FV-2-1768"
+    },
+    {
+      "row": 399,
+      "invoice": "FV-2-1768"
+    },
+    {
+      "row": 400,
+      "invoice": "FV-2-1769"
+    },
+    {
+      "row": 401,
+      "invoice": "FV-2-1770"
+    },
+    {
+      "row": 402,
+      "invoice": "FV-2-1771"
+    },
+    {
+      "row": 403,
+      "invoice": "FV-2-1772"
+    },
+    {
+      "row": 404,
+      "invoice": "FV-2-1773"
+    },
+    {
+      "row": 405,
+      "invoice": "FV-2-1773"
+    },
+    {
+      "row": 406,
+      "invoice": "FV-2-1774"
+    },
+    {
+      "row": 407,
+      "invoice": "FV-2-1775"
+    },
+    {
+      "row": 408,
+      "invoice": "FV-2-1776"
+    },
+    {
+      "row": 409,
+      "invoice": "FV-2-1777"
+    },
+    {
+      "row": 410,
+      "invoice": "FV-2-1778"
+    },
+    {
+      "row": 411,
+      "invoice": "FV-2-1779"
+    },
+    {
+      "row": 412,
+      "invoice": "FV-2-1779"
+    },
+    {
+      "row": 413,
+      "invoice": "FV-2-1780"
+    },
+    {
+      "row": 414,
+      "invoice": "FV-2-1781"
+    },
+    {
+      "row": 415,
+      "invoice": "FV-2-1782"
+    },
+    {
+      "row": 416,
+      "invoice": "FV-2-1783"
+    },
+    {
+      "row": 417,
+      "invoice": "FV-2-1784"
+    },
+    {
+      "row": 419,
+      "invoice": "FV-2-1786"
+    },
+    {
+      "row": 420,
+      "invoice": "FV-2-1786"
+    },
+    {
+      "row": 421,
+      "invoice": "FV-2-1787"
+    },
+    {
+      "row": 422,
+      "invoice": "FV-2-1788"
+    },
+    {
+      "row": 423,
+      "invoice": "FV-2-1789"
+    },
+    {
+      "row": 424,
+      "invoice": "FV-2-1790"
+    },
+    {
+      "row": 425,
+      "invoice": "FV-2-1791"
+    },
+    {
+      "row": 426,
+      "invoice": "FV-2-1792"
+    },
+    {
+      "row": 427,
+      "invoice": "FV-2-1793"
+    },
+    {
+      "row": 428,
+      "invoice": "FV-2-1849"
+    },
+    {
+      "row": 429,
+      "invoice": "FV-2-1849"
+    },
+    {
+      "row": 430,
+      "invoice": "FV-2-1850"
+    },
+    {
+      "row": 431,
+      "invoice": "FV-2-1851"
+    },
+    {
+      "row": 432,
+      "invoice": "FV-2-1802"
+    },
+    {
+      "row": 433,
+      "invoice": "FV-2-1801"
+    },
+    {
+      "row": 434,
+      "invoice": "FV-2-1800"
+    },
+    {
+      "row": 435,
+      "invoice": "FV-2-1798"
+    },
+    {
+      "row": 436,
+      "invoice": "FV-2-1852"
+    },
+    {
+      "row": 437,
+      "invoice": "FV-2-1799"
+    },
+    {
+      "row": 438,
+      "invoice": "FV-2-1804"
+    },
+    {
+      "row": 439,
+      "invoice": "FV-2-1853"
+    },
+    {
+      "row": 447,
+      "invoice": "FV-2-1809"
+    },
+    {
+      "row": 449,
+      "invoice": "FV-2-1808"
+    },
+    {
+      "row": 450,
+      "invoice": "FV-2-1803"
+    },
+    {
+      "row": 451,
+      "invoice": "FV-2-1807"
+    },
+    {
+      "row": 452,
+      "invoice": "FV-2-1806"
+    },
+    {
+      "row": 462,
+      "invoice": "FV-2-1810"
+    },
+    {
+      "row": 464,
+      "invoice": "FV-2-1811"
+    },
+    {
+      "row": 470,
+      "invoice": "FV-2-1813"
+    },
+    {
+      "row": 474,
+      "invoice": "FV-2-1814"
+    },
+    {
+      "row": 476,
+      "invoice": "FV-2-1815"
+    },
+    {
+      "row": 482,
+      "invoice": "FV-2-1817"
+    },
+    {
+      "row": 483,
+      "invoice": "FV-2-1816"
+    },
+    {
+      "row": 485,
+      "invoice": "FV-2-1818"
+    },
+    {
+      "row": 486,
+      "invoice": "FV-2-1819"
+    },
+    {
+      "row": 487,
+      "invoice": "FV-2-1820"
+    },
+    {
+      "row": 492,
+      "invoice": "FV-2-1823"
+    },
+    {
+      "row": 493,
+      "invoice": "FV-2-1824"
+    },
+    {
+      "row": 494,
+      "invoice": "FV-2-1825"
+    },
+    {
+      "row": 499,
+      "invoice": "FV-2-1840"
+    },
+    {
+      "row": 500,
+      "invoice": "FV-2-1841"
+    },
+    {
+      "row": 505,
+      "invoice": "FV-2-1847"
+    },
+    {
+      "row": 752,
+      "invoice": "FV-2-2572"
+    },
+    {
+      "row": 778,
+      "invoice": "FV-2-2579"
+    },
+    {
+      "row": 805,
+      "invoice": "FV-2-2582"
+    },
+    {
+      "row": 894,
+      "invoice": "FV-2-2573"
+    },
+    {
+      "row": 941,
+      "invoice": "FV-2-2635"
+    },
+    {
+      "row": 942,
+      "invoice": "FV-2-2636"
+    },
+    {
+      "row": 944,
+      "invoice": "FV-2-2638"
+    },
+    {
+      "row": 964,
+      "invoice": "FV-2-2652"
+    },
+    {
+      "row": 996,
+      "invoice": "FV-2-2643"
+    },
+    {
+      "row": 1098,
+      "invoice": "FV-2-2650"
+    },
+    {
+      "row": 1391,
+      "invoice": "FV-2-3292"
+    },
+    {
+      "row": 1392,
+      "invoice": "FV-2-3292"
+    },
+    {
+      "row": 1393,
+      "invoice": "FV-2-3293"
+    },
+    {
+      "row": 1394,
+      "invoice": "FV-2-3293"
+    },
+    {
+      "row": 1396,
+      "invoice": "FV-2-3288"
+    },
+    {
+      "row": 1397,
+      "invoice": "FV-2-3288"
+    },
+    {
+      "row": 1400,
+      "invoice": "FV-2-3342"
+    },
+    {
+      "row": 1401,
+      "invoice": "FV-2-3343"
+    },
+    {
+      "row": 1405,
+      "invoice": "FV-2-3346"
+    },
+    {
+      "row": 1415,
+      "invoice": "FV-2-3353"
+    },
+    {
+      "row": 1416,
+      "invoice": "FV-2-3354"
+    },
+    {
+      "row": 1419,
+      "invoice": "FV-2-3357"
+    },
+    {
+      "row": 1420,
+      "invoice": "FV-2-3358"
+    },
+    {
+      "row": 1421,
+      "invoice": "FV-2-3359"
+    },
+    {
+      "row": 1423,
+      "invoice": "FV-2-3361"
+    },
+    {
+      "row": 1424,
+      "invoice": "FV-2-3377"
+    },
+    {
+      "row": 1425,
+      "invoice": "FV-2-3378"
+    },
+    {
+      "row": 1427,
+      "invoice": "FV-2-3380"
+    }
+  ]
+}

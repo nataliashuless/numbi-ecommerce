@@ -3,8 +3,10 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { createHash } from 'node:crypto'
 const cache = new Map()
 function load(name) {
+  if (name === 'node:crypto') return { createHash }
   if (name === '@/lib/siigo-values') return { withoutIva: n => n / 1.19 }
   const path = new URL(`../lib/marketing/${name.replace('./', '')}.ts`, import.meta.url)
   if (cache.has(path.href)) return cache.get(path.href)
@@ -82,6 +84,7 @@ function query(table) {
 const db = { from: query }
 const route = {}
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../app/api/marketing/executive/route.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: route, URL, Date, console, require(name) {
+  if (name === '@/data/marketing-2025-audit-inputs.json') return { default: { targets: [], fairInvoiceNames: [] } }
   if (name === '@/data/marketing-online-excel-2025.json') return { default: { from: '2025-01-01', to: '2025-12-31', rows: [] } }
   if (name === 'next/server') return { NextResponse: { json: (value, options) => ({ ...value, status: options?.status || 200 }) } }
   if (name === '@/lib/auth-helpers') return { requireAuth: async () => ({}), getAdminClient: () => db }
@@ -189,4 +192,24 @@ test('disputed 2025 online baseline suppresses growth without changing source un
   const sameYear = await route.GET({ url: 'https://example.test/api/marketing/executive?view=monthly&start_date=2026-09-01&end_date=2026-09-30&comparison=previous' })
   assert.equal(sameYear.unitComparisonReview, undefined)
   assert.equal(sameYear.comparability.units, true)
+})
+
+const { reconcileHistory } = load('history-reconciliation')
+const buyerHash = value => createHash('sha256').update(value).digest('hex')
+const auditRow = { row: 2, date: '2025-01-02', units: 1, design: 'Leo', size: '20', city: 'Cali', amount: 119, payment: 'Nequi', status: 'Enviado', invoice: 'FV-2-10', webOrder: '', flags: [] }
+const auditTarget = { row: 2, invoiceCandidates: ['FV-2-10'], buyerHash: buyerHash('buyer'), nameHash: buyerHash('privatebuyer'), emailHash: null, shipping: 0, explicitRefund: false, explicitFair: false }
+test('internal history reconciliation finds explicit replacement while keeping private buyer evidence off the report', () => {
+  const source = [{ ...base, id: 'void', name: 'FV-2-10', date: '2025-01-05', total: 119, credited_amount: 119, customer_identification: 'buyer' }, { ...base, id: 'new', name: 'FV-2-11', date: '2025-01-06', total: 119, customer_identification: 'buyer', observations: 'Reemplaza factura 10' }]
+  const result = reconcileHistory({ from: '2025-01-01', to: '2025-12-31', rows: [auditRow] }, { targets: [auditTarget], fairInvoiceNames: [] }, source, [], new Set())
+  assert.equal(result.decisions[0].decision, 'online'); assert.equal(result.decisions[0].replacement, 'FV-2-11')
+  assert.equal(JSON.stringify(result).includes(auditTarget.buyerHash), false)
+  assert.equal(JSON.stringify(result).includes('privatebuyer'), false)
+})
+test('paid Shopify evidence supersedes stale unpaid flags; cancelled orders and explicit refunds are excluded', () => {
+  const order = { id: 9, created_at: '2025-01-02T12:00:00Z', financial_status: 'paid', total_price: 119, raw: { order_number: 9, customer: { first_name: 'Private', last_name: 'Buyer' }, line_items: [{ title: 'Leo', variant_title: '20', quantity: 1 }] } }
+  const history = { from: '2025-01-01', to: '2025-12-31', rows: [{ ...auditRow, flags: ['unpaid'] }] }
+  const inputs = { targets: [auditTarget], fairInvoiceNames: [] }
+  assert.equal(reconcileHistory(history, inputs, [], [order], new Set()).decisions[0].decision, 'shopify')
+  assert.equal(reconcileHistory(history, inputs, [], [{ ...order, raw: { ...order.raw, cancelled_at: '2025-01-03' } }], new Set()).decisions[0].decision, 'excluded')
+  assert.equal(reconcileHistory(history, { ...inputs, targets: [{ ...auditTarget, explicitRefund: true }] }, [], [order], new Set()).decisions[0].decision, 'excluded')
 })

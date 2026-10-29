@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import excelHistory from '@/data/marketing-online-excel-2025.json'
+import historyAuditInputs from '@/data/marketing-2025-audit-inputs.json'
+import { reconcileHistory } from '@/lib/marketing/history-reconciliation'
 import { applyExcelHistory } from '@/lib/marketing/excel-history'
 import { directShopifyInvoices } from '@/lib/marketing/shopify-ledger'
 import { classifyMarketingInvoice } from '@/lib/marketing/channel-reconciliation'
@@ -172,6 +174,7 @@ export async function GET(request: Request) {
 
     const whatsappLinks = await loadPaged<{ siigo_invoice_id: string | null }>((from, to) => supabase.from('ventas_whatsapp').select('siigo_invoice_id').not('siigo_invoice_id', 'is', null).range(from, to))
     const reconciliationContext = { ...onlineSalesContext, ...marketingBusinessChannelRules, historicalStoreEvidence: historicalStoreEvidence(siigoInvoices), firstShopifyOrderDate: shopifyFrom, whatsappInvoiceIds: new Set(whatsappLinks.map(row => row.siigo_invoice_id).filter((id): id is string => Boolean(id))) }
+    const historyAudit = reconcileHistory(excelHistory, historyAuditInputs, siigoInvoices, orders, new Set([...marketingBusinessChannelRules.confirmedStoreInvoiceNames, ...marketingBusinessChannelRules.confirmedParaisoInvoiceNames]))
     const excel = applyExcelHistory(siigoInvoices, reconciliationContext, excelHistory)
     const unifiedInvoices = [...excel.invoices.filter(invoice => classifyMarketingInvoice(invoice, reconciliationContext).channel !== 'shopify'), ...directShopifyInvoices(orders)]
     const ledger = buildMarketingLedger(unifiedInvoices, orders, reconciliationContext, nonRetailProductCodes, filters, 'invoice')
@@ -292,6 +295,7 @@ export async function GET(request: Request) {
 
     const report: MarketingExecutiveReport = {
       source: 'Shopify directo + Excel no Shopify 2025 + WhatsApp Siigo 2026',
+      historyAudit,
       unitComparisonReview: pendingUnitsReview ? review : undefined,
       excelHistory: { from: excelHistory.from, to: excelHistory.to, missingValueUnits: missingExcelValues.reduce((sum, record) => sum + record.order.raw!.line_items!.reduce((n, item) => n + Number(item.quantity || 0), 0), 0) },
       currency: 'COP',
