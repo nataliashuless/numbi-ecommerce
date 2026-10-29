@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { presetDates } from '@/lib/marketing/global-filters'
 import {
   BarChart3, Boxes, ChevronDown, ChevronRight, ChevronUp, CircleDollarSign, FileText, Gauge, Loader2,
   LogOut, Megaphone, MessageCircle, Package, Plus, RefreshCw, ShoppingCart,
@@ -177,6 +178,11 @@ function previousMetaItem(item: MetaItem, previous: MetaResponse | null): MetaIt
 }
 
 export default function MarketingPage() {
+  const [preset, setPreset] = useState('ytd')
+  const [comparisonMode, setComparisonMode] = useState('year')
+  const [category, setCategory] = useState('')
+  const [city, setCity] = useState('')
+  const requestVersion = useRef(0)
   const [view, setView] = useState<MarketingView>('ytd')
   const [report, setReport] = useState<MarketingExecutiveReport | null>(null)
   const [loading, setLoading] = useState(true)
@@ -220,15 +226,15 @@ export default function MarketingPage() {
       const metaUrl = (period: { start: string; end: string }, level: string, daily = false) => `/api/meta/insights?start_date=${period.start}&end_date=${period.end}&level=${level}${daily ? '&daily=true' : ''}`
       const responses = await Promise.all([
         fetch(metaUrl(current, 'campaign')).then(response => response.json()),
-        fetch(metaUrl(previous, 'campaign')).then(response => response.json()),
+        nextReport.filters.comparisonMode === 'none' ? Promise.resolve({}) : fetch(metaUrl(previous, 'campaign')).then(response => response.json()),
         fetch(metaUrl(current, 'ad')).then(response => response.json()),
-        fetch(metaUrl(previous, 'ad')).then(response => response.json()),
+        nextReport.filters.comparisonMode === 'none' ? Promise.resolve({}) : fetch(metaUrl(previous, 'ad')).then(response => response.json()),
         fetch(metaUrl(current, 'adset')).then(response => response.json()),
         fetch(metaUrl(current, 'account', true)).then(response => response.json()),
       ])
       const responseError = responses.find(response => response?.error)?.error || null
       setMetaError(responseError)
-      setMetaCurrent({ ...responses[0], daily: responses[5]?.daily || [] }); setMetaPrevious(responses[1]); setMetaAds(responses[2]); setMetaAdsPrevious(responses[3]); setMetaAdsets(responses[4])
+      setMetaCurrent({ ...responses[0], daily: responses[5]?.daily || [] }); setMetaPrevious(nextReport.filters.comparisonMode === 'none' ? null : responses[1]); setMetaAds(responses[2]); setMetaAdsPrevious(responses[3]); setMetaAdsets(responses[4])
     } else {
       setMetaError(null)
       setMetaCurrent(null); setMetaPrevious(null); setMetaAds(null); setMetaAdsPrevious(null); setMetaAdsets(null)
@@ -237,16 +243,19 @@ export default function MarketingPage() {
     if (nextReport.availability.ga4) {
       const [currentGa, previousGa] = await Promise.all([
         fetch(`/api/ga4/insights?start_date=${current.start}&end_date=${current.end}`).then(response => response.json()),
-        fetch(`/api/ga4/insights?start_date=${previous.start}&end_date=${previous.end}`).then(response => response.json()),
+        nextReport.filters.comparisonMode === 'none' ? Promise.resolve(null) : fetch(`/api/ga4/insights?start_date=${previous.start}&end_date=${previous.end}`).then(response => response.json()),
       ])
       setGa4Current(currentGa); setGa4Previous(previousGa)
     } else { setGa4Current(null); setGa4Previous(null) }
   }
 
   async function fetchReport() {
+    const version = ++requestVersion.current
     setLoading(true); setError(null)
-    const params = new URLSearchParams({ view, customer_type: customerType })
+    const params = new URLSearchParams({ view, comparison: comparisonMode })
     if (startDate && endDate) { params.set('start_date', startDate); params.set('end_date', endDate) }
+    if (category) params.set('category', category)
+    if (city) params.set('city', city)
     if (channel) params.set('channel', channel)
     if (product) params.set('product', product)
     if (size) params.set('size', size)
@@ -259,12 +268,13 @@ export default function MarketingPage() {
       const response = await fetch(`/api/marketing/executive?${params}`)
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'No fue posible cargar Marketing')
+      if (version !== requestVersion.current) return
       setReport(payload)
       await fetchSupportingData(payload).catch(() => {
         setMetaError('No fue posible actualizar Meta en este momento. El reporte de Siigo continúa disponible.')
       })
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Error desconocido') }
-    finally { setLoading(false) }
+    finally { if (version === requestVersion.current) setLoading(false) }
   }
 
   useEffect(() => {
@@ -277,7 +287,7 @@ export default function MarketingPage() {
     fetchReport()
     // Filters are applied explicitly with the Actualizar button.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view])
+  }, [view, startDate, endDate, channel, category, product, size, city, comparisonMode])
 
   async function saveObjectives() {
     const response = await fetch('/api/marketing/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ objectives }) })
@@ -358,12 +368,12 @@ export default function MarketingPage() {
     <DashboardHeader />
     <main className="container mx-auto space-y-6 px-4 py-7">
       <section className="overflow-hidden rounded-2xl bg-[#172239] text-white shadow-sm"><div className="grid gap-6 px-6 py-7 lg:grid-cols-[1fr_auto] lg:items-end"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#54c3f1]">Resumen para socias</p><h1 className="mt-2 text-3xl font-bold tracking-tight">Cómo va el negocio</h1><p className="mt-2 max-w-2xl text-sm text-slate-300">Lo esencial para saber cuánto vendimos, cuánto invertimos y qué debemos revisar. Los números técnicos están disponibles, pero no estorban la lectura.</p></div><div className="flex flex-wrap gap-2"><Button onClick={() => setShowAnnotation(true)} variant="outline" className="border-white/20 bg-white/5 text-white hover:bg-white/10"><Plus className="mr-2 h-4 w-4" />Registrar evento</Button><Button onClick={() => setShowSettings(true)} className="bg-[#26a9e8] text-white hover:bg-[#1598d7]"><Target className="mr-2 h-4 w-4" />Definir metas</Button></div></div></section>
-      <FilterBar view={view} setView={setView} startDate={startDate} setStartDate={setStartDate} endDate={endDate} setEndDate={setEndDate} channel={channel} setChannel={setChannel} product={product} setProduct={setProduct} size={size} setSize={setSize} customerType={customerType} setCustomerType={setCustomerType} report={report} loading={loading} refresh={fetchReport} expanded={showFilters} setExpanded={setShowFilters} />
+      <FilterBar preset={preset} setPreset={setPreset} comparisonMode={comparisonMode} setComparisonMode={setComparisonMode} category={category} setCategory={setCategory} city={city} setCity={setCity} view={view} setView={setView} startDate={startDate} setStartDate={setStartDate} endDate={endDate} setEndDate={setEndDate} channel={channel} setChannel={setChannel} product={product} setProduct={setProduct} size={size} setSize={setSize} customerType={customerType} setCustomerType={setCustomerType} report={report} loading={loading} refresh={fetchReport} expanded={showFilters} setExpanded={setShowFilters} />
 
       {loading ? <div className="flex items-center justify-center py-24 text-slate-500"><Loader2 className="mr-3 h-7 w-7 animate-spin" />Construyendo reporte…</div> : error ? <Card className="border-rose-200 bg-rose-50"><CardContent className="p-6 text-rose-800">{error}</CardContent></Card> : report && <>
         {metaError && <Card className="border-rose-200 bg-rose-50"><CardContent className="flex flex-col gap-3 p-5 text-rose-900 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">Meta Ads necesita reconexión</p><p className="mt-1 text-sm">{metaError.includes('Session has expired') ? 'El token de acceso venció. Gasto, campañas y anuncios no se pueden consultar hasta renovarlo.' : metaError}</p></div><Link href="/dashboard/configuracion"><Button variant="outline" className="border-rose-300 bg-white text-rose-900">Ir a configuración</Button></Link></CardContent></Card>}
         <SimpleExecutiveSummary report={report} spend={spend} previousSpend={previousSpend} mer={mer} insights={insights} actions={simpleActions.slice(0, 3)} onOpenDetails={() => setShowDetails(true)} comparisonReliable={comparisonReliable} />
-        {view === 'ytd' && <YtdComparison report={report} spend={spend} previousSpend={previousSpend} mer={mer} previousMer={previousMer} comparisonReliable={comparisonReliable} />}
+        {comparisonMode !== 'none' && <YtdComparison report={report} spend={spend} previousSpend={previousSpend} mer={mer} previousMer={previousMer} comparisonReliable={comparisonReliable} />}
         <CategoryChannelUnitsChart report={report} />
         <div className="grid items-stretch gap-6 lg:grid-cols-2">
           <DesignSalesChart report={report} />
@@ -380,17 +390,17 @@ export default function MarketingPage() {
 
         {showDetails && <>
         <section id="gerencia" className="space-y-4"><SectionTitle eyebrow="01 · Resultado" title="Gerencia en 30 segundos" badge={report.periods.current.label} /><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiCard label="Ventas netas antes de IVA" source="Siigo" value={report.current.netSales} previous={report.previous.netSales} change={report.comparisons.netSales.change} format={currency} sufficient={sufficient} />
+          <KpiCard label="Ventas netas antes de IVA" source="Siigo" value={report.current.netSales} previous={report.filters.comparisonMode === 'none' ? null : report.previous.netSales} change={report.comparisons.netSales.change} format={currency} sufficient={sufficient} />
           <KpiCard label="Gasto Meta" source="Meta Ads" value={spend} previous={previousSpend} change={spend !== null && previousSpend ? (spend - previousSpend) / previousSpend : null} format={currency} sufficient={sufficient} />
           <KpiCard label="MER" source="Ventas reales ÷ Meta" value={mer} previous={previousMer} change={mer !== null && previousMer && comparisonReliable ? (mer - previousMer) / previousMer : null} target={objectives.merMin} tolerancePct={tolerance} format={ratio} sufficient={sufficient} />
           <KpiCard label="ROAS Meta" source="Atribución Meta" value={metaCurrent?.totals?.roas ?? null} previous={metaPrevious?.totals?.roas ?? null} change={metaCurrent?.totals?.roas != null && metaPrevious?.totals?.roas ? (metaCurrent.totals.roas - metaPrevious.totals.roas) / metaPrevious.totals.roas : null} target={objectives.roasMin} tolerancePct={tolerance} format={ratio} sufficient={sufficient} />
           <KpiCard label="CAC cliente nuevo" source="Meta + primer pedido Shopify" value={null} previous={null} change={null} target={objectives.cacMax} direction="lower" tolerancePct={tolerance} format={currency} sufficient={false} />
           <KpiCard label="CPA" source="Meta Ads" value={metaCurrent?.totals?.cpa ?? null} previous={metaPrevious?.totals?.cpa ?? null} change={metaCurrent?.totals?.cpa != null && metaPrevious?.totals?.cpa ? (metaCurrent.totals.cpa - metaPrevious.totals.cpa) / metaPrevious.totals.cpa : null} target={objectives.cpaMax} direction="lower" tolerancePct={tolerance} format={currency} sufficient={sufficient} />
           <KpiCard label="Conversión Shopify" source="Pedidos Shopify ÷ sesiones GA4" value={conversion} previous={previousConversion} change={conversion !== null && previousConversion ? (conversion - previousConversion) / previousConversion : null} target={objectives.conversionMin === undefined ? undefined : objectives.conversionMin / 100} tolerancePct={tolerance} format={percent} sufficient={sufficient} />
-          <KpiCard label="AOV ecommerce" source="Shopify" value={report.current.aov} previous={report.previous.aov} change={report.comparisons.aov.change} target={objectives.aovMin} tolerancePct={tolerance} format={currency} sufficient={sufficient} />
-          <KpiCard label="Pedidos online" source="Archivo histórico + Shopify" value={report.current.onlineOrders} previous={report.previous.onlineOrders} change={report.comparisons.orders.change} format={number} sufficient={sufficient} />
-          <KpiCard label="Unidades vendidas" source="Shopify" value={report.current.units} previous={report.previous.units} change={report.comparisons.units.change} format={number} sufficient={sufficient} />
-          <KpiCard label="Clientes nuevos" source="Shopify customer.created_at" value={report.current.customers.new} previous={report.previous.customers.new} change={report.comparisons.newCustomers.change} format={number} sufficient={sufficient} />
+          <KpiCard label="AOV ecommerce" source="Siigo · fecha real" value={report.current.aov} previous={report.filters.comparisonMode === 'none' ? null : report.previous.aov} change={report.comparisons.aov.change} target={objectives.aovMin} tolerancePct={tolerance} format={currency} sufficient={sufficient} />
+          <KpiCard label="Pedidos online" source="Siigo · ventas seleccionadas" value={report.current.onlineOrders} previous={report.filters.comparisonMode === 'none' ? null : report.previous.onlineOrders} change={report.comparisons.orders.change} format={number} sufficient={sufficient} />
+          <KpiCard label="Unidades vendidas" source="Siigo · fecha real" value={report.current.units} previous={report.filters.comparisonMode === 'none' ? null : report.previous.units} change={report.comparisons.units.change} format={number} sufficient={sufficient} />
+          <KpiCard label="Clientes nuevos" source="Shopify customer.created_at" value={report.current.customers.new} previous={report.filters.comparisonMode === 'none' ? null : report.previous.customers.new} change={report.comparisons.newCustomers.change} format={number} sufficient={sufficient} />
           <KpiCard label="Gasto publicitario a revisar" source="Meta Ads" value={spendToReview} previous={previousSpendToReview} change={spendToReview !== null && previousSpendToReview ? (spendToReview - previousSpendToReview) / previousSpendToReview : null} direction="lower" format={currency} sufficient={sufficient} />
         </div><Card className="border-0 bg-[#eaf6fb] shadow-sm"><CardHeader><CardTitle className="flex items-center gap-2 text-lg text-[#172239]"><Gauge className="h-5 w-5 text-[#168fc6]" />Resumen ejecutivo</CardTitle></CardHeader><CardContent><ol className="space-y-2">{insights.slice(0, 5).map((item, index) => <li key={item} className="flex gap-3 text-sm text-slate-700"><span className="font-bold text-[#168fc6]">{index + 1}.</span>{item}</li>)}</ol></CardContent></Card></section>
 
@@ -477,7 +487,7 @@ function SizeSalesChart({ report }: { report: MarketingExecutiveReport }) {
   return <section className="flex min-w-0 flex-col gap-4" aria-labelledby="size-sales-title">
     <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#168fc6]">Concentración de ventas</p><h2 id="size-sales-title" className="text-2xl font-bold text-[#172239]">Ventas por talla</h2></div>
     <Card className="flex-1 border-0 shadow-sm">
-      <CardHeader><CardTitle className="text-lg text-[#172239]">Participación de cada talla</CardTitle><p className="text-xs text-slate-500">{readableRange(report.periods.current.start, report.periods.current.end)} · Ventas Shopify antes de IVA.</p></CardHeader>
+      <CardHeader><CardTitle className="text-lg text-[#172239]">Participación de cada talla</CardTitle><p className="text-xs text-slate-500">{readableRange(report.periods.current.start, report.periods.current.end)} · Ventas Siigo antes de IVA · fecha real de venta.</p></CardHeader>
       <CardContent>
         {total <= 0 ? <p className="py-16 text-center text-sm text-slate-500">Dato no disponible para el periodo seleccionado.</p> : <div className="grid min-w-0 gap-6">
           <div className="h-[320px] min-w-0 sm:h-[360px]">
@@ -504,15 +514,7 @@ function SizeSalesChart({ report }: { report: MarketingExecutiveReport }) {
 }
 
 function DesignSalesChart({ report }: { report: MarketingExecutiveReport }) {
-  const allCategories = '__all__'
-  const categories = Array.from(new Set(report.designSales.map(row => row.category))).sort((a, b) => a.localeCompare(b, 'es'))
-  const years = Array.from(new Set(report.designSales.map(row => row.year))).sort((a, b) => b.localeCompare(a))
-  const currentYear = report.periods.current.end.slice(0, 4)
-  const [requestedCategory, setRequestedCategory] = useState(allCategories)
-  const [requestedYear, setRequestedYear] = useState(currentYear)
-  const category = requestedCategory === allCategories || categories.includes(requestedCategory) ? requestedCategory : allCategories
-  const year = years.includes(requestedYear) ? requestedYear : years[0] || currentYear
-  const filtered = report.designSales.filter(row => row.year === year && (category === allCategories || row.category === category))
+  const filtered = report.designSales
   const designs = new Map<string, { name: string; value: number }>()
   for (const row of filtered) {
     const key = row.design.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
@@ -527,10 +529,7 @@ function DesignSalesChart({ report }: { report: MarketingExecutiveReport }) {
   return <section className="flex min-w-0 flex-col gap-4">
     <SectionTitle eyebrow="Concentración de ventas" title="Ventas por diseño" badge="Antes de IVA · Siigo" />
     <Card className="flex-1 border-0 shadow-sm">
-      <CardHeader className="gap-4">
-        <div><CardTitle className="text-lg text-[#172239]">Participación de cada diseño</CardTitle><p className="mt-1 text-xs text-slate-500">{year === currentYear ? `${year} acumulado hasta ${readableDate(report.periods.current.end)}` : `Año calendario ${year}`}.</p></div>
-        <div className="flex flex-wrap gap-3"><label className="flex items-center gap-2 text-sm font-semibold text-[#172239]">Año<select value={year} onChange={event => setRequestedYear(event.target.value)} className="h-10 rounded-lg border bg-white px-3 font-normal">{years.map(item => <option key={item} value={item}>{item}</option>)}</select></label><label className="flex items-center gap-2 text-sm font-semibold text-[#172239]">Categoría<select value={category} onChange={event => setRequestedCategory(event.target.value)} className="h-10 rounded-lg border bg-white px-3 font-normal"><option value={allCategories}>Todas las categorías</option>{categories.map(item => <option key={item} value={item}>{item}</option>)}</select></label></div>
-      </CardHeader>
+      <CardHeader><div><CardTitle className="text-lg text-[#172239]">Participación de cada diseño</CardTitle><p className="mt-1 text-xs text-slate-500">{readableRange(report.periods.current.start, report.periods.current.end)} · filtros globales.</p></div></CardHeader>
       <CardContent>
         {data.length === 0 || total <= 0 ? <p className="py-16 text-center text-sm text-slate-500">Dato no disponible para el periodo seleccionado.</p> : <div className="grid min-w-0 gap-6">
           <div className="h-[320px] min-w-0 sm:h-[360px]">
@@ -545,18 +544,17 @@ function DesignSalesChart({ report }: { report: MarketingExecutiveReport }) {
           </div>
           <div className="grid max-h-[360px] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">{data.map((row, index) => <div key={row.name} className="flex items-center justify-between gap-4 rounded-lg border px-3 py-2 text-sm"><span className="flex min-w-0 items-center gap-2"><span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: designColor(index) }} /><span className="break-words font-medium text-[#172239]">{row.name}</span></span><span className="shrink-0 text-xs font-semibold text-slate-500">{percent(row.value / total)}</span></div>)}</div>
         </div>}
-        <p className="mt-3 text-xs text-slate-500">Cada diseño aparece con su nombre y porcentaje, ordenado de mayor a menor venta. Desplázate por la leyenda para verlos todos. Ventas online antes de IVA, con notas crédito descontadas.</p>
+        <p className="mt-3 text-xs text-slate-500">Cada diseño aparece con su nombre y porcentaje, ordenado de mayor a menor venta. Desplázate por la leyenda para verlos todos. Ventas antes de IVA por fecha real de venta, con notas crédito descontadas.</p>
       </CardContent>
     </Card>
   </section>
 }
 
 function CategoryChannelUnitsChart({ report }: { report: MarketingExecutiveReport }) {
+  const categories = Array.from(new Set(report.categoryChannelUnits.map(row => row.category)))
+  const category = '__all__'
   const allProducts = '__all__'
-  const categories = Array.from(new Set(report.categoryChannelUnits.map(row => row.category))).sort((a, b) => a.localeCompare(b, 'es'))
-  const [requestedCategory, setRequestedCategory] = useState(allProducts)
-  const category = requestedCategory === allProducts || categories.includes(requestedCategory) ? requestedCategory : allProducts
-  const categoryLabel = category === allProducts ? 'Todos los productos' : category
+  const categoryLabel = report.filters.applied.category || 'Todos los productos'
   const monthKeys: string[] = []
   let cursor = `${report.periods.current.start.slice(0, 7)}-01`
   const lastMonth = report.periods.current.end.slice(0, 7)
@@ -581,10 +579,10 @@ function CategoryChannelUnitsChart({ report }: { report: MarketingExecutiveRepor
     <Card className="border-0 shadow-sm">
       <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div><CardTitle className="text-lg text-[#172239]">Shuless.co vs WhatsApp</CardTitle><p className="mt-1 text-xs text-slate-500">Unidades con factura, por fecha real de venta. No es cantidad de pedidos.</p></div>
-        <label className="flex items-center gap-2 text-sm font-semibold text-[#172239]">Categoría<select value={category} onChange={event => setRequestedCategory(event.target.value)} className="h-10 rounded-lg border bg-white px-3 font-normal"><option value={allProducts}>Todos los productos</option>{categories.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
+
       </CardHeader>
       <CardContent>
-        {report.saleDateCoverage?.undatedUnits > 0 && <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Sin fecha de venta verificable: {number(report.saleDateCoverage.undatedUnits)} unidades en {number(report.saleDateCoverage.undatedInvoices)} facturas emitidas en el período (todas las categorías). No se asignan a ningún mes hasta confirmar la fecha.</p>}
+        {report.saleDateCoverage?.undatedUnits > 0 && <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Sin fecha de venta verificable: {number(report.saleDateCoverage.undatedUnits)} unidades en {number(report.saleDateCoverage.undatedInvoices)} facturas emitidas en el período y coincidentes con los filtros. No se asignan a ningún mes hasta confirmar la fecha.</p>}
         {categories.length === 0 ? <p className="py-16 text-center text-sm text-slate-500">Dato no disponible para el periodo seleccionado.</p> : <div className="h-[340px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 24, right: 12, left: 0, bottom: 4 }}>
@@ -629,16 +627,16 @@ function SimpleExecutiveSummary({
 }) {
   const salesChange = comparisonReliable ? report.comparisons.netSales.change : null
   const spendChange = spend !== null && previousSpend !== null && previousSpend > 0 ? (spend - previousSpend) / previousSpend : null
-  const headline = !comparisonReliable
+  const headline = report.filters.comparisonMode === 'none' ? 'Ventas del período seleccionado' : !comparisonReliable
     ? 'La comparación anual todavía está incompleta'
     : salesChange === null
     ? 'Así va el negocio en el periodo seleccionado'
     : `Las ventas ${salesChange >= 0 ? 'subieron' : 'bajaron'} ${Math.abs(salesChange * 100).toFixed(1)}%`
-  const explanation = !comparisonReliable
+  const explanation = report.filters.comparisonMode === 'none' ? 'Sin comparación.' : !comparisonReliable
     ? `Siigo no tiene todavía todas las fechas necesarias para comparar con ${report.periods.previous.start.slice(0, 4)}.`
     : salesChange === null
     ? 'No hay un periodo anterior comparable para indicar si crecimos.'
-    : `Comparamos con las mismas fechas de ${report.periods.previous.start.slice(0, 4)}.`
+    : report.filters.comparisonMode === 'none' ? 'Sin comparación.' : `Comparamos ventas con fecha verificable con ${readableRange(report.periods.previous.start, report.periods.previous.end)}.`
 
   return <section className="space-y-5" aria-labelledby="simple-summary-title">
     <Card className="overflow-hidden border-0 bg-gradient-to-br from-[#e8f7f3] via-white to-[#eaf4fb] shadow-sm">
@@ -648,25 +646,25 @@ function SimpleExecutiveSummary({
           <h2 id="simple-summary-title" className="mt-3 text-3xl font-bold tracking-tight text-[#172239]">{headline}</h2>
           <p className="mt-2 text-sm text-slate-600">{explanation}</p>
           <div className="mt-5 border-t border-slate-200/70 pt-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#168fc6]">Unidades vendidas online · Siigo</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#168fc6]">Unidades vendidas · fecha real de venta</p>
             <p className="mt-1 text-2xl font-bold text-[#172239]">{report.onlineUnitComparison.change !== null ? report.onlineUnitComparison.change === 0 ? 'Las unidades no cambiaron' : `Las unidades ${report.onlineUnitComparison.change > 0 ? 'subieron' : 'bajaron'} ${Math.abs(report.onlineUnitComparison.change * 100).toFixed(1)}%` : 'Unidades del período'}</p>
-            <p className="mt-1 text-sm text-slate-600">{number(report.onlineUnitComparison.current || 0)} unidades actuales{report.onlineUnitComparison.previous !== null ? ` frente a ${number(report.onlineUnitComparison.previous)} anteriores · ${(report.onlineUnitComparison.current || 0) - report.onlineUnitComparison.previous > 0 ? '+' : ''}${number((report.onlineUnitComparison.current || 0) - report.onlineUnitComparison.previous)} unidades de diferencia.` : ' · Historial Siigo incompleto para comparar.'}</p>
-            <p className="mt-1 text-xs text-slate-500">Por fecha de factura, igual que las ventas en pesos. Excluye tiendas, ferias, envíos, materias primas y facturas anuladas. Las notas crédito parciales no descuentan unidades sin un cruce por producto.</p>
+            <p className="mt-1 text-sm text-slate-600">{number(report.onlineUnitComparison.current || 0)} unidades actuales{report.onlineUnitComparison.previous !== null ? ` frente a ${number(report.onlineUnitComparison.previous)} anteriores · ${(report.onlineUnitComparison.current || 0) - report.onlineUnitComparison.previous > 0 ? '+' : ''}${number((report.onlineUnitComparison.current || 0) - report.onlineUnitComparison.previous)} unidades de diferencia.` : report.filters.comparisonMode === 'none' ? '' : ' · Historial incompleto para comparar.'}</p>
+            <p className="mt-1 text-xs text-slate-500">Por fecha real de venta verificable, igual que todas las gráficas. Excluye tiendas, ferias, envíos, materias primas y facturas anuladas. Las notas crédito parciales no descuentan unidades sin un cruce por producto.</p>
           </div>
         </div>
         <div className="min-w-72 space-y-3 rounded-2xl bg-white/80 px-5 py-4 text-sm text-slate-600 shadow-sm">
           <div><p className="text-xs font-semibold uppercase tracking-wide text-[#168fc6]">Resultado actual</p><p className="mt-1 font-semibold text-[#172239]">{report.view === 'ytd' ? readableMonthRange(report.periods.current.start, report.periods.current.end) : readableRange(report.periods.current.start, report.periods.current.end)}</p></div>
-          <div className="border-t pt-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Se compara con</p><p className="mt-1 font-semibold text-[#172239]">{report.view === 'ytd' ? readableMonthRange(report.periods.previous.start, report.periods.previous.end) : readableRange(report.periods.previous.start, report.periods.previous.end)}</p></div>
-          <p className="border-t pt-3 text-xs">Ventas online antes de IVA: Siigo · Publicidad: Meta</p>
+          {report.filters.comparisonMode !== 'none' && <div className="border-t pt-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Se compara con</p><p className="mt-1 font-semibold text-[#172239]">{report.view === 'ytd' ? readableMonthRange(report.periods.previous.start, report.periods.previous.end) : readableRange(report.periods.previous.start, report.periods.previous.end)}</p></div>}
+          <p className="border-t pt-3 text-xs">Ventas facturadas · Fecha real verificable · Siigo + Shopify</p>
         </div>
       </CardContent>
     </Card>
 
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <PlainMetricCard icon={CircleDollarSign} label="Vendimos online antes de IVA" value={currency(report.current.netSales)} change={salesChange} detail="Facturas online netas registradas en Siigo" />
+      <PlainMetricCard icon={CircleDollarSign} label="Vendimos online antes de IVA" value={currency(report.current.netSales)} change={salesChange} detail="Ventas facturadas con fecha real verificable" />
       <PlainMetricCard icon={WalletCards} label="Invertimos en publicidad" value={spend === null ? 'Dato no disponible' : currency(spend)} change={spendChange} detail="Gasto registrado por Meta" />
       <PlainMetricCard icon={TrendingUp} label="Ventas por cada $1 de publicidad" value={mer === null ? 'Dato no disponible' : `${mer.toFixed(2)} veces`} change={null} detail="Ventas reales ÷ gasto Meta; no es utilidad" />
-      <PlainMetricCard icon={Users} label="Clientes nuevos" value={number(report.current.customers.new)} change={comparisonReliable ? report.comparisons.newCustomers.change : null} detail="Identificados por Shopify" />
+      <PlainMetricCard icon={Users} label="Clientes nuevos" value={number(report.current.customers.new)} change={comparisonReliable ? report.comparisons.newCustomers.change : null} detail="Identificados en las ventas seleccionadas vinculadas a Shopify" />
     </div>
 
     <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
@@ -697,16 +695,16 @@ function YtdComparison({ report, spend, previousSpend, mer, previousMer, compari
   const currentYear = report.periods.current.start.slice(0, 4)
   const previousYear = report.periods.previous.start.slice(0, 4)
   const rows = [
-    { label: 'Ventas online Siigo antes de IVA', current: report.current.netSales, previous: report.previous.netSales, formatter: currency, reliable: comparisonReliable },
+    { label: 'Ventas antes de IVA', current: report.current.netSales, previous: report.previous.netSales, formatter: currency, reliable: comparisonReliable },
     { label: 'Gasto en publicidad Meta', current: spend, previous: previousSpend, formatter: currency, reliable: true },
-    { label: 'Pedidos online', current: report.current.onlineOrders, previous: report.previous.onlineOrders, formatter: number, reliable: report.comparability.orders },
-    { label: 'Unidades Shopify', current: report.current.units, previous: report.previous.units, formatter: number, reliable: report.comparability.units },
+    { label: 'Pedidos facturados', current: report.current.onlineOrders, previous: report.previous.onlineOrders, formatter: number, reliable: report.comparability.orders },
+    { label: 'Unidades vendidas', current: report.current.units, previous: report.previous.units, formatter: number, reliable: report.comparability.units },
     { label: 'Clientes nuevos Shopify', current: report.current.customers.new, previous: report.previous.customers.new, formatter: number, reliable: report.comparability.customers },
     { label: 'Ventas por cada $1 de publicidad', current: mer, previous: previousMer, formatter: ratio, reliable: comparisonReliable },
   ]
   return <section className="space-y-4">
-    <SectionTitle eyebrow="Comparación anual" title={`${currentYear} vs ${previousYear}, mismos meses`} badge="Acumulado" />
-    {comparisonReliable ? <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950"><p className="font-semibold">La comparación de ventas online usa Siigo en ambos años.</p><p className="mt-1">Incluye WooCommerce histórico, Shopify y WhatsApp. Excluye tiendas y ferias.</p><p className="mt-1">Se descuentan notas crédito y se retira el IVA.</p>{!report.comparability.orders && <p className="mt-2 text-xs text-sky-800">Los pedidos anteriores a julio de 2025 vienen del archivo diario, pero hay {report.dataCoverage.historicalOrderMissingDates.length} fechas sin dato. Por eso su variación aparece como no concluyente. Unidades y clientes siguen siendo métricas de Shopify.</p>}</div> : <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p className="font-semibold">Ventas online Siigo del periodo incompletas.</p><p className="mt-1">No calculamos crecimiento hasta contar con todas las fechas del rango seleccionado.</p></div>}
+    <SectionTitle eyebrow="Comparación anual" title="Comparación de períodos" badge="Acumulado" />
+    <p className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">Todas las filas usan los filtros globales. Ventas, unidades y pedidos facturados se comparan por fecha real de venta verificable. Las ventas sin fecha no se incluyen; los clientes identificados solo cubren ventas vinculadas a Shopify.</p>
     <Card className="overflow-hidden border-0 shadow-sm"><CardContent className="overflow-x-auto p-0"><Table><TableHeader><TableRow><TableHead>Indicador</TableHead><TableHead className="text-right">{previousYear}<span className="block text-[10px] font-normal normal-case text-slate-400">{readableMonthRange(report.periods.previous.start, report.periods.previous.end)}</span></TableHead><TableHead className="text-right">{currentYear}<span className="block text-[10px] font-normal normal-case text-slate-400">{readableMonthRange(report.periods.current.start, report.periods.current.end)}</span></TableHead><TableHead className="text-right">Cambio</TableHead></TableRow></TableHeader><TableBody>{rows.map(row => { const change = row.reliable && row.current !== null && row.previous !== null && row.previous !== 0 ? (row.current - row.previous) / Math.abs(row.previous) : null; return <TableRow key={row.label}><TableCell className="font-medium text-[#172239]">{row.label}</TableCell><TableCell className="text-right">{row.previous === null ? 'Dato no disponible' : row.formatter(row.previous)}</TableCell><TableCell className="text-right font-semibold">{row.current === null ? 'Dato no disponible' : row.formatter(row.current)}</TableCell><TableCell className="text-right">{change === null ? <span className="text-xs text-slate-500">{row.reliable ? 'Sin comparación' : 'No concluyente'}</span> : <ChangeBadge value={change} />}</TableCell></TableRow> })}</TableBody></Table></CardContent></Card>
   </section>
 }
@@ -725,6 +723,9 @@ function SectionTitle({ eyebrow, title, badge }: { eyebrow: string; title: strin
 }
 
 function FilterBar(props: {
+  preset: string; setPreset: (value: string) => void
+  comparisonMode: string; setComparisonMode: (value: string) => void
+  category: string; setCategory: (value: string) => void; city: string; setCity: (value: string) => void
   view: MarketingView; setView: (value: MarketingView) => void
   startDate: string; setStartDate: (value: string) => void; endDate: string; setEndDate: (value: string) => void
   channel: string; setChannel: (value: string) => void; product: string; setProduct: (value: string) => void
@@ -732,37 +733,41 @@ function FilterBar(props: {
   report: MarketingExecutiveReport | null; loading: boolean; refresh: () => void
   expanded: boolean; setExpanded: (value: boolean) => void
 }) {
-  const selectView = (view: MarketingView) => {
-    props.setStartDate('')
-    props.setEndDate('')
-    props.setView(view)
+  const selectPeriod = (preset: string) => {
+    props.setPreset(preset)
+    if (preset === 'custom') {
+      props.setStartDate(props.report?.periods.current.start || '')
+      props.setEndDate(props.report?.periods.current.end || '')
+      return
+    }
+    const dates = presetDates(preset)
+    props.setStartDate(dates.start); props.setEndDate(dates.end)
+    props.setView(preset === 'ytd' ? 'ytd' : 'monthly')
   }
-  const periodLabel = (start: string, end: string) => props.report?.view === 'ytd'
-    ? readableMonthRange(start, end)
-    : readableRange(start, end)
-  const currentYear = props.report?.periods.current.start.slice(0, 4) || '2026'
-  const previousYear = props.report?.periods.previous.start.slice(0, 4) || '2025'
-
-  return <section className="rounded-2xl border bg-white p-4 shadow-sm">
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex flex-wrap rounded-lg bg-slate-100 p-1">
-        <button onClick={() => selectView('ytd')} className={`rounded-md px-4 py-2 text-sm font-semibold ${props.view === 'ytd' ? 'bg-white text-[#172239] shadow-sm' : 'text-slate-500'}`}>Acumulado {currentYear} vs {previousYear}</button>
-        <button onClick={() => selectView('weekly')} className={`rounded-md px-4 py-2 text-sm font-semibold ${props.view === 'weekly' ? 'bg-white text-[#172239] shadow-sm' : 'text-slate-500'}`}>Semana {currentYear} vs {previousYear}</button>
-        <button onClick={() => selectView('monthly')} className={`rounded-md px-4 py-2 text-sm font-semibold ${props.view === 'monthly' ? 'bg-white text-[#172239] shadow-sm' : 'text-slate-500'}`}>Mes {currentYear} vs {previousYear}</button>
-      </div>
-      <Button variant="ghost" onClick={() => props.setExpanded(!props.expanded)}>{props.expanded ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}Cambiar fechas o filtrar</Button>
+  const reset = () => {
+    selectPeriod('ytd'); props.setComparisonMode('year'); props.setChannel(''); props.setCategory(''); props.setProduct(''); props.setSize(''); props.setCity(''); props.setCustomerType('all')
+  }
+  const selectClass = 'mt-1 block h-10 w-full rounded-lg border bg-white px-3 text-sm font-normal text-slate-900 disabled:opacity-50'
+  const applied = props.report?.filters.applied
+  const hasScope = Boolean(applied?.channel || applied?.category || applied?.product || applied?.size || applied?.city)
+  return <section className="rounded-2xl border bg-white p-4 shadow-sm" aria-label="Filtros de todo Mercadeo">
+    <div className="grid gap-3 sm:grid-cols-3">
+      <label className="text-xs font-semibold text-slate-500">Período<select disabled={props.loading} value={props.preset} onChange={event => selectPeriod(event.target.value)} className={selectClass}><option value="month">Este mes</option><option value="last_month">Mes anterior</option><option value="ytd">Acumulado del año</option><option value="custom">Elegir fechas</option></select></label>
+      <label className="text-xs font-semibold text-slate-500">Comparar con<select disabled={props.loading} value={props.comparisonMode} onChange={event => props.setComparisonMode(event.target.value)} className={selectClass}><option value="year">Mismo período del año anterior</option><option value="previous">Período anterior</option><option value="none">Sin comparación</option></select></label>
+      <label className="text-xs font-semibold text-slate-500">Canal<select disabled={props.loading} value={props.channel} onChange={event => props.setChannel(event.target.value)} className={selectClass}><option value="">Todos online</option><option value="web">Shopify / web</option><option value="whatsapp">WhatsApp</option></select></label>
     </div>
-    {props.expanded && <div className="mt-4 flex flex-wrap items-end gap-3 border-t pt-4">
-      <label className="text-xs font-medium text-slate-500">Desde<Input type="date" value={props.startDate} onChange={event => props.setStartDate(event.target.value)} className="mt-1 w-40" /></label>
-      <label className="text-xs font-medium text-slate-500">Hasta<Input type="date" value={props.endDate} onChange={event => props.setEndDate(event.target.value)} className="mt-1 w-40" /></label>
-      <label className="text-xs font-medium text-slate-500">Canal<select value={props.channel} onChange={event => props.setChannel(event.target.value)} className="mt-1 block h-9 min-w-32 rounded-md border bg-white px-3 text-sm"><option value="">Todos</option>{props.report?.filters.channels.map(item => <option key={item}>{item}</option>)}</select></label>
-      <label className="text-xs font-medium text-slate-500">Producto<select value={props.product} onChange={event => props.setProduct(event.target.value)} className="mt-1 block h-9 max-w-52 rounded-md border bg-white px-3 text-sm"><option value="">Todos</option>{props.report?.filters.products.map(item => <option key={item}>{item}</option>)}</select></label>
-      <label className="text-xs font-medium text-slate-500">Talla<select value={props.size} onChange={event => props.setSize(event.target.value)} className="mt-1 block h-9 min-w-24 rounded-md border bg-white px-3 text-sm"><option value="">Todas</option>{props.report?.filters.sizes.map(item => <option key={item}>{item}</option>)}</select></label>
-      <label className="text-xs font-medium text-slate-500">Tipo de cliente<select value={props.customerType} onChange={event => props.setCustomerType(event.target.value)} className="mt-1 block h-9 rounded-md border bg-white px-3 text-sm"><option value="all">Todos</option><option value="new">Nuevo</option><option value="returning">Recurrente</option></select></label>
-      <Button onClick={props.refresh} disabled={props.loading}><RefreshCw className={`mr-2 h-4 w-4 ${props.loading ? 'animate-spin' : ''}`} />Aplicar</Button>
-      <p className="w-full text-xs text-slate-400">Los filtros de canal, producto, talla y cliente aplican al diagnóstico ecommerce de Shopify; las ventas contables Siigo siempre muestran el total del negocio.</p>
+    {props.preset === 'custom' && <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold text-slate-500">Desde<Input disabled={props.loading} type="date" value={props.startDate} max={props.endDate || undefined} onChange={event => props.setStartDate(event.target.value)} className="mt-1" /></label><label className="text-xs font-semibold text-slate-500">Hasta<Input disabled={props.loading} type="date" value={props.endDate} min={props.startDate || undefined} onChange={event => props.setEndDate(event.target.value)} className="mt-1" /></label></div>}
+    <div className="mt-3 flex flex-wrap gap-2"><Button variant="ghost" onClick={() => props.setExpanded(!props.expanded)}>{props.expanded ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}Más filtros</Button><Button disabled={props.loading} variant="ghost" onClick={reset}>Limpiar filtros</Button><Button disabled={props.loading} variant="ghost" onClick={props.refresh}><RefreshCw className={`mr-2 h-4 w-4 ${props.loading ? 'animate-spin' : ''}`} />Actualizar</Button></div>
+    {props.expanded && <div className="mt-3 grid gap-3 border-t pt-4 sm:grid-cols-2 lg:grid-cols-4">
+      <label className="text-xs font-semibold text-slate-500">Categoría<select disabled={props.loading} value={props.category} onChange={event => props.setCategory(event.target.value)} className={selectClass}><option value="">Todas</option>{props.report?.filters.categories.map(item => <option key={item}>{item}</option>)}</select></label>
+      <label className="text-xs font-semibold text-slate-500">Diseño<select disabled={props.loading} value={props.product} onChange={event => props.setProduct(event.target.value)} className={selectClass}><option value="">Todos</option>{props.report?.filters.products.map(item => <option key={item}>{item}</option>)}</select></label>
+      <label className="text-xs font-semibold text-slate-500">Talla<select disabled={props.loading} value={props.size} onChange={event => props.setSize(event.target.value)} className={selectClass}><option value="">Todas</option>{props.report?.filters.sizes.map(item => <option key={item}>{item}</option>)}</select></label>
+      <label className="text-xs font-semibold text-slate-500">Ciudad<select disabled={props.loading} value={props.city} onChange={event => props.setCity(event.target.value)} className={selectClass}><option value="">Todas</option>{props.report?.filters.cities.map(item => <option key={item}>{item}</option>)}</select></label>
     </div>}
-    {props.report && <div className="mt-3 grid gap-1 text-xs text-slate-500 sm:grid-cols-2"><span><strong className="text-slate-700">Resultado actual:</strong> {periodLabel(props.report.periods.current.start, props.report.periods.current.end)}</span><span><strong className="text-slate-700">Periodo de comparación:</strong> {periodLabel(props.report.periods.previous.start, props.report.periods.previous.end)}</span></div>}
+    {props.report && <p className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-700"><strong>Mostrando:</strong> {readableRange(props.report.periods.current.start, props.report.periods.current.end)} · {props.report.filters.comparisonMode === 'none' ? 'sin comparación' : `comparado con ${readableRange(props.report.periods.previous.start, props.report.periods.previous.end)}`} · {applied?.channel === 'web' ? 'Shopify / web' : applied?.channel === 'whatsapp' ? 'WhatsApp' : 'todos online'}{[applied?.category, applied?.product, applied?.size && `Talla ${applied.size}`, applied?.city].filter(Boolean).map(value => <span key={value}> · {value}</span>)} · <strong>Fecha real de venta</strong></p>}
+    {props.report && (props.report.saleDateCoverage.undatedUnits > 0 || (props.comparisonMode !== 'none' && props.report.saleDateCoverage.previousUndatedUnits > 0)) && <p className="mt-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">La comparación solo incluye ventas con fecha verificable. Pendientes de fecha: {number(props.report.saleDateCoverage.undatedUnits)} unidades facturadas en el período actual{props.comparisonMode !== 'none' ? ` y ${number(props.report.saleDateCoverage.previousUndatedUnits)} en el período comparado` : ''}. Se excluyen de los totales y porcentajes.</p>}
+    {hasScope && <p className="mt-2 text-xs text-amber-800">Meta y Analytics no se muestran con filtros de ventas: sus datos no permiten atribuir gasto o tráfico a esta selección.</p>}
+    <p className="mt-2 text-xs text-slate-500">Los filtros se aplican automáticamente a todo Mercadeo. Se incluyen ventas facturadas con fecha verificable; antes de Shopify, el canal web incluye WooCommerce histórico.</p>
   </section>
 }
 
@@ -808,7 +813,7 @@ function ProductsSection({ report, objectives, search, setSearch, selectedProduc
     ['Top por unidades', topUnits?.reference, topUnits ? `${number(topUnits.units)} unidades` : 'Datos insuficientes'],
     ['Mayor crecimiento', growth?.reference, growth?.variation == null ? 'Sin comparación' : `${growth.variation >= 0 ? '+' : ''}${(growth.variation * 100).toFixed(1)}%`],
     ['Mayor caída', decline?.reference, decline?.variation == null ? 'Sin comparación' : `${(decline.variation * 100).toFixed(1)}%`],
-  ].map(([label, title, detail]) => <Card key={label}><CardContent className="p-4"><p className="text-xs uppercase tracking-wide text-slate-500">{label}</p><p className="mt-2 font-bold text-[#172239]">{title || 'Datos insuficientes'}</p><p className="text-xs text-slate-500">{detail}</p></CardContent></Card>)}</div><Card><CardHeader className="flex-row items-center justify-between"><div><CardTitle>Productos</CardTitle><p className="mt-1 text-xs text-slate-500">Ventas Shopify antes de IVA; stock propio actual de Siigo. Top 10 por ventas.</p></div><Input placeholder="Buscar referencia…" value={search} onChange={event => setSearch(event.target.value)} className="w-64" /></CardHeader><CardContent className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Referencia</TableHead><TableHead className="text-right">Ventas</TableHead><TableHead className="text-right">% ventas</TableHead><TableHead className="text-right">Unidades</TableHead><TableHead className="text-right">Pedidos</TableHead><TableHead className="text-right">AOV</TableHead><TableHead className="text-right">Stock propio</TableHead><TableHead className="text-right">Variación</TableHead></TableRow></TableHeader><TableBody>{report.current.products.filter(item => !search || item.reference.toLowerCase().includes(search.toLowerCase())).slice(0, 10).map(item => <TableRow id={`product-${slug(item.reference)}`} key={item.key} className="cursor-pointer" onClick={() => selectProduct(item.reference)}><TableCell className="font-semibold text-[#172239]">{item.reference}</TableCell><TableCell className="text-right">{currency(item.sales)}</TableCell><TableCell className="text-right">{percent(item.share)}</TableCell><TableCell className="text-right">{number(item.units)}</TableCell><TableCell className="text-right">{number(item.orders)}</TableCell><TableCell className="text-right">{currency(item.aov)}</TableCell><TableCell className="text-right">{item.stock === null ? 'N/D' : number(item.stock)}</TableCell><TableCell className="text-right"><ChangeBadge value={item.variation} /></TableCell></TableRow>)}</TableBody></Table></CardContent></Card><Card><CardHeader><CardTitle>Matriz referencia × talla</CardTitle><p className="text-xs text-slate-500">Sell-through no se calcula: falta inventario inicial e historial de movimientos.</p></CardHeader><CardContent className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Referencia</TableHead><TableHead>Talla</TableHead><TableHead>SKU</TableHead><TableHead className="text-right">Unidades</TableHead><TableHead className="text-right">Ventas</TableHead><TableHead className="text-right">Stock propio</TableHead><TableHead>Estado</TableHead></TableRow></TableHeader><TableBody>{report.current.sizes.filter(item => !selectedProduct || item.reference === selectedProduct).slice(0, 30).map(item => { const status = stockStatus(item, objectives); return <TableRow id={`size-${slug(item.key)}`} key={item.key}><TableCell className="font-medium">{item.reference}</TableCell><TableCell>{item.size}</TableCell><TableCell className="text-xs text-slate-500">{item.sku || 'Sin SKU'}</TableCell><TableCell className="text-right">{number(item.units)}</TableCell><TableCell className="text-right">{currency(item.sales)}</TableCell><TableCell className="text-right">{item.stock === null ? 'N/D' : number(item.stock)}</TableCell><TableCell><Badge className={status.style}>{status.label}</Badge></TableCell></TableRow>})}</TableBody></Table></CardContent></Card></section>
+  ].map(([label, title, detail]) => <Card key={label}><CardContent className="p-4"><p className="text-xs uppercase tracking-wide text-slate-500">{label}</p><p className="mt-2 font-bold text-[#172239]">{title || 'Datos insuficientes'}</p><p className="text-xs text-slate-500">{detail}</p></CardContent></Card>)}</div><Card><CardHeader className="flex-row items-center justify-between"><div><CardTitle>Productos</CardTitle><p className="mt-1 text-xs text-slate-500">Ventas seleccionadas por fecha real; stock propio actual de Siigo. Top 10 por ventas.</p></div><Input placeholder="Buscar referencia…" value={search} onChange={event => setSearch(event.target.value)} className="w-64" /></CardHeader><CardContent className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Referencia</TableHead><TableHead className="text-right">Ventas</TableHead><TableHead className="text-right">% ventas</TableHead><TableHead className="text-right">Unidades</TableHead><TableHead className="text-right">Pedidos</TableHead><TableHead className="text-right">AOV</TableHead><TableHead className="text-right">Stock propio</TableHead><TableHead className="text-right">Variación</TableHead></TableRow></TableHeader><TableBody>{report.current.products.filter(item => !search || item.reference.toLowerCase().includes(search.toLowerCase())).slice(0, 10).map(item => <TableRow id={`product-${slug(item.reference)}`} key={item.key} className="cursor-pointer" onClick={() => selectProduct(item.reference)}><TableCell className="font-semibold text-[#172239]">{item.reference}</TableCell><TableCell className="text-right">{currency(item.sales)}</TableCell><TableCell className="text-right">{percent(item.share)}</TableCell><TableCell className="text-right">{number(item.units)}</TableCell><TableCell className="text-right">{number(item.orders)}</TableCell><TableCell className="text-right">{currency(item.aov)}</TableCell><TableCell className="text-right">{item.stock === null ? 'N/D' : number(item.stock)}</TableCell><TableCell className="text-right"><ChangeBadge value={item.variation} /></TableCell></TableRow>)}</TableBody></Table></CardContent></Card><Card><CardHeader><CardTitle>Matriz referencia × talla</CardTitle><p className="text-xs text-slate-500">Sell-through no se calcula: falta inventario inicial e historial de movimientos.</p></CardHeader><CardContent className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Referencia</TableHead><TableHead>Talla</TableHead><TableHead>SKU</TableHead><TableHead className="text-right">Unidades</TableHead><TableHead className="text-right">Ventas</TableHead><TableHead className="text-right">Stock propio</TableHead><TableHead>Estado</TableHead></TableRow></TableHeader><TableBody>{report.current.sizes.filter(item => !selectedProduct || item.reference === selectedProduct).slice(0, 30).map(item => { const status = stockStatus(item, objectives); return <TableRow id={`size-${slug(item.key)}`} key={item.key}><TableCell className="font-medium">{item.reference}</TableCell><TableCell>{item.size}</TableCell><TableCell className="text-xs text-slate-500">{item.sku || 'Sin SKU'}</TableCell><TableCell className="text-right">{number(item.units)}</TableCell><TableCell className="text-right">{currency(item.sales)}</TableCell><TableCell className="text-right">{item.stock === null ? 'N/D' : number(item.stock)}</TableCell><TableCell><Badge className={status.style}>{status.label}</Badge></TableCell></TableRow>})}</TableBody></Table></CardContent></Card></section>
 }
 
 function AdHighlights({ items }: { items: MetaItem[] }) {
@@ -833,10 +838,9 @@ function ReviewAndConcentration({ report, spendToReview }: { report: MarketingEx
 }
 
 function MonthlySection({ report, annotations }: { report: MarketingExecutiveReport; annotations: Annotation[] }) {
-  const previousYear = report.periods.previous.start.slice(0, 4)
   const monthlyAnnotations = Array.from(new Map(annotations.map(item => [item.annotation_date.slice(0, 7), item])).values())
-  return <section className="space-y-4"><SectionTitle eyebrow="Tendencia" title="Últimos 12 meses" /><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{[
-    [`Ventas vs mismo mes ${previousYear}`, report.comparisons.netSales.change], [`Pedidos vs mismo mes ${previousYear}`, report.comparisons.orders.change], [`Unidades vs mismo mes ${previousYear}`, report.comparisons.units.change], [`Ticket promedio vs ${previousYear}`, report.comparisons.aov.change],
+  return <section className="space-y-4"><SectionTitle eyebrow="Tendencia" title="Tendencia del período seleccionado" /><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{[
+    [`Ventas vs período comparado`, report.comparisons.netSales.change], [`Pedidos vs período comparado`, report.comparisons.orders.change], [`Unidades vs período comparado`, report.comparisons.units.change], [`Ticket promedio vs período comparado`, report.comparisons.aov.change],
   ].map(([label, value]) => <Card key={String(label)}><CardContent className="p-4"><p className="text-xs uppercase tracking-wide text-slate-500">{String(label)}</p><p className="mt-2 text-xl font-bold text-[#172239]">{value === null ? 'Dato no disponible' : `${Number(value) >= 0 ? '+' : ''}${(Number(value) * 100).toFixed(1)}%`}</p></CardContent></Card>)}</div><Card className="min-w-0"><CardContent className="pt-6"><div className="h-80 min-w-0"><ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}><ComposedChart data={report.trend}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="month" tick={{ fontSize: 11 }} /><YAxis yAxisId="sales" tickFormatter={compactCurrency} tick={{ fontSize: 11 }} /><YAxis yAxisId="customers" orientation="right" tick={{ fontSize: 11 }} /><Tooltip formatter={(value, name) => name === 'Ventas Siigo antes de IVA' ? currency(Number(value)) : number(Number(value))} /><Bar yAxisId="customers" dataKey="newCustomers" name="Clientes nuevos" fill="#93c5fd" /><Line yAxisId="sales" type="monotone" dataKey="sales" name="Ventas Siigo antes de IVA" stroke="#172239" strokeWidth={3} />{monthlyAnnotations.filter(item => report.trend.some(point => point.month === item.annotation_date.slice(0, 7))).map(item => <ReferenceLine key={item.id} x={item.annotation_date.slice(0, 7)} yAxisId="sales" stroke="#64748b" strokeDasharray="3 3" label={{ value: item.title, position: 'insideTopRight', fontSize: 10 }} />)}</ComposedChart></ResponsiveContainer></div><p className="mt-2 text-xs text-slate-500">Gasto, MER, CAC y conversión históricos: Dato no disponible hasta configurar Meta y GA4.</p></CardContent></Card><Unavailable label="Cohortes, retención 30/60/90, LTV y LTV:CAC" reason="El cache Shopify comienza en junio de 2025 y no existe todavía un modelo de cohortes validado ni CAC atribuible." /></section>
 }
 

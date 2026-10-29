@@ -12,6 +12,8 @@ export interface DatePeriod {
 }
 
 export interface MarketingFilters {
+  city?: string
+  category?: string
   channel?: string
   product?: string
   size?: string
@@ -156,6 +158,9 @@ export interface MarketingExecutiveReport {
   }
   filters: {
     applied: MarketingFilters
+    comparisonMode: string
+    categories: string[]
+    cities: string[]
     channels: string[]
     products: string[]
     sizes: string[]
@@ -168,7 +173,7 @@ export interface MarketingExecutiveReport {
   salesByWeekday: Array<{ name: string; units: number }>
   salesByCity: Array<{ name: string; units: number }>
   onlineUnitComparison: MetricComparison
-  saleDateCoverage: { undatedInvoices: number; undatedUnits: number }
+  saleDateCoverage: { undatedInvoices: number; undatedUnits: number; previousUndatedUnits: number }
   designSales: Array<{ year: string; design: string; category: string; sales: number }>
   comparisons: Record<string, MetricComparison>
   comparability: {
