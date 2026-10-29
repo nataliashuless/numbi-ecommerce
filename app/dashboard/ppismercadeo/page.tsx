@@ -6,7 +6,7 @@ import { presetDates } from '@/lib/marketing/global-filters'
 import {
   BarChart3, Boxes, ChevronDown, ChevronRight, ChevronUp, CircleDollarSign, FileText, Gauge, Loader2,
   LogOut, Megaphone, MessageCircle, Package, Plus, RefreshCw, ShoppingCart,
-  ShieldCheck, Store, Target, Tent, TrendingUp, Users, WalletCards, X,
+  Store, Target, Tent, TrendingUp, Users, WalletCards, X,
 } from 'lucide-react'
 import {
   Bar, BarChart, CartesianGrid, Cell, ComposedChart, LabelList, Legend, Line, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -653,43 +653,7 @@ function SimpleExecutiveSummary({
 }) {
   const salesChange = comparisonReliable ? report.comparisons.netSales.change : null
   const spendChange = spend !== null && previousSpend !== null && previousSpend > 0 ? (spend - previousSpend) / previousSpend : null
-  const pendingChannels = [...report.channelReconciliation.current, ...report.channelReconciliation.previous].filter(row => row.channel === 'pending').length > 0
-  const hasUnverifiedDates = report.saleDateCoverage.undatedUnits > 0 || report.saleDateCoverage.previousUndatedUnits > 0
-  const headline = report.filters.comparisonMode === 'none' ? 'Ventas del período seleccionado' : !comparisonReliable
-    ? report.unitComparisonReview ? 'Comparación pendiente de validar' : report.comparability.units ? 'Comparación de unidades vendidas' : 'La comparación anual todavía está incompleta'
-    : salesChange === null
-    ? 'Así va el negocio en el periodo seleccionado'
-    : `Las ventas ${hasUnverifiedDates ? 'con fecha ' : ''}${salesChange >= 0 ? 'subieron' : 'bajaron'} ${Math.abs(salesChange * 100).toFixed(1)}%`
-  const explanation = report.filters.comparisonMode === 'none' ? 'Sin comparación.' : !comparisonReliable
-    ? report.confirmedSalesComparison ? `Comparamos únicamente unidades confirmadas: ${readableRange(report.periods.current.start, report.periods.current.end)} frente a ${readableRange(report.periods.previous.start, report.periods.previous.end)}.` : report.unitComparisonReview ? report.unitComparisonReview.message : pendingChannels ? 'No calculamos crecimiento mientras existan facturas sin canal confirmado. Revisa la conciliación debajo.' : report.excelHistory?.missingValueUnits ? 'Las unidades sí son comparables. Faltan algunos importes del Excel para comparar ventas en pesos.' : 'El historial no cubre ambos períodos completos.'
-    : salesChange === null
-    ? 'No hay un periodo anterior comparable para indicar si crecimos.'
-    : report.filters.comparisonMode === 'none' ? 'Sin comparación.' : `Comparamos ventas con fecha de cada fuente con ${readableRange(report.periods.previous.start, report.periods.previous.end)}.`
-
-  return <section className="space-y-5" aria-labelledby="simple-summary-title">
-    <Card className="overflow-hidden border-0 bg-gradient-to-br from-[#e8f7f3] via-white to-[#eaf4fb] shadow-sm">
-      <CardContent className="grid gap-6 p-6 md:p-8 lg:grid-cols-[1fr_auto] lg:items-center">
-        <div>
-          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800"><ShieldCheck className="h-5 w-5" />Resumen fácil de entender</div>
-          <h2 id="simple-summary-title" className="mt-3 text-3xl font-bold tracking-tight text-[#172239]">{headline}</h2>
-          <p className="mt-2 text-sm text-slate-600">{explanation}</p>
-          <div className="mt-5 border-t border-slate-200/70 pt-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#168fc6]">Unidades online · Shopify + Excel / Siigo</p>
-            <p className="mt-1 text-2xl font-bold text-[#172239]">{report.onlineUnitComparison.change !== null ? report.onlineUnitComparison.change === 0 ? 'Las unidades no cambiaron' : `Las unidades confirmadas ${hasUnverifiedDates ? 'con fecha ' : ''}${report.onlineUnitComparison.change > 0 ? 'subieron' : 'bajaron'} ${Math.abs(report.onlineUnitComparison.change * 100).toFixed(1)}%` : report.filters.comparisonMode === 'none' ? 'Unidades del período' : report.unitComparisonReview ? 'Crecimiento pendiente de validar' : 'Variación no concluyente: clasificación pendiente'}</p>
-            <p className="mt-1 text-sm text-slate-600">{number(report.onlineUnitComparison.current || 0)} unidades confirmadas actuales{report.onlineUnitComparison.previous !== null ? ` frente a ${number(report.onlineUnitComparison.previous)} anteriores · ${(report.onlineUnitComparison.current || 0) - report.onlineUnitComparison.previous > 0 ? '+' : ''}${number((report.onlineUnitComparison.current || 0) - report.onlineUnitComparison.previous)} unidades de diferencia.` : report.filters.comparisonMode === 'none' ? '' : ' · No se calcula crecimiento con una base incompleta.'}</p>
-            {report.confirmedSalesComparison && <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{report.confirmedSalesComparison.note}</p>}
-            <p className="mt-1 text-xs text-slate-500">Excel 2025: fecha real de venta y unidades de las ventas no Shopify. Shopify: fecha de venta del pedido. WhatsApp 2026: fecha de factura Siigo. Excluye regalos, pagos pendientes y ventas presenciales identificadas.</p>
-
-          </div>
-        </div>
-        <div className="min-w-72 space-y-3 rounded-2xl bg-white/80 px-5 py-4 text-sm text-slate-600 shadow-sm">
-          <div><p className="text-xs font-semibold uppercase tracking-wide text-[#168fc6]">Resultado actual</p><p className="mt-1 font-semibold text-[#172239]">{report.view === 'ytd' ? readableMonthRange(report.periods.current.start, report.periods.current.end) : readableRange(report.periods.current.start, report.periods.current.end)}</p></div>
-          {report.filters.comparisonMode !== 'none' && <div className="border-t pt-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Se compara con</p><p className="mt-1 font-semibold text-[#172239]">{report.view === 'ytd' ? readableMonthRange(report.periods.previous.start, report.periods.previous.end) : readableRange(report.periods.previous.start, report.periods.previous.end)}</p></div>}
-          <p className="border-t pt-3 text-xs">Shopify + Excel 2025 / Siigo 2026</p>
-        </div>
-      </CardContent>
-    </Card>
-
+  return <section className="space-y-5" aria-label="Indicadores y recomendaciones">
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <PlainMetricCard icon={CircleDollarSign} label="Ventas online antes de IVA" value={currency(report.current.netSales)} change={salesChange} detail="Shopify + Excel / Siigo" />
       <PlainMetricCard icon={WalletCards} label="Invertimos en publicidad" value={spend === null ? 'Dato no disponible' : currency(spend)} change={spendChange} detail="Gasto registrado por Meta" />
@@ -735,6 +699,7 @@ function YtdComparison({ report, spend, previousSpend, mer, previousMer, compari
   return <section className="space-y-4">
     <SectionTitle eyebrow="Comparación anual" title="Comparación de períodos" badge="Acumulado" />
     <p className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">Todas las filas usan los filtros globales y las mismas fuentes: Excel para no Shopify en 2025; Shopify directo y Siigo para WhatsApp 2026. Las ventas sin fecha no se incluyen; los clientes identificados solo cubren ventas vinculadas a Shopify.</p>
+    {report.confirmedSalesComparison && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{report.confirmedSalesComparison.note}</p>}
     <Card className="overflow-hidden border-0 shadow-sm"><CardContent className="overflow-x-auto p-0"><Table><TableHeader><TableRow><TableHead>Indicador</TableHead><TableHead className="text-right">{previousYear}<span className="block text-[10px] font-normal normal-case text-slate-400">{readableMonthRange(report.periods.previous.start, report.periods.previous.end)}</span></TableHead><TableHead className="text-right">{currentYear}<span className="block text-[10px] font-normal normal-case text-slate-400">{readableMonthRange(report.periods.current.start, report.periods.current.end)}</span></TableHead><TableHead className="text-right">Cambio</TableHead></TableRow></TableHeader><TableBody>{rows.map(row => { const change = row.reliable && row.current !== null && row.previous !== null && row.previous !== 0 ? (row.current - row.previous) / Math.abs(row.previous) : null; return <TableRow key={row.label}><TableCell className="font-medium text-[#172239]">{row.label}</TableCell><TableCell className="text-right">{row.previous === null ? 'Dato no disponible' : row.formatter(row.previous)}</TableCell><TableCell className="text-right font-semibold">{row.current === null ? 'Dato no disponible' : row.formatter(row.current)}</TableCell><TableCell className="text-right">{change === null ? <span className="text-xs text-slate-500">{row.reliable ? 'Sin comparación' : 'No concluyente'}</span> : <ChangeBadge value={change} />}</TableCell></TableRow> })}</TableBody></Table></CardContent></Card>
   </section>
 }
