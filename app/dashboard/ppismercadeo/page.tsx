@@ -467,7 +467,7 @@ function SizeSalesChart({ report }: { report: MarketingExecutiveReport }) {
   return <section className="flex min-w-0 flex-col gap-4" aria-labelledby="size-sales-title">
     <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#168fc6]">Concentración de ventas</p><h2 id="size-sales-title" className="text-2xl font-bold text-[#172239]">Ventas por talla</h2></div>
     <Card className="flex-1 border-0 shadow-sm">
-      <CardHeader><CardTitle className="text-lg text-[#172239]">Participación de cada talla</CardTitle><p className="text-xs text-slate-500">{readableRange(report.periods.current.start, report.periods.current.end)} · Ventas online antes de IVA · fecha de cada fuente.</p></CardHeader>
+      <CardHeader className="flex flex-wrap flex-row items-start justify-between gap-3"><div><CardTitle className="text-lg text-[#172239]">Participación de cada talla</CardTitle><p className="mt-1 text-xs text-slate-500">{readableRange(report.periods.current.start, report.periods.current.end)} · Ventas online antes de IVA · fecha de cada fuente.</p></div><ChartGrandTotal units={report.current.units} /></CardHeader>
       <CardContent>
         {total <= 0 ? <p className="py-16 text-center text-sm text-slate-500">Dato no disponible para el periodo seleccionado.</p> : <div className="grid min-w-0 gap-6">
           <div className="h-[320px] min-w-0 sm:h-[360px]">
@@ -493,6 +493,10 @@ function SizeSalesChart({ report }: { report: MarketingExecutiveReport }) {
   </section>
 }
 
+function ChartGrandTotal({ units }: { units: number }) {
+  return <div className="shrink-0 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center"><p className="text-xs font-semibold uppercase text-slate-500">Gran total · unidades</p><p className="mt-1 text-3xl font-bold text-[#183675]">{number(units)}</p></div>
+}
+
 function DesignSalesChart({ report }: { report: MarketingExecutiveReport }) {
   const filtered = report.designSales
   const designs = new Map<string, { name: string; value: number }>()
@@ -509,7 +513,7 @@ function DesignSalesChart({ report }: { report: MarketingExecutiveReport }) {
   return <section className="flex min-w-0 flex-col gap-4">
     <SectionTitle eyebrow="Concentración de ventas" title="Ventas por diseño" badge="Antes de IVA · Shopify + Excel / Siigo" />
     <Card className="flex-1 border-0 shadow-sm">
-      <CardHeader><div><CardTitle className="text-lg text-[#172239]">Participación de cada diseño</CardTitle><p className="mt-1 text-xs text-slate-500">{readableRange(report.periods.current.start, report.periods.current.end)} · filtros globales.</p></div></CardHeader>
+      <CardHeader className="flex flex-wrap flex-row items-start justify-between gap-3"><div><CardTitle className="text-lg text-[#172239]">Participación de cada diseño</CardTitle><p className="mt-1 text-xs text-slate-500">{readableRange(report.periods.current.start, report.periods.current.end)} · filtros globales.</p></div><ChartGrandTotal units={report.current.units} /></CardHeader>
       <CardContent>
         {data.length === 0 || total <= 0 ? <p className="py-16 text-center text-sm text-slate-500">Dato no disponible para el periodo seleccionado.</p> : <div className="grid min-w-0 gap-6">
           <div className="h-[320px] min-w-0 sm:h-[360px]">
