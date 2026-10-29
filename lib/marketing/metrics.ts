@@ -136,6 +136,7 @@ export interface MetricComparison {
 }
 
 export interface MarketingExecutiveReport {
+  confirmedSalesComparison?: { excludedCurrentUnits: number; excludedPreviousUnits: number; note: string }
   historyAudit?: { decisions: Array<{ row: number; decision: string; reason: string; invoice?: string; order?: number; credited?: boolean; replacement?: string; documentUnits?: number; variantMatch?: boolean }>; fair: Array<{ invoice: string; units: number; online: boolean; reason: string }> }
   unitComparisonReview?: { status: string; reportedUnits: number; message: string }
   excelHistory?: { from: string; to: string; missingValueUnits: number }

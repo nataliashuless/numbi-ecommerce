@@ -188,11 +188,14 @@ export async function GET(request: Request) {
     const inPeriod = (date: string, period: typeof periods.current) => date >= period.start && date <= period.end
     const pendingCurrent = ledger.reconciliation.filter(row => row.channel === 'pending' && inPeriod(row.date, periods.current))
     const pendingPrevious = ledger.reconciliation.filter(row => row.channel === 'pending' && inPeriod(row.date, periods.previous))
-    const classificationComplete = pendingCurrent.length === 0 && pendingPrevious.length === 0
+    const authorizedPendingNames = marketingBusinessChannelRules.growthExcludedPendingInvoiceNames
+    const isAuthorizedPending = (row: typeof pendingCurrent[number]) => authorizedPendingNames.has(row.name) && row.units === 1
+    const classificationComplete = [...pendingCurrent, ...pendingPrevious].every(isAuthorizedPending)
     const periodCovered = (period: typeof periods.current) => hasCompleteSiigoCoverage(period, siigoFrom, siigoSyncedThrough) && Boolean(shopifyFrom && shopifyTo && period.end <= shopifyTo && (period.start >= shopifyFrom || period.start >= excelHistory.from && period.end <= excelHistory.to))
     const unresolvedHistoryRows = historyAudit.decisions.filter(decision => decision.decision === 'pending')
-    const historyReconciled = historyAuditInputs.targets.length > 0 && historyAudit.decisions.length === historyAuditInputs.targets.length && historyAuditInputs.fairInvoiceNames.length > 0 && historyAudit.fair.every(row => row.online) && unresolvedHistoryRows.length === 0
-    const review = { ...marketingBusinessChannelRules.historicalUnitsReview, status: historyReconciled ? 'reconciled' : 'pending', message: unresolvedHistoryRows.length ? `Conciliación de 2025: ${unresolvedHistoryRows.length === 1 ? 'falta 1 fila' : `faltan ${unresolvedHistoryRows.length} filas`} por confirmar. No calculamos crecimiento hasta aclarar esas ventas. Revisa la tabla de conciliación detallada.` : marketingBusinessChannelRules.historicalUnitsReview.message }
+    const authorizedPendingRows = new Set(historyAuditInputs.targets.filter(target => target.ownerDecision === 'pending' && target.invoiceCandidates.some(name => authorizedPendingNames.has(name))).map(target => target.row))
+    const historyReadyForConfirmedComparison = historyAuditInputs.targets.length > 0 && historyAudit.decisions.length === historyAuditInputs.targets.length && historyAuditInputs.fairInvoiceNames.length > 0 && historyAudit.fair.every(row => row.online) && unresolvedHistoryRows.every(row => authorizedPendingRows.has(row.row))
+    const review = { ...marketingBusinessChannelRules.historicalUnitsReview, status: historyReadyForConfirmedComparison ? 'confirmed_only' : 'pending', message: unresolvedHistoryRows.length ? `Conciliación de 2025: ${unresolvedHistoryRows.length === 1 ? 'falta 1 fila' : `faltan ${unresolvedHistoryRows.length} filas`} por confirmar. No calculamos crecimiento hasta aclarar esas ventas. Revisa la tabla de conciliación detallada.` : marketingBusinessChannelRules.historicalUnitsReview.message }
     const intersectsReviewYear = (period: typeof periods.current) => period.start <= `${review.year}-12-31` && period.end >= `${review.year}-01-01`
     const pendingUnitsReview = review.status === 'pending' && comparisonMode !== 'none' && filters.channel !== 'shopify' && (intersectsReviewYear(periods.current) || intersectsReviewYear(periods.previous))
     const salesComparable = !pendingUnitsReview && classificationComplete && comparisonMode !== 'none' && periodCovered(periods.current) && periodCovered(periods.previous)
@@ -302,6 +305,7 @@ export async function GET(request: Request) {
       source: 'Shopify directo + Excel no Shopify 2025 + WhatsApp Siigo 2026',
       historyAudit,
       unitComparisonReview: pendingUnitsReview ? review : undefined,
+      confirmedSalesComparison: salesComparable ? { excludedCurrentUnits: pendingCurrent.filter(isAuthorizedPending).reduce((sum, row) => sum + row.units, 0), excludedPreviousUnits: pendingPrevious.filter(isAuthorizedPending).reduce((sum, row) => sum + row.units, 0), note: 'FV-2-1812 (1 unidad de 2025) sigue pendiente. No está incluida en los totales confirmados ni en el cálculo del crecimiento.' } : undefined,
       excelHistory: { from: excelHistory.from, to: excelHistory.to, missingValueUnits: missingExcelValues.reduce((sum, record) => sum + record.order.raw!.line_items!.reduce((n, item) => n + Number(item.quantity || 0), 0), 0) },
       currency: 'COP',
       timeZone: 'America/Bogota',

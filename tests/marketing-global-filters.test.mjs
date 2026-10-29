@@ -82,10 +82,12 @@ function query(table) {
   return q
 }
 const db = { from: query }
+const auditInputsFixture = { targets: [], fairInvoiceNames: [], invoiceLinks: [] }
+const excelHistoryFixture = { from: '2025-01-01', to: '2025-12-31', rows: [] }
 const route = {}
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../app/api/marketing/executive/route.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: route, URL, Date, console, require(name) {
-  if (name === '@/data/marketing-2025-audit-inputs.json') return { default: { targets: [], fairInvoiceNames: [], invoiceLinks: [] } }
-  if (name === '@/data/marketing-online-excel-2025.json') return { default: { from: '2025-01-01', to: '2025-12-31', rows: [] } }
+  if (name === '@/data/marketing-2025-audit-inputs.json') return { default: auditInputsFixture }
+  if (name === '@/data/marketing-online-excel-2025.json') return { default: excelHistoryFixture }
   if (name === 'next/server') return { NextResponse: { json: (value, options) => ({ ...value, status: options?.status || 200 }) } }
   if (name === '@/lib/auth-helpers') return { requireAuth: async () => ({}), getAdminClient: () => db }
   if (name === '@/lib/marketing/historical-orders') return { HISTORICAL_ORDER_MISSING_DATES: [] }
@@ -249,4 +251,31 @@ test('owner instruction to leave a credited sale pending is preserved rather tha
   const result = reconcileHistory({ from: '2025-01-01', to: '2025-12-31', rows: [auditRow] }, { targets: [{ ...auditTarget, ownerDecision: 'pending', ownerReviewedOn: '2026-10-29' }], fairInvoiceNames: [] }, [{ ...base, id: 'old', name: 'FV-2-10', credited_amount: 357 }, { ...base, id: 'new', name: 'FV-2-11', customer_identification: 'buyer', observations: 'Reemplaza factura 10' }], [], new Set())
   assert.equal(result.decisions[0].decision, 'pending')
   assert.match(result.decisions[0].reason, /indicación de la dueña/)
+})
+
+test('confirmed-only growth excludes the authorized pending unit while retaining its status and blocking other unknown sales', async () => {
+  auditInputsFixture.targets.push({ ...auditTarget, row: 466, invoiceCandidates: ['FV-2-1812'], ownerDecision: 'pending', ownerReviewedOn: '2026-10-29' })
+  auditInputsFixture.fairInvoiceNames.push('FV-2-44')
+  excelHistoryFixture.rows.push({ ...auditRow, row: 466, date: '2025-05-16', invoice: 'FV-2-1812' }, { ...auditRow, row: 744, date: '2025-10-10', invoice: 'FV-2-44', payment: 'Mercadopago' })
+  tables.siigo_invoices.push({ ...base, id: 'old1812', name: 'FV-2-1812', date: '2025-05-20', total: 119, credited_amount: 119, items: [base.items[0]] }, { ...base, id: 'fair44', name: 'FV-2-44', date: '2025-10-10', total: 119, observations: 'Mercadopago', assigned_feria_id: 'fair', items: [base.items[0]] })
+  const url = 'https://example.test/api/marketing/executive?view=ytd&start_date=2026-01-01&end_date=2026-10-28'
+  try {
+    const report = await route.GET({ url })
+    assert.equal(report.status, 200)
+    assert.equal(report.current.units, 6); assert.equal(report.previous.units, 1)
+    assert.equal(report.onlineUnitComparison.change, 5)
+    assert.equal(report.confirmedSalesComparison.excludedCurrentUnits, 0)
+    assert.equal(report.confirmedSalesComparison.excludedPreviousUnits, 1)
+    assert.equal(report.historyAudit.decisions[0].decision, 'pending')
+    assert.equal(report.channelReconciliation.previous.find(row => row.name === 'FV-2-1812').channel, 'pending')
+    assert.equal(report.unitComparisonReview, undefined)
+    tables.siigo_invoices.push({ ...base, id: 'new-unknown', name: 'FV-2-other', observations: 'Sin canal confirmado' })
+    const unknown = await route.GET({ url })
+    assert.equal(unknown.onlineUnitComparison.change, null)
+    assert.equal(unknown.confirmedSalesComparison, undefined)
+    tables.siigo_invoices.pop()
+  } finally {
+    tables.siigo_invoices.splice(-2)
+    auditInputsFixture.targets.length = 0; auditInputsFixture.fairInvoiceNames.length = 0; excelHistoryFixture.rows.length = 0
+  }
 })
