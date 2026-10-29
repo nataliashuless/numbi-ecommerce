@@ -627,11 +627,12 @@ function SimpleExecutiveSummary({
 }) {
   const salesChange = comparisonReliable ? report.comparisons.netSales.change : null
   const spendChange = spend !== null && previousSpend !== null && previousSpend > 0 ? (spend - previousSpend) / previousSpend : null
+  const hasUnverifiedDates = report.saleDateCoverage.undatedUnits > 0 || report.saleDateCoverage.previousUndatedUnits > 0
   const headline = report.filters.comparisonMode === 'none' ? 'Ventas del período seleccionado' : !comparisonReliable
     ? 'La comparación anual todavía está incompleta'
     : salesChange === null
     ? 'Así va el negocio en el periodo seleccionado'
-    : `Las ventas ${salesChange >= 0 ? 'subieron' : 'bajaron'} ${Math.abs(salesChange * 100).toFixed(1)}%`
+    : `Las ventas ${hasUnverifiedDates ? 'con fecha ' : ''}${salesChange >= 0 ? 'subieron' : 'bajaron'} ${Math.abs(salesChange * 100).toFixed(1)}%`
   const explanation = report.filters.comparisonMode === 'none' ? 'Sin comparación.' : !comparisonReliable
     ? `Siigo no tiene todavía todas las fechas necesarias para comparar con ${report.periods.previous.start.slice(0, 4)}.`
     : salesChange === null
@@ -647,7 +648,7 @@ function SimpleExecutiveSummary({
           <p className="mt-2 text-sm text-slate-600">{explanation}</p>
           <div className="mt-5 border-t border-slate-200/70 pt-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-[#168fc6]">Unidades vendidas · fecha real de venta</p>
-            <p className="mt-1 text-2xl font-bold text-[#172239]">{report.onlineUnitComparison.change !== null ? report.onlineUnitComparison.change === 0 ? 'Las unidades no cambiaron' : `Las unidades ${report.onlineUnitComparison.change > 0 ? 'subieron' : 'bajaron'} ${Math.abs(report.onlineUnitComparison.change * 100).toFixed(1)}%` : 'Unidades del período'}</p>
+            <p className="mt-1 text-2xl font-bold text-[#172239]">{report.onlineUnitComparison.change !== null ? report.onlineUnitComparison.change === 0 ? 'Las unidades no cambiaron' : `Las unidades ${hasUnverifiedDates ? 'con fecha ' : ''}${report.onlineUnitComparison.change > 0 ? 'subieron' : 'bajaron'} ${Math.abs(report.onlineUnitComparison.change * 100).toFixed(1)}%` : 'Unidades del período'}</p>
             <p className="mt-1 text-sm text-slate-600">{number(report.onlineUnitComparison.current || 0)} unidades actuales{report.onlineUnitComparison.previous !== null ? ` frente a ${number(report.onlineUnitComparison.previous)} anteriores · ${(report.onlineUnitComparison.current || 0) - report.onlineUnitComparison.previous > 0 ? '+' : ''}${number((report.onlineUnitComparison.current || 0) - report.onlineUnitComparison.previous)} unidades de diferencia.` : report.filters.comparisonMode === 'none' ? '' : ' · Historial incompleto para comparar.'}</p>
             <p className="mt-1 text-xs text-slate-500">Por fecha real de venta verificable, igual que todas las gráficas. Excluye tiendas, ferias, envíos, materias primas y facturas anuladas. Las notas crédito parciales no descuentan unidades sin un cruce por producto.</p>
           </div>
@@ -765,7 +766,7 @@ function FilterBar(props: {
       <label className="text-xs font-semibold text-slate-500">Ciudad<select disabled={props.loading} value={props.city} onChange={event => props.setCity(event.target.value)} className={selectClass}><option value="">Todas</option>{props.report?.filters.cities.map(item => <option key={item}>{item}</option>)}</select></label>
     </div>}
     {props.report && <p className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-700"><strong>Mostrando:</strong> {readableRange(props.report.periods.current.start, props.report.periods.current.end)} · {props.report.filters.comparisonMode === 'none' ? 'sin comparación' : `comparado con ${readableRange(props.report.periods.previous.start, props.report.periods.previous.end)}`} · {applied?.channel === 'web' ? 'Shopify / web' : applied?.channel === 'whatsapp' ? 'WhatsApp' : 'todos online'}{[applied?.category, applied?.product, applied?.size && `Talla ${applied.size}`, applied?.city].filter(Boolean).map(value => <span key={value}> · {value}</span>)} · <strong>Fecha real de venta</strong></p>}
-    {props.report && (props.report.saleDateCoverage.undatedUnits > 0 || (props.comparisonMode !== 'none' && props.report.saleDateCoverage.previousUndatedUnits > 0)) && <p className="mt-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">La comparación solo incluye ventas con fecha verificable. Pendientes de fecha: {number(props.report.saleDateCoverage.undatedUnits)} unidades facturadas en el período actual{props.comparisonMode !== 'none' ? ` y ${number(props.report.saleDateCoverage.previousUndatedUnits)} en el período comparado` : ''}. Se excluyen de los totales y porcentajes.</p>}
+    {props.report && (props.report.saleDateCoverage.undatedUnits > 0 || (props.comparisonMode !== 'none' && props.report.saleDateCoverage.previousUndatedUnits > 0)) && <p className="mt-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">Variación provisional: solo incluye ventas con fecha verificable. Pendientes de fecha: {number(props.report.saleDateCoverage.undatedUnits)} unidades facturadas en el período actual{props.comparisonMode !== 'none' ? ` y ${number(props.report.saleDateCoverage.previousUndatedUnits)} en el período comparado` : ''}. Se excluyen de los totales y porcentajes.</p>}
     {hasScope && <p className="mt-2 text-xs text-amber-800">Meta y Analytics no se muestran con filtros de ventas: sus datos no permiten atribuir gasto o tráfico a esta selección.</p>}
     <p className="mt-2 text-xs text-slate-500">Los filtros se aplican automáticamente a todo Mercadeo. Se incluyen ventas facturadas con fecha verificable; antes de Shopify, el canal web incluye WooCommerce histórico.</p>
   </section>
