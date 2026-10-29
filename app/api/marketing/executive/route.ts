@@ -22,6 +22,7 @@ import {
   onlineMarketingChannel,
   marketingProductItems,
   marketingSaleDate,
+  onlineInvoiceUnits,
   replaceSalesWithSiigoOnline,
 } from '@/lib/marketing/siigo-sales'
 import {
@@ -367,6 +368,10 @@ export async function GET(request: Request) {
       ),
       salesByWeekday: Array.from(weekdayUnits, ([name, units]) => ({ name, units })).sort((a, b) => b.units - a.units),
       salesByCity: Array.from(cityUnits, ([name, units]) => ({ name, units })).sort((a, b) => b.units - a.units || a.name.localeCompare(b.name, 'es')),
+      onlineUnitComparison: comparison(
+        onlineInvoiceUnits(siigoInvoices, periods.current, onlineSalesContext, nonRetailProductCodes),
+        salesComparable ? onlineInvoiceUnits(siigoInvoices, periods.previous, onlineSalesContext, nonRetailProductCodes) : null,
+      ),
       saleDateCoverage,
       designSales: Array.from(designSalesBuckets.values()).sort((a, b) =>
         b.year.localeCompare(a.year) || b.sales - a.sales,

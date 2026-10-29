@@ -648,9 +648,10 @@ function SimpleExecutiveSummary({
           <h2 id="simple-summary-title" className="mt-3 text-3xl font-bold tracking-tight text-[#172239]">{headline}</h2>
           <p className="mt-2 text-sm text-slate-600">{explanation}</p>
           <div className="mt-5 border-t border-slate-200/70 pt-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#168fc6]">Unidades vendidas · Shopify</p>
-            <p className="mt-1 text-xl font-bold text-[#172239]">{number(report.current.units)} unidades{report.comparability.units && report.comparisons.units.change !== null ? ` · ${report.comparisons.units.change === 0 ? 'sin cambio' : `${report.comparisons.units.change > 0 ? 'subieron' : 'bajaron'} ${Math.abs(report.comparisons.units.change * 100).toFixed(1)}%`}` : ''}</p>
-            <p className="mt-1 text-sm text-slate-600">{report.comparability.units ? `${number(report.previous.units)} unidades en el período anterior · ${report.current.units - report.previous.units > 0 ? '+' : ''}${number(report.current.units - report.previous.units)} unidades de diferencia.` : 'Comparación no concluyente: el historial Shopify no cubre ambos períodos completos.'}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#168fc6]">Unidades vendidas online · Siigo</p>
+            <p className="mt-1 text-2xl font-bold text-[#172239]">{report.onlineUnitComparison.change !== null ? report.onlineUnitComparison.change === 0 ? 'Las unidades no cambiaron' : `Las unidades ${report.onlineUnitComparison.change > 0 ? 'subieron' : 'bajaron'} ${Math.abs(report.onlineUnitComparison.change * 100).toFixed(1)}%` : 'Unidades del período'}</p>
+            <p className="mt-1 text-sm text-slate-600">{number(report.onlineUnitComparison.current || 0)} unidades actuales{report.onlineUnitComparison.previous !== null ? ` frente a ${number(report.onlineUnitComparison.previous)} anteriores · ${(report.onlineUnitComparison.current || 0) - report.onlineUnitComparison.previous > 0 ? '+' : ''}${number((report.onlineUnitComparison.current || 0) - report.onlineUnitComparison.previous)} unidades de diferencia.` : ' · Historial Siigo incompleto para comparar.'}</p>
+            <p className="mt-1 text-xs text-slate-500">Por fecha de factura, igual que las ventas en pesos. Excluye tiendas, ferias, envíos, materias primas y facturas anuladas. Las notas crédito parciales no descuentan unidades sin un cruce por producto.</p>
           </div>
         </div>
         <div className="min-w-72 space-y-3 rounded-2xl bg-white/80 px-5 py-4 text-sm text-slate-600 shadow-sm">

@@ -114,6 +114,15 @@ export function marketingProductItems(invoice: CachedSiigoInvoice, nonRetailProd
   })
 }
 
+export function onlineInvoiceUnits(invoices: CachedSiigoInvoice[], period: DatePeriod, context: OnlineSalesClassificationContext, nonRetailProductCodes: Set<string>): number {
+  return invoices.reduce((sum, invoice) => {
+    const date = invoice.date.slice(0, 10)
+    const total = Number(invoice.total) || 0
+    if (date < period.start || date > period.end || total <= 0 || (Number(invoice.credited_amount) || 0) >= total || !isOnlineMarketingInvoice(invoice, context)) return sum
+    return sum + marketingProductItems(invoice, nonRetailProductCodes).reduce((units, item) => units + Number(item.quantity), 0)
+  }, 0)
+}
+
 export function replaceSalesWithSiigoOnline(
   metrics: PeriodMetrics,
   invoices: CachedSiigoInvoice[],

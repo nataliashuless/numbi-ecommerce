@@ -167,6 +167,7 @@ export interface MarketingExecutiveReport {
   categoryChannelUnits: Array<{ month: string; category: string; web: number; whatsapp: number }>
   salesByWeekday: Array<{ name: string; units: number }>
   salesByCity: Array<{ name: string; units: number }>
+  onlineUnitComparison: MetricComparison
   saleDateCoverage: { undatedInvoices: number; undatedUnits: number }
   designSales: Array<{ year: string; design: string; category: string; sales: number }>
   comparisons: Record<string, MetricComparison>

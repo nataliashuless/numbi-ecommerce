@@ -64,3 +64,9 @@ test('missing year resolves to the most recent past date, including previous Dec
 test('shoe sizes on a previous line cannot be mistaken for a day of month', () => {
   assert.equal(exports.marketingSaleDate(invoice({ date: '2026-09-16', observations: 'Sharky 21\nAgosto 20 2026\nNequi' }), new Map()), '2026-08-20')
 })
+
+test('online unit comparison counts both historical years using Siigo, excluding unrelated items and invoices', () => {
+  const period = { start: '2026-01-01', end: '2026-12-31' }
+  const make = overrides => invoice({ id: 'invoice', total: 100, credited_amount: 0, date: '2026-09-16', items: [{ code: 'shoe', quantity: 2 }, { code: 'MP001', quantity: 92.3 }, { code: 'ENVIO', quantity: 1 }], ...overrides })
+  assert.equal(exports.onlineInvoiceUnits([make({}), make({ observations: 'Pedido #2987' }), make({ customer_identification: 'store' }), make({ assigned_feria_id: 'fair' }), make({ credited_amount: 100 }), make({ date: '2025-09-16' })], period, context, new Set(['MP001'])), 4)
+})
