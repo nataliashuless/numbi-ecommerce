@@ -3,6 +3,7 @@ import type { DatePeriod, PeriodMetrics } from '@/lib/marketing/metrics'
 
 export interface CachedSiigoInvoice {
   id: string
+  name?: string
   date: string
   total: number
   credited_amount: number | null

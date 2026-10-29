@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getAdminClient, requireAuth } from '@/lib/auth-helpers'
 import { withoutIva } from '@/lib/siigo-values'
+import { historicalStoreEvidence } from '@/lib/marketing/channel-reconciliation'
+import { marketingBusinessChannelRules } from '@/lib/marketing/business-channel-rules'
 import { buildMarketingLedger, marketingItem } from '@/lib/marketing/sales-ledger'
 import { MARKETING_WEEKDAYS, marketingWeekday } from '@/lib/marketing/distributions'
 import {
@@ -104,7 +106,7 @@ export async function GET(request: Request) {
     const [siigoInvoices, orderStateResult, invoiceStateResult, stockStateResult, warehouseResult, tiendaResult, feriaResult] = await Promise.all([
       loadPaged<CachedSiigoInvoice>((from, to) => supabase
         .from('siigo_invoices')
-        .select('id, date, total, credited_amount, customer_identification, assigned_feria_id, observations, items, raw')
+        .select('id, name, date, total, credited_amount, customer_identification, assigned_feria_id, observations, items, raw')
         .gte('date', siigoQueryStart)
         // Include later invoices: their evidenced sale can belong to the selected period.
         .lte('date', isoDateInTimeZone(new Date()))
@@ -164,12 +166,18 @@ export async function GET(request: Request) {
       })),
     }
 
-    const ledger = buildMarketingLedger(siigoInvoices, orders, onlineSalesContext, nonRetailProductCodes, filters, 'invoice')
+    const whatsappLinks = await loadPaged<{ siigo_invoice_id: string | null }>((from, to) => supabase.from('ventas_whatsapp').select('siigo_invoice_id').not('siigo_invoice_id', 'is', null).range(from, to))
+    const reconciliationContext = { ...onlineSalesContext, ...marketingBusinessChannelRules, historicalStoreEvidence: historicalStoreEvidence(siigoInvoices), firstShopifyOrderDate: shopifyFrom, whatsappInvoiceIds: new Set(whatsappLinks.map(row => row.siigo_invoice_id).filter((id): id is string => Boolean(id))) }
+    const ledger = buildMarketingLedger(siigoInvoices, orders, reconciliationContext, nonRetailProductCodes, filters, 'invoice')
     const salesOrders = ledger.records.map(record => record.order)
     const previous = aggregatePeriod(comparisonMode === 'none' ? [] : salesOrders, periods.previous, stockBySku)
     let current = addProductComparisons(aggregatePeriod(salesOrders, periods.current, stockBySku), previous)
     const yearAgo = null
-    const salesComparable = comparisonMode !== 'none' && hasCompleteSiigoCoverage(periods.current, siigoFrom, siigoSyncedThrough) && hasCompleteSiigoCoverage(periods.previous, siigoFrom, siigoSyncedThrough)
+    const inPeriod = (date: string, period: typeof periods.current) => date >= period.start && date <= period.end
+    const pendingCurrent = ledger.reconciliation.filter(row => row.channel === 'pending' && inPeriod(row.date, periods.current))
+    const pendingPrevious = ledger.reconciliation.filter(row => row.channel === 'pending' && inPeriod(row.date, periods.previous))
+    const classificationComplete = pendingCurrent.length === 0 && pendingPrevious.length === 0
+    const salesComparable = classificationComplete && comparisonMode !== 'none' && hasCompleteSiigoCoverage(periods.current, siigoFrom, siigoSyncedThrough) && hasCompleteSiigoCoverage(periods.previous, siigoFrom, siigoSyncedThrough)
     if (!salesComparable) {
       current = { ...current, products: current.products.map(product => ({ ...product, variation: null, sizes: product.sizes.map(size => ({ ...size, variation: null })) })), sizes: current.sizes.map(size => ({ ...size, variation: null })) }
     }
@@ -254,7 +262,7 @@ export async function GET(request: Request) {
       }
     }).filter(point => point.month >= periods.current.start.slice(0, 7) && point.month <= periods.current.end.slice(0, 7))
 
-    const allChannels = new Set(['web', 'whatsapp'])
+    const allChannels = new Set(['woocommerce', 'shopify', 'whatsapp'])
     const allProducts = ledger.options.products
     const allSizes = ledger.options.sizes
     const scoped = Boolean(filters.channel || filters.product || filters.size || filters.category || filters.city)
@@ -306,6 +314,10 @@ export async function GET(request: Request) {
       salesByCity: Array.from(cityUnits, ([name, units]) => ({ name, units })).sort((a, b) => b.units - a.units || a.name.localeCompare(b.name, 'es')),
       onlineUnitComparison: comparison(current.units, salesComparable ? previous.units : null),
       invoiceUnitReconciliation: comparison(current.units, salesComparable ? previous.units : null),
+      channelReconciliation: {
+        current: ledger.reconciliation.filter(row => inPeriod(row.date, periods.current)),
+        previous: comparisonMode === 'none' ? [] : ledger.reconciliation.filter(row => inPeriod(row.date, periods.previous)),
+      },
       saleDateCoverage,
       designSales: Array.from(designSalesBuckets.values()).sort((a, b) =>
         b.year.localeCompare(a.year) || b.sales - a.sales,
@@ -339,7 +351,7 @@ export async function GET(request: Request) {
       },
       limitations: [
         'Todas las ventas, unidades, pedidos facturados y gráficas usan la misma selección global y la fecha de factura Siigo. Se excluyen tiendas, ferias, envíos y materias primas.',
-        'No se excluyen facturas por falta de fecha de venta en las notas o de pedido en Shopify. La fecha de factura Siigo define el período en ambos años.',
+        'La fecha de factura Siigo define ambos períodos. Mercado Pago se identifica como WooCommerce por confirmación de la dueña. Otros medios de pago o la fecha de feria no prueban canal. Las facturas sin canal confirmado se muestran en conciliación y bloquean el crecimiento, en lugar de suponerse WhatsApp.',
         'La ciudad procede de la dirección de envío del pedido Shopify; sin ciudad disponible se conserva como Sin ciudad registrada.',
         'Meta y GA4 solo están disponibles sin filtros de canal, categoría, diseño, talla o ciudad: no se puede atribuir su gasto o tráfico a esos filtros. Usan el período global.',
         'Las notas crédito parciales reducen ventas en pesos; no reducen unidades sin cruce por línea. Los pedidos aún sin factura no se incluyen.',

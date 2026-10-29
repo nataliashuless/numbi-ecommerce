@@ -172,6 +172,10 @@ export interface MarketingExecutiveReport {
   categoryChannelUnits: Array<{ month: string; category: string; web: number; whatsapp: number }>
   salesByWeekday: Array<{ name: string; units: number }>
   salesByCity: Array<{ name: string; units: number }>
+  channelReconciliation: {
+    current: Array<{ id: string; name: string; date: string; channel: string; reason: string; units: number; sales: number }>
+    previous: Array<{ id: string; name: string; date: string; channel: string; reason: string; units: number; sales: number }>
+  }
   invoiceUnitReconciliation: MetricComparison
   onlineUnitComparison: MetricComparison
   saleDateCoverage: { undatedInvoices: number; undatedUnits: number; previousUndatedUnits: number }

@@ -15,7 +15,7 @@ function load(name) {
 const { buildMarketingLedger, marketingItem } = load('sales-ledger')
 const { aggregatePeriod } = load('metrics')
 const { presetDates } = load('global-filters')
-const ctx = { shopifyOrderNumbers: new Set([100]), tiendaNits: new Set(['store']), feriaWindows: [] }
+const ctx = { shopifyOrderNumbers: new Set([100]), tiendaNits: new Set(['store']), feriaWindows: [], whatsappInvoiceIds: new Set(['wa', 'unknown']) }
 const orders = [{ id: 100, created_at: '2026-09-01T03:00:00Z', raw: { order_number: 100, shipping_address: { city: 'BOGOTA D.C.' } } }]
 const base = { total: 357, credited_amount: 0, date: '2026-10-10', customer_identification: 'direct', assigned_feria_id: null, raw: null, items: [{ code: 'a', description: 'Leo - 20', quantity: 1, total: 119 }, { code: 'b', description: 'Blue - 25', quantity: 1, total: 119 }, { code: '2', description: 'Costo de Envío', quantity: 1, total: 119 }] }
 const invoices = [{ ...base, id: 'web', observations: 'Pedido #100' }, { ...base, id: 'wa', observations: 'Compra el 7 de septiembre 2026' }]
@@ -56,6 +56,7 @@ test('period presets handle year boundaries, closed months and Colombian time', 
 
 const tables = {
   shopify_orders: orders,
+  ventas_whatsapp: [{ siigo_invoice_id: 'wa' }, { siigo_invoice_id: 'unknown' }],
   siigo_invoices: [...invoices, { ...base, id: 'unknown', observations: '' }],
   shopify_orders_sync_state: [{ id: 1, earliest_at: '2025-01-01', latest_at: '2026-10-29' }],
   siigo_invoices_sync_state: [{ id: 1, earliest_date: '2025-01-01', last_full_sync_at: '2026-10-29T12:00:00Z' }],
@@ -123,4 +124,18 @@ test('Siigo historical basis includes invoices with no sale date in notes and do
   assert.equal(report.current.units, 6)
   assert.equal(report.invoiceUnitReconciliation.current, 6)
   assert.equal(report.current.netSales, 600)
+})
+
+test('unclassified invoices are reconciled, not discarded or labelled WhatsApp, and suppress aggregate growth', async () => {
+  tables.siigo_invoices.push({ ...base, id: 'ambiguous', observations: 'Pago transferencia' })
+  try {
+    const report = await route.GET({ url: 'https://example.test/api/marketing/executive?view=ytd&start_date=2026-01-01&end_date=2026-10-28' })
+    assert.equal(report.channelReconciliation.current.find(row => row.id === 'ambiguous').channel, 'pending')
+    assert.equal(report.channelReconciliation.current.reduce((sum, row) => sum + row.units, 0), 8)
+    assert.equal(report.current.units, 6)
+    assert.equal(report.comparisons.units.change, null)
+    assert.equal(report.comparisons.netSales.change, null)
+    const confirm = report.channelReconciliation.current.filter(row => ['shopify', 'woocommerce', 'whatsapp'].includes(row.channel)).reduce((sum, row) => sum + row.units, 0)
+    assert.equal(confirm, report.current.units)
+  } finally { tables.siigo_invoices.pop() }
 })

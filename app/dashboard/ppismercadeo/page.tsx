@@ -374,6 +374,7 @@ export default function MarketingPage() {
         {metaError && <Card className="border-rose-200 bg-rose-50"><CardContent className="flex flex-col gap-3 p-5 text-rose-900 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">Meta Ads necesita reconexión</p><p className="mt-1 text-sm">{metaError.includes('Session has expired') ? 'El token de acceso venció. Gasto, campañas y anuncios no se pueden consultar hasta renovarlo.' : metaError}</p></div><Link href="/dashboard/configuracion"><Button variant="outline" className="border-rose-300 bg-white text-rose-900">Ir a configuración</Button></Link></CardContent></Card>}
         <SimpleExecutiveSummary report={report} spend={spend} previousSpend={previousSpend} mer={mer} insights={insights} actions={simpleActions.slice(0, 3)} onOpenDetails={() => setShowDetails(true)} comparisonReliable={comparisonReliable} />
         {comparisonMode !== 'none' && <YtdComparison report={report} spend={spend} previousSpend={previousSpend} mer={mer} previousMer={previousMer} comparisonReliable={comparisonReliable} />}
+        <ChannelReconciliation report={report} />
         <CategoryChannelUnitsChart report={report} />
         <div className="grid items-stretch gap-6 lg:grid-cols-2">
           <DesignSalesChart report={report} />
@@ -424,6 +425,30 @@ export default function MarketingPage() {
 }
 
 const DESIGN_COLORS = ['#7378f4', '#17356f', '#f7bb1b', '#ff5a2a', '#1f9d55', '#147d77', '#c62828', '#ea7ba7', '#40523d', '#70b7ec', '#a965ef']
+
+function ChannelReconciliation({ report }: { report: MarketingExecutiveReport }) {
+  const labels: Record<string, string> = { woocommerce: 'WooCommerce confirmado', shopify: 'Shopify confirmado', whatsapp: 'WhatsApp confirmado', tienda: 'Tiendas · excluidas de online', feria: 'Ferias · excluidas de online', pending: 'Canal pendiente · no se supone WhatsApp' }
+  const current = report.channelReconciliation.current
+  const previous = report.channelReconciliation.previous
+  const pending = [...current.map(row => ({ ...row, period: 'Actual' })), ...previous.map(row => ({ ...row, period: 'Comparado' }))].filter(row => row.channel === 'pending')
+  const units = (rows: typeof current, channel: string) => rows.filter(row => row.channel === channel).reduce((sum, row) => sum + row.units, 0)
+  const downloadAudit = () => {
+    const rows = [['Factura', 'Fecha', 'Periodo', 'Canal', 'Unidades', 'Ventas antes de IVA', 'Evidencia'], ...current.map(row => [row.name, row.date, 'Actual', labels[row.channel], row.units, row.sales, row.reason]), ...previous.map(row => [row.name, row.date, 'Comparado', labels[row.channel], row.units, row.sales, row.reason])]
+    const csv = rows.map(row => row.map(value => { const text = String(value ?? ''); return `"${(/^[=+@-]/.test(text) ? "'" + text : text).replace(/"/g, '""')}"` }).join(';')).join('\r\n')
+    const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a'); link.href = url; link.download = `conciliacion-canales-siigo-${report.periods.current.end}.csv`; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+  return <Card className="border-sky-200 shadow-sm">
+    <CardHeader><CardTitle>Conciliación del histórico de Siigo</CardTitle><p className="text-sm text-slate-600">Cada factura de producto se asigna una sola vez. Tiendas y ferias se excluyen de online. Las facturas sin evidencia de canal se conservan aquí y bloquean el porcentaje de crecimiento.</p></CardHeader>
+    <CardContent>
+      <Button variant="outline" className="mb-3" onClick={downloadAudit}>Descargar conciliación CSV</Button>
+      <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Clasificación</TableHead><TableHead className="text-right">Unidades actuales</TableHead>{report.filters.comparisonMode !== 'none' && <TableHead className="text-right">Unidades comparadas</TableHead>}</TableRow></TableHeader><TableBody>{Object.entries(labels).map(([channel, label]) => <TableRow key={channel} className={channel === 'pending' ? 'bg-amber-50' : ''}><TableCell className="font-medium">{label}</TableCell><TableCell className="text-right">{number(units(current, channel))}</TableCell>{report.filters.comparisonMode !== 'none' && <TableCell className="text-right">{number(units(previous, channel))}</TableCell>}</TableRow>)}</TableBody></Table></div>
+      <p className="mt-3 text-xs text-slate-500">Shopify: cruce de pedido o registro Moship. WooCommerce: Mercado Pago por regla confirmada, mención explícita o venta web documentada antes de Shopify. WhatsApp: venta vinculada, mención explícita o pagos directos Nequi/Bold/Bancolombia/Daviplata por regla confirmada, tras excluir web, tiendas y ferias. Tiendas: NIT registrado. Ferias: asignación o nota explícita. Regla confirmada por la dueña: Mercado Pago corresponde exclusivamente a WooCommerce. Los pagos directos Nequi/Bold/Bancolombia/Daviplata corresponden a WhatsApp tras excluir tiendas, ferias y pedidos web. La fecha de feria por sí sola no determina canal.</p>
+      {pending.length > 0 && <details className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3"><summary className="cursor-pointer text-sm font-semibold text-amber-900">Revisar {number(pending.length)} facturas pendientes de canal</summary><div className="mt-3 max-h-96 overflow-auto"><Table><TableHeader><TableRow><TableHead>Factura</TableHead><TableHead>Fecha</TableHead><TableHead>Período</TableHead><TableHead>Unidades</TableHead><TableHead>Motivo</TableHead></TableRow></TableHeader><TableBody>{pending.map(row => <TableRow key={`${row.period}-${row.id}`}><TableCell>{row.name}</TableCell><TableCell>{row.date}</TableCell><TableCell>{row.period}</TableCell><TableCell>{number(row.units)}</TableCell><TableCell>{row.reason}</TableCell></TableRow>)}</TableBody></Table></div></details>}
+      <p className="mt-3 text-xs text-slate-500">Suma de control actual: {number(current.reduce((sum, row) => sum + row.units, 0))} unidades de producto en todas las clasificaciones de la selección. Los pedidos sin factura y las facturas anuladas no se incluyen; las notas crédito parciales no descuentan unidades sin cruce por línea.</p>
+    </CardContent>
+  </Card>
+}
 
 function WeekdayCityCharts({ report }: { report: MarketingExecutiveReport }) {
   const weekdays = report.salesByWeekday || []
@@ -578,7 +603,7 @@ function CategoryChannelUnitsChart({ report }: { report: MarketingExecutiveRepor
     <SectionTitle eyebrow="Categoría y canal" title="Unidades vendidas mes a mes" badge="Fuente: Siigo" />
     <Card className="border-0 shadow-sm">
       <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div><CardTitle className="text-lg text-[#172239]">Shuless.co vs WhatsApp</CardTitle><p className="mt-1 text-xs text-slate-500">Unidades con factura, por fecha de factura Siigo. No es cantidad de pedidos.</p></div>
+        <div><CardTitle className="text-lg text-[#172239]">WooCommerce + Shopify vs WhatsApp</CardTitle><p className="mt-1 text-xs text-slate-500">Unidades con factura, por fecha de factura Siigo. No es cantidad de pedidos.</p></div>
 
       </CardHeader>
       <CardContent>
@@ -627,6 +652,7 @@ function SimpleExecutiveSummary({
 }) {
   const salesChange = comparisonReliable ? report.comparisons.netSales.change : null
   const spendChange = spend !== null && previousSpend !== null && previousSpend > 0 ? (spend - previousSpend) / previousSpend : null
+  const pendingChannels = [...report.channelReconciliation.current, ...report.channelReconciliation.previous].filter(row => row.channel === 'pending').length > 0
   const hasUnverifiedDates = report.saleDateCoverage.undatedUnits > 0 || report.saleDateCoverage.previousUndatedUnits > 0
   const headline = report.filters.comparisonMode === 'none' ? 'Ventas del período seleccionado' : !comparisonReliable
     ? 'La comparación anual todavía está incompleta'
@@ -634,7 +660,7 @@ function SimpleExecutiveSummary({
     ? 'Así va el negocio en el periodo seleccionado'
     : `Las ventas ${hasUnverifiedDates ? 'con fecha ' : ''}${salesChange >= 0 ? 'subieron' : 'bajaron'} ${Math.abs(salesChange * 100).toFixed(1)}%`
   const explanation = report.filters.comparisonMode === 'none' ? 'Sin comparación.' : !comparisonReliable
-    ? hasUnverifiedDates ? 'No podemos concluir si crecimos por fecha de factura Siigo: faltan fechas de venta en uno o ambos períodos.' : 'El historial no cubre ambos períodos completos.'
+    ? pendingChannels ? 'No calculamos crecimiento mientras existan facturas sin canal confirmado. Revisa la conciliación debajo.' : 'El historial no cubre ambos períodos completos.'
     : salesChange === null
     ? 'No hay un periodo anterior comparable para indicar si crecimos.'
     : report.filters.comparisonMode === 'none' ? 'Sin comparación.' : `Comparamos ventas con fecha de factura Siigo con ${readableRange(report.periods.previous.start, report.periods.previous.end)}.`
@@ -647,8 +673,8 @@ function SimpleExecutiveSummary({
           <h2 id="simple-summary-title" className="mt-3 text-3xl font-bold tracking-tight text-[#172239]">{headline}</h2>
           <p className="mt-2 text-sm text-slate-600">{explanation}</p>
           <div className="mt-5 border-t border-slate-200/70 pt-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#168fc6]">Unidades vendidas · fecha de factura Siigo</p>
-            <p className="mt-1 text-2xl font-bold text-[#172239]">{report.onlineUnitComparison.change !== null ? report.onlineUnitComparison.change === 0 ? 'Las unidades no cambiaron' : `Las unidades ${hasUnverifiedDates ? 'con fecha ' : ''}${report.onlineUnitComparison.change > 0 ? 'subieron' : 'bajaron'} ${Math.abs(report.onlineUnitComparison.change * 100).toFixed(1)}%` : report.filters.comparisonMode === 'none' ? 'Unidades del período' : 'Variación no concluyente: faltan fechas'}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#168fc6]">Unidades online confirmadas · Siigo</p>
+            <p className="mt-1 text-2xl font-bold text-[#172239]">{report.onlineUnitComparison.change !== null ? report.onlineUnitComparison.change === 0 ? 'Las unidades no cambiaron' : `Las unidades ${hasUnverifiedDates ? 'con fecha ' : ''}${report.onlineUnitComparison.change > 0 ? 'subieron' : 'bajaron'} ${Math.abs(report.onlineUnitComparison.change * 100).toFixed(1)}%` : report.filters.comparisonMode === 'none' ? 'Unidades del período' : 'Variación no concluyente: clasificación pendiente'}</p>
             <p className="mt-1 text-sm text-slate-600">{number(report.onlineUnitComparison.current || 0)} unidades actuales{report.onlineUnitComparison.previous !== null ? ` frente a ${number(report.onlineUnitComparison.previous)} anteriores · ${(report.onlineUnitComparison.current || 0) - report.onlineUnitComparison.previous > 0 ? '+' : ''}${number((report.onlineUnitComparison.current || 0) - report.onlineUnitComparison.previous)} unidades de diferencia.` : report.filters.comparisonMode === 'none' ? '' : ' · No se calcula crecimiento con una base incompleta.'}</p>
             <p className="mt-1 text-xs text-slate-500">Por fecha de factura Siigo, igual que todas las gráficas. Excluye tiendas, ferias, envíos, materias primas y facturas anuladas. Las notas crédito parciales no descuentan unidades sin un cruce por producto.</p>
 
@@ -663,7 +689,7 @@ function SimpleExecutiveSummary({
     </Card>
 
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <PlainMetricCard icon={CircleDollarSign} label="Vendimos online antes de IVA" value={currency(report.current.netSales)} change={salesChange} detail="Ventas facturadas con fecha de factura Siigo" />
+      <PlainMetricCard icon={CircleDollarSign} label="Ventas online confirmadas antes de IVA" value={currency(report.current.netSales)} change={salesChange} detail="Ventas facturadas con fecha de factura Siigo" />
       <PlainMetricCard icon={WalletCards} label="Invertimos en publicidad" value={spend === null ? 'Dato no disponible' : currency(spend)} change={spendChange} detail="Gasto registrado por Meta" />
       <PlainMetricCard icon={TrendingUp} label="Ventas por cada $1 de publicidad" value={mer === null ? 'Dato no disponible' : `${mer.toFixed(2)} veces`} change={null} detail="Ventas reales ÷ gasto Meta; no es utilidad" />
       <PlainMetricCard icon={Users} label="Clientes nuevos" value={number(report.current.customers.new)} change={comparisonReliable ? report.comparisons.newCustomers.change : null} detail="Identificados en las ventas seleccionadas vinculadas a Shopify" />
@@ -756,7 +782,7 @@ function FilterBar(props: {
     <div className="grid gap-3 sm:grid-cols-3">
       <label className="text-xs font-semibold text-slate-500">Período<select disabled={props.loading} value={props.preset} onChange={event => selectPeriod(event.target.value)} className={selectClass}><option value="month">Este mes</option><option value="last_month">Mes anterior</option><option value="ytd">Acumulado del año</option><option value="custom">Elegir fechas</option></select></label>
       <label className="text-xs font-semibold text-slate-500">Comparar con<select disabled={props.loading} value={props.comparisonMode} onChange={event => props.setComparisonMode(event.target.value)} className={selectClass}><option value="year">Mismo período del año anterior</option><option value="previous">Período anterior</option><option value="none">Sin comparación</option></select></label>
-      <label className="text-xs font-semibold text-slate-500">Canal<select disabled={props.loading} value={props.channel} onChange={event => props.setChannel(event.target.value)} className={selectClass}><option value="">Todos online</option><option value="web">Shopify / web</option><option value="whatsapp">WhatsApp</option></select></label>
+      <label className="text-xs font-semibold text-slate-500">Canal<select disabled={props.loading} value={props.channel} onChange={event => props.setChannel(event.target.value)} className={selectClass}><option value="">Todos online</option><option value="woocommerce">WooCommerce</option><option value="shopify">Shopify</option><option value="whatsapp">WhatsApp</option></select></label>
     </div>
     {props.preset === 'custom' && <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold text-slate-500">Desde<Input disabled={props.loading} type="date" value={props.startDate} max={props.endDate || undefined} onChange={event => props.setStartDate(event.target.value)} className="mt-1" /></label><label className="text-xs font-semibold text-slate-500">Hasta<Input disabled={props.loading} type="date" value={props.endDate} min={props.startDate || undefined} onChange={event => props.setEndDate(event.target.value)} className="mt-1" /></label></div>}
     <div className="mt-3 flex flex-wrap gap-2"><Button variant="ghost" onClick={() => props.setExpanded(!props.expanded)}>{props.expanded ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}Más filtros</Button><Button disabled={props.loading} variant="ghost" onClick={reset}>Limpiar filtros</Button><Button disabled={props.loading} variant="ghost" onClick={props.refresh}><RefreshCw className={`mr-2 h-4 w-4 ${props.loading ? 'animate-spin' : ''}`} />Actualizar</Button></div>
@@ -766,10 +792,10 @@ function FilterBar(props: {
       <label className="text-xs font-semibold text-slate-500">Talla<select disabled={props.loading} value={props.size} onChange={event => props.setSize(event.target.value)} className={selectClass}><option value="">Todas</option>{props.report?.filters.sizes.map(item => <option key={item}>{item}</option>)}</select></label>
       <label className="text-xs font-semibold text-slate-500">Ciudad<select disabled={props.loading} value={props.city} onChange={event => props.setCity(event.target.value)} className={selectClass}><option value="">Todas</option>{props.report?.filters.cities.map(item => <option key={item}>{item}</option>)}</select></label>
     </div>}
-    {props.report && <p className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-700"><strong>Mostrando:</strong> {readableRange(props.report.periods.current.start, props.report.periods.current.end)} · {props.report.filters.comparisonMode === 'none' ? 'sin comparación' : `comparado con ${readableRange(props.report.periods.previous.start, props.report.periods.previous.end)}`} · {applied?.channel === 'web' ? 'Shopify / web' : applied?.channel === 'whatsapp' ? 'WhatsApp' : 'todos online'}{[applied?.category, applied?.product, applied?.size && `Talla ${applied.size}`, applied?.city].filter(Boolean).map(value => <span key={value}> · {value}</span>)} · <strong>Fecha de factura Siigo</strong></p>}
+    {props.report && <p className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-700"><strong>Mostrando:</strong> {readableRange(props.report.periods.current.start, props.report.periods.current.end)} · {props.report.filters.comparisonMode === 'none' ? 'sin comparación' : `comparado con ${readableRange(props.report.periods.previous.start, props.report.periods.previous.end)}`} · {applied?.channel === 'woocommerce' ? 'WooCommerce' : applied?.channel === 'shopify' ? 'Shopify' : applied?.channel === 'whatsapp' ? 'WhatsApp' : 'online confirmado'}{[applied?.category, applied?.product, applied?.size && `Talla ${applied.size}`, applied?.city].filter(Boolean).map(value => <span key={value}> · {value}</span>)} · <strong>Fecha de factura Siigo</strong></p>}
     {props.report && (props.report.saleDateCoverage.undatedUnits > 0 || (props.comparisonMode !== 'none' && props.report.saleDateCoverage.previousUndatedUnits > 0)) && <p className="mt-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">No calculamos crecimiento por fecha de factura Siigo mientras falten fechas. Pendientes de fecha: {number(props.report.saleDateCoverage.undatedUnits)} unidades facturadas en el período actual{props.comparisonMode !== 'none' ? ` y ${number(props.report.saleDateCoverage.previousUndatedUnits)} en el período comparado` : ''}. Se excluyen de los totales y porcentajes.</p>}
     {hasScope && <p className="mt-2 text-xs text-amber-800">Meta y Analytics no se muestran con filtros de ventas: sus datos no permiten atribuir gasto o tráfico a esta selección.</p>}
-    <p className="mt-2 text-xs text-slate-500">Los filtros se aplican automáticamente a todo Mercadeo. Fuente: histórico online de Siigo, por fecha de factura. Incluye facturas sin fecha de venta en las notas; antes de Shopify, el canal web incluye WooCommerce histórico.</p>
+    <p className="mt-2 text-xs text-slate-500">Los filtros se aplican automáticamente a todo Mercadeo. Fuente: histórico online de Siigo, por fecha de factura. Incluye facturas sin fecha de venta en las notas; los canales se confirman con pedidos vinculados y observaciones explícitas. Mercado Pago identifica WooCommerce por confirmación de la dueña; Nequi/Bold/Bancolombia/Daviplata identifican WhatsApp solo tras excluir tiendas, ferias y pedidos web, según confirmación de la dueña.</p>
   </section>
 }
 
