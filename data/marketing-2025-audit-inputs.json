@@ -63,7 +63,9 @@
       "emailHash": "eec9174558b451c328996d820b67a009a87f52d2b3137ccef0e07f0be18f3be1",
       "shipping": 16500.0,
       "explicitRefund": false,
-      "explicitFair": false
+      "explicitFair": false,
+      "ownerDecision": "pending",
+      "ownerReviewedOn": "2026-10-29"
     },
     {
       "row": 491,

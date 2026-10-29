@@ -6,7 +6,7 @@ import { marketingProductItems, marketingSaleDate } from './siigo-sales'
 import type { ExcelHistory, ExcelSaleRow } from './excel-history'
 import { marketingItem } from './sales-ledger'
 
-interface Target { row: number; invoiceCandidates: string[]; buyerHash: string | null; nameHash: string | null; emailHash: string | null; shipping: number; explicitRefund: boolean; explicitFair: boolean; duplicateOf?: number; productAmount?: number | null; totalPaid?: number | null; orderNumber?: number }
+interface Target { row: number; invoiceCandidates: string[]; buyerHash: string | null; nameHash: string | null; emailHash: string | null; shipping: number; explicitRefund: boolean; explicitFair: boolean; duplicateOf?: number; productAmount?: number | null; totalPaid?: number | null; orderNumber?: number; ownerDecision?: string; ownerReviewedOn?: string }
 interface Inputs { targets: Target[]; fairInvoiceNames: string[]; fairInvoiceRows?: Array<{ row: number; invoice: string }> }
 export interface HistoryDecision { row: number; decision: 'online' | 'shopify' | 'excluded' | 'pending'; reason: string; invoice?: string; order?: number; credited?: boolean; replacement?: string; documentUnits?: number; variantMatch?: boolean }
 const normalize = (value: unknown) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -29,6 +29,7 @@ export function reconcileHistory(history: ExcelHistory, inputs: Inputs, invoices
     const refs = target.invoiceCandidates.map(name => byName.get(name)).filter((invoice): invoice is CachedSiigoInvoice => Boolean(invoice))
     const original = refs[0]
     const base = { row: row.row, invoice: original?.name, order: target.orderNumber || Number((original?.observations || '').match(/(?:#|pedido\s+)(\d+)/i)?.[1]) || undefined, credited: original ? !validInvoice(original) : undefined }
+    if (target.ownerDecision === 'pending') { decisions.push({ ...base, decision: 'pending', reason: `Pendiente por indicación de la dueña (${target.ownerReviewedOn || 'revisión actual'}): falta confirmar entrega y pago frente a la nota crédito` }); continue }
     if (target.duplicateOf) { decisions.push({ ...base, decision: 'excluded', reason: `Repetición exacta de la fila ${target.duplicateOf}; Shopify cuenta el pedido una sola vez` }); continue }
     if (row.flags.includes('gift') || target.explicitRefund || target.explicitFair) {
       decisions.push({ ...base, decision: 'excluded', reason: target.explicitRefund ? 'Devolución de dinero explícita en Excel' : target.explicitFair ? 'Venta de feria explícita en Excel' : 'Regalo comercial o de marketing' }); continue

@@ -244,3 +244,9 @@ test('a paid Shopify order explicitly reconciled as a physical fair is excluded 
   assert.equal(directShopifyInvoices([order]).length, 1)
   assert.equal(directShopifyInvoices([order], new Set([1326])).length, 0)
 })
+
+test('owner instruction to leave a credited sale pending is preserved rather than inferred from another invoice', () => {
+  const result = reconcileHistory({ from: '2025-01-01', to: '2025-12-31', rows: [auditRow] }, { targets: [{ ...auditTarget, ownerDecision: 'pending', ownerReviewedOn: '2026-10-29' }], fairInvoiceNames: [] }, [{ ...base, id: 'old', name: 'FV-2-10', credited_amount: 357 }, { ...base, id: 'new', name: 'FV-2-11', customer_identification: 'buyer', observations: 'Reemplaza factura 10' }], [], new Set())
+  assert.equal(result.decisions[0].decision, 'pending')
+  assert.match(result.decisions[0].reason, /indicación de la dueña/)
+})

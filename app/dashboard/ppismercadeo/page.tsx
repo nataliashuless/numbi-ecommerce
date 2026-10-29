@@ -426,7 +426,7 @@ const DESIGN_COLORS = ['#7378f4', '#17356f', '#f7bb1b', '#ff5a2a', '#1f9d55', '#
 
 function ChannelReconciliation({ report }: { report: MarketingExecutiveReport }) {
   const auditDecisionLabels: Record<string, string> = { online: 'Online', shopify: 'Solo Shopify', excluded: 'Excluida', pending: 'Pendiente' }
-  const labels: Record<string, string> = { woocommerce: 'WooCommerce confirmado', shopify: 'Shopify confirmado', whatsapp: 'WhatsApp confirmado', tienda: 'Tiendas · excluidas de online', feria: 'Ferias · excluidas de online', pending: 'Canal pendiente · no se supone WhatsApp' }
+  const labels: Record<string, string> = { woocommerce: 'WooCommerce confirmado', shopify: 'Shopify confirmado', whatsapp: 'WhatsApp confirmado', tienda: 'Tiendas · excluidas de online', feria: 'Ferias · excluidas de online', pending: 'Pendiente de conciliación' }
   const current = report.channelReconciliation.current
   const previous = report.channelReconciliation.previous
   const pending = [...current.map(row => ({ ...row, period: 'Actual' })), ...previous.map(row => ({ ...row, period: 'Comparado' }))].filter(row => row.channel === 'pending')
