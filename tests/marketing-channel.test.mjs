@@ -70,3 +70,9 @@ test('online unit comparison counts both historical years using Siigo, excluding
   const make = overrides => invoice({ id: 'invoice', total: 100, credited_amount: 0, date: '2026-09-16', items: [{ code: 'shoe', quantity: 2 }, { code: 'MP001', quantity: 92.3 }, { code: 'ENVIO', quantity: 1 }], ...overrides })
   assert.equal(exports.onlineInvoiceUnits([make({}), make({ observations: 'Pedido #2987' }), make({ customer_identification: 'store' }), make({ assigned_feria_id: 'fair' }), make({ credited_amount: 100 }), make({ date: '2025-09-16' })], period, context, new Set(['MP001'])), 4)
 })
+
+test('legacy shipping code 2 does not inflate the prior-year unit denominator', () => {
+  const previous = invoice({ date: '2025-02-01', total: 200, credited_amount: 0, items: [{ code: 'shoe', quantity: 2 }, { code: '2', description: 'Costo de Envío', quantity: 1 }] })
+  assert.equal(exports.onlineInvoiceUnits([previous], { start: '2025-01-01', end: '2025-10-28' }, context, new Set()), 2)
+  assert.equal(exports.marketingProductItems(invoice({ items: [{ code: '2', description: 'Zapato 20', quantity: 1 }] }), new Set()).length, 1)
+})

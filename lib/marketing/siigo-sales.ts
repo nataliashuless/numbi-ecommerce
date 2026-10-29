@@ -110,7 +110,10 @@ export function onlineMarketingChannel(
 export function marketingProductItems(invoice: CachedSiigoInvoice, nonRetailProductCodes: Set<string>) {
   return (invoice.items || []).filter(item => {
     const code = (item.code || '').trim()
-    return code && code !== 'ENVIO' && !nonRetailProductCodes.has(code) && (Number(item.quantity) || 0) > 0
+    const description = (item.description || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+    // WooCommerce-era invoices used code "2" for shipping, not the current ENVIO SKU.
+    const shipping = code.toUpperCase() === 'ENVIO' || /^(?:(?:costo|coste|gastos?|servicio) de )?envio(?:s)?$|^fletes?$/.test(description)
+    return code && !shipping && !nonRetailProductCodes.has(code) && (Number(item.quantity) || 0) > 0
   })
 }
 
