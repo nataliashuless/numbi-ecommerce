@@ -2,11 +2,12 @@ import { isValidSalesOrder, isoDateInTimeZone, netSalesOf, type CachedShopifyOrd
 import type { CachedSiigoInvoice } from './siigo-sales'
 
 /** Product quantities and dates come directly from Shopify, even before Siigo invoicing. */
-export function directShopifyInvoices(orders: CachedShopifyOrder[]): CachedSiigoInvoice[] {
+export function directShopifyInvoices(orders: CachedShopifyOrder[], excludedOrderNumbers: Set<number> = new Set()): CachedSiigoInvoice[] {
   const seen = new Set<number>()
   return orders.flatMap(order => {
     if (seen.has(order.id)) return []
     seen.add(order.id)
+    if (excludedOrderNumbers.has(Number(order.raw?.order_number))) return []
     if (!isValidSalesOrder(order) || order.raw?.source_name === 'pos') return []
     const raw = order.raw || {}
     const items = (raw.line_items || []).filter(item => Number(item.current_quantity ?? item.quantity) > 0).map((item, index) => {

@@ -178,7 +178,8 @@ export async function GET(request: Request) {
     const historicalSales = { ...excelHistory, rows: excelHistory.rows.map(row => ({ ...row, invoice: row.invoice || invoiceLinks.get(row.row) || null })) }
     const historyAudit = reconcileHistory(historicalSales, historyAuditInputs, siigoInvoices, orders, new Set([...marketingBusinessChannelRules.confirmedStoreInvoiceNames, ...marketingBusinessChannelRules.confirmedParaisoInvoiceNames, ...siigoInvoices.filter(invoice => classifyMarketingInvoice(invoice, reconciliationContext).channel === 'tienda').map(invoice => invoice.name || '')]))
     const excel = applyExcelHistory(siigoInvoices, reconciliationContext, historicalSales, historyAudit.decisions)
-    const unifiedInvoices = [...excel.invoices.filter(invoice => classifyMarketingInvoice(invoice, reconciliationContext).channel !== 'shopify'), ...directShopifyInvoices(orders)]
+    const excludedPhysicalOrders = new Set(historyAudit.decisions.filter(decision => decision.decision === 'excluded' && decision.reason === 'Venta de feria explícita en Excel').map(decision => decision.order).filter((number): number is number => Boolean(number)))
+    const unifiedInvoices = [...excel.invoices.filter(invoice => classifyMarketingInvoice(invoice, reconciliationContext).channel !== 'shopify'), ...directShopifyInvoices(orders, excludedPhysicalOrders)]
     const ledger = buildMarketingLedger(unifiedInvoices, orders, reconciliationContext, nonRetailProductCodes, filters, 'invoice')
     const salesOrders = ledger.records.map(record => record.order)
     const previous = aggregatePeriod(comparisonMode === 'none' ? [] : salesOrders, periods.previous, stockBySku)

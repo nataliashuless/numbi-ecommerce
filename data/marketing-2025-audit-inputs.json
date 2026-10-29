@@ -286,7 +286,8 @@
       "emailHash": "6e5cfed46813f58dcff2201488c126d1f213e3d903b0fc6bb244bdca4b193d55",
       "shipping": 0,
       "explicitRefund": false,
-      "explicitFair": true
+      "explicitFair": true,
+      "orderNumber": 1326
     },
     {
       "row": 1028,

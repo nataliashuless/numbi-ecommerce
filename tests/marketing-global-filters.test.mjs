@@ -230,3 +230,17 @@ test('unresolved rows remain explicit pending units and owner-confirmed physical
   const physical = { ...base, id: 'physical', name: 'FV-2-10', date: '2025-01-03', customer_identification: 'store' }
   assert.equal(applyExcelHistory([physical], ctx, history).invoices.length, 0)
 })
+
+test('two credited duplicates reissued into one invoice retain only the documented product quantity', () => {
+  const rows = [auditRow, { ...auditRow, row: 3, invoice: 'FV-2-12' }]
+  const source = [{ ...base, id: 'old10', name: 'FV-2-10', total: 119, credited_amount: 119, customer_identification: 'buyer' }, { ...base, id: 'old12', name: 'FV-2-12', total: 119, credited_amount: 119, customer_identification: 'buyer' }, { ...base, id: 'new11', name: 'FV-2-11', date: '2025-01-06', total: 119, customer_identification: 'buyer', observations: 'Reemplaza factura 10 y factura 12', items: [base.items[0]] }]
+  const result = reconcileHistory({ from: '2025-01-01', to: '2025-12-31', rows }, { targets: [auditTarget, { ...auditTarget, row: 3, invoiceCandidates: ['FV-2-12'] }], fairInvoiceNames: [] }, source, [], new Set())
+  assert.equal(result.decisions.filter(row => row.decision === 'online').length, 1)
+  assert.equal(result.decisions.filter(row => row.decision === 'excluded').length, 1)
+})
+
+test('a paid Shopify order explicitly reconciled as a physical fair is excluded from online', () => {
+  const order = { id: 1326, created_at: '2025-09-15T12:00:00Z', financial_status: 'paid', total_price: 119, raw: { order_number: 1326, current_subtotal_price: '119', line_items: [{ title: 'Leo', variant_title: '20', quantity: 1, price: '119' }] } }
+  assert.equal(directShopifyInvoices([order]).length, 1)
+  assert.equal(directShopifyInvoices([order], new Set([1326])).length, 0)
+})

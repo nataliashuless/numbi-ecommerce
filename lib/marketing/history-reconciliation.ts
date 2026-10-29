@@ -6,7 +6,7 @@ import { marketingProductItems, marketingSaleDate } from './siigo-sales'
 import type { ExcelHistory, ExcelSaleRow } from './excel-history'
 import { marketingItem } from './sales-ledger'
 
-interface Target { row: number; invoiceCandidates: string[]; buyerHash: string | null; nameHash: string | null; emailHash: string | null; shipping: number; explicitRefund: boolean; explicitFair: boolean; duplicateOf?: number; productAmount?: number | null; totalPaid?: number | null }
+interface Target { row: number; invoiceCandidates: string[]; buyerHash: string | null; nameHash: string | null; emailHash: string | null; shipping: number; explicitRefund: boolean; explicitFair: boolean; duplicateOf?: number; productAmount?: number | null; totalPaid?: number | null; orderNumber?: number }
 interface Inputs { targets: Target[]; fairInvoiceNames: string[]; fairInvoiceRows?: Array<{ row: number; invoice: string }> }
 export interface HistoryDecision { row: number; decision: 'online' | 'shopify' | 'excluded' | 'pending'; reason: string; invoice?: string; order?: number; credited?: boolean; replacement?: string; documentUnits?: number; variantMatch?: boolean }
 const normalize = (value: unknown) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -28,7 +28,7 @@ export function reconcileHistory(history: ExcelHistory, inputs: Inputs, invoices
     if (!row) continue
     const refs = target.invoiceCandidates.map(name => byName.get(name)).filter((invoice): invoice is CachedSiigoInvoice => Boolean(invoice))
     const original = refs[0]
-    const base = { row: row.row, invoice: original?.name, order: Number((original?.observations || '').match(/(?:#|pedido\s+)(\d+)/i)?.[1]) || undefined, credited: original ? !validInvoice(original) : undefined }
+    const base = { row: row.row, invoice: original?.name, order: target.orderNumber || Number((original?.observations || '').match(/(?:#|pedido\s+)(\d+)/i)?.[1]) || undefined, credited: original ? !validInvoice(original) : undefined }
     if (target.duplicateOf) { decisions.push({ ...base, decision: 'excluded', reason: `Repetición exacta de la fila ${target.duplicateOf}; Shopify cuenta el pedido una sola vez` }); continue }
     if (row.flags.includes('gift') || target.explicitRefund || target.explicitFair) {
       decisions.push({ ...base, decision: 'excluded', reason: target.explicitRefund ? 'Devolución de dinero explícita en Excel' : target.explicitFair ? 'Venta de feria explícita en Excel' : 'Regalo comercial o de marketing' }); continue
@@ -79,6 +79,26 @@ export function reconcileHistory(history: ExcelHistory, inputs: Inputs, invoices
     if (!invoice || !row || (invoice.items || []).some(item => sameProduct(item.description || '', row))) continue
     const represented = decisions.some(other => other.row !== decision.row && other.decision === 'online' && other.invoice === decision.invoice && history.rows.some(source => source.row === other.row && source.date === row.date && (invoice.items || []).some(item => sameProduct(item.description || '', source))))
     if (represented) { decision.decision = 'excluded'; decision.reason = 'Factura anulada y cambio de talla: la venta vigente ya está representada por otra fila del mismo día' }
+  }
+  const correctedGroups = new Map<string, HistoryDecision[]>()
+  for (const decision of decisions.filter(decision => decision.decision === 'online' && decision.credited && decision.replacement)) {
+    const target = inputs.targets.find(target => target.row === decision.row)
+    const row = history.rows.find(row => row.row === decision.row)
+    if (!target?.buyerHash || !row) continue
+    const key = `${decision.invoice}:${target.buyerHash}:${row.date}:${design(row.design)}:${row.size}:${row.amount}`
+    const group = correctedGroups.get(key) || []; group.push(decision); correctedGroups.set(key, group)
+  }
+  for (const group of correctedGroups.values()) {
+    if (group.length < 2) continue
+    const firstRow = history.rows.find(row => row.row === group[0].row)!
+    const invoice = byName.get(group[0].invoice)
+    if (!invoice) continue
+    let remaining = (invoice.items || []).filter(item => sameProduct(item.description || '', firstRow)).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
+    for (const decision of group.sort((a, b) => a.row - b.row)) {
+      const row = history.rows.find(row => row.row === decision.row)!
+      if (remaining >= row.units) remaining -= row.units
+      else { decision.decision = 'excluded'; decision.reason = 'Facturas anuladas reemitidas: misma venta, comprador, día, variante e importe; ya incluida una vez en la factura vigente' }
+    }
   }
   for (const decision of decisions) {
     const invoice = byName.get(decision.invoice)
