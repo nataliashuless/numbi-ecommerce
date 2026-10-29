@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAdminClient, requireAuth } from '@/lib/auth-helpers'
 import { withoutIva } from '@/lib/siigo-values'
-import { buildMarketingLedger, marketingItem, hasUndatedSales } from '@/lib/marketing/sales-ledger'
+import { buildMarketingLedger, marketingItem } from '@/lib/marketing/sales-ledger'
 import { MARKETING_WEEKDAYS, marketingWeekday } from '@/lib/marketing/distributions'
 import {
   addMonths,
@@ -164,13 +164,12 @@ export async function GET(request: Request) {
       })),
     }
 
-    const ledger = buildMarketingLedger(siigoInvoices, orders, onlineSalesContext, nonRetailProductCodes, filters)
+    const ledger = buildMarketingLedger(siigoInvoices, orders, onlineSalesContext, nonRetailProductCodes, filters, 'invoice')
     const salesOrders = ledger.records.map(record => record.order)
     const previous = aggregatePeriod(comparisonMode === 'none' ? [] : salesOrders, periods.previous, stockBySku)
     let current = addProductComparisons(aggregatePeriod(salesOrders, periods.current, stockBySku), previous)
     const yearAgo = null
-    const dateCoverageComplete = !hasUndatedSales(ledger.undated, periods.current) && !hasUndatedSales(ledger.undated, periods.previous)
-    const salesComparable = dateCoverageComplete && comparisonMode !== 'none' && hasCompleteSiigoCoverage(periods.current, siigoFrom, siigoSyncedThrough) && hasCompleteSiigoCoverage(periods.previous, siigoFrom, siigoSyncedThrough)
+    const salesComparable = comparisonMode !== 'none' && hasCompleteSiigoCoverage(periods.current, siigoFrom, siigoSyncedThrough) && hasCompleteSiigoCoverage(periods.previous, siigoFrom, siigoSyncedThrough)
     if (!salesComparable) {
       current = { ...current, products: current.products.map(product => ({ ...product, variation: null, sizes: product.sizes.map(size => ({ ...size, variation: null })) })), sizes: current.sizes.map(size => ({ ...size, variation: null })) }
     }
@@ -271,7 +270,7 @@ export async function GET(request: Request) {
       .maybeSingle()
 
     const report: MarketingExecutiveReport = {
-      source: 'Ventas online facturadas con fecha real verificable · Siigo + Shopify',
+      source: 'Histórico de ventas online Siigo · fecha de factura',
       currency: 'COP',
       timeZone: 'America/Bogota',
       view,
@@ -306,14 +305,7 @@ export async function GET(request: Request) {
       salesByWeekday: Array.from(weekdayUnits, ([name, units]) => ({ name, units })).sort((a, b) => b.units - a.units),
       salesByCity: Array.from(cityUnits, ([name, units]) => ({ name, units })).sort((a, b) => b.units - a.units || a.name.localeCompare(b.name, 'es')),
       onlineUnitComparison: comparison(current.units, salesComparable ? previous.units : null),
-      invoiceUnitReconciliation: (() => {
-        const invoiceLedger = buildMarketingLedger(siigoInvoices, orders, onlineSalesContext, nonRetailProductCodes, filters, 'invoice')
-        const invoiceOrders = invoiceLedger.records.map(record => record.order)
-        const invoiceCurrent = aggregatePeriod(invoiceOrders, periods.current, stockBySku).units
-        const invoicePrevious = aggregatePeriod(invoiceOrders, periods.previous, stockBySku).units
-        const complete = comparisonMode !== 'none' && hasCompleteSiigoCoverage(periods.current, siigoFrom, siigoSyncedThrough) && hasCompleteSiigoCoverage(periods.previous, siigoFrom, siigoSyncedThrough)
-        return comparison(invoiceCurrent, complete ? invoicePrevious : null)
-      })(),
+      invoiceUnitReconciliation: comparison(current.units, salesComparable ? previous.units : null),
       saleDateCoverage,
       designSales: Array.from(designSalesBuckets.values()).sort((a, b) =>
         b.year.localeCompare(a.year) || b.sales - a.sales,
@@ -346,16 +338,16 @@ export async function GET(request: Request) {
         exactNewCustomerAttribution: false,
       },
       limitations: [
-        'Todas las ventas, unidades, pedidos facturados y gráficas usan la misma selección global y la fecha real verificable de venta. Se excluyen tiendas, ferias, envíos y materias primas.',
-        'Las facturas sin fecha verificable se informan por separado y no se asignan a un mes. La comparación describe ventas fechadas disponibles, no un histórico completo de ventas sin fecha.',
+        'Todas las ventas, unidades, pedidos facturados y gráficas usan la misma selección global y la fecha de factura Siigo. Se excluyen tiendas, ferias, envíos y materias primas.',
+        'No se excluyen facturas por falta de fecha de venta en las notas o de pedido en Shopify. La fecha de factura Siigo define el período en ambos años.',
         'La ciudad procede de la dirección de envío del pedido Shopify; sin ciudad disponible se conserva como Sin ciudad registrada.',
         'Meta y GA4 solo están disponibles sin filtros de canal, categoría, diseño, talla o ciudad: no se puede atribuir su gasto o tráfico a esos filtros. Usan el período global.',
         'Las notas crédito parciales reducen ventas en pesos; no reducen unidades sin cruce por línea. Los pedidos aún sin factura no se incluyen.',
         'Los clientes nuevos y recurrentes solo pueden identificarse en las ventas vinculadas a Shopify; los demás quedan sin identificar. El inventario es actual.',
       ],
       formulas: [
-        { metric: 'Ventas', formula: 'Venta neta antes de IVA de las facturas seleccionadas, distribuida entre sus productos y fechada con el pedido Shopify o fecha documentada en Siigo.', source: 'Siigo + Shopify' },
-        { metric: 'Unidades', formula: 'Cantidad de producto terminado de las mismas ventas seleccionadas y fechadas.', source: 'Siigo' },
+        { metric: 'Ventas', formula: 'Venta neta antes de IVA de las facturas seleccionadas, distribuida entre sus productos y fechada con la factura Siigo.', source: 'Siigo + Shopify' },
+        { metric: 'Unidades', formula: 'Cantidad de producto terminado de las mismas facturas seleccionadas.', source: 'Siigo' },
         { metric: 'Pedidos facturados', formula: 'Una factura válida por venta seleccionada; no incluye pedidos aún sin factura.', source: 'Siigo' },
         { metric: 'Variación', formula: '(Actual − anterior) ÷ anterior, para los períodos seleccionados.', source: 'Selección global' },
       ],

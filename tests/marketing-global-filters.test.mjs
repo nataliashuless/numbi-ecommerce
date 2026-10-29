@@ -89,7 +89,7 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../app/api/market
 } })
 
 test('endpoint reconciles summary, design, size, weekday, city, monthly units and trend under global filters', async () => {
-  const report = await route.GET({ url: 'https://example.test/api/marketing/executive?view=ytd&start_date=2026-08-01&end_date=2026-08-31&channel=web&category=Beb%C3%A9%20%2F%20Peque%C3%B1os%20Caminantes&size=20&city=Bogot%C3%A1' })
+  const report = await route.GET({ url: 'https://example.test/api/marketing/executive?view=ytd&start_date=2026-10-01&end_date=2026-10-28&channel=web&category=Beb%C3%A9%20%2F%20Peque%C3%B1os%20Caminantes&size=20&city=Bogot%C3%A1' })
   assert.equal(report.status, 200)
   assert.equal(report.current.units, 1)
   assert.equal(report.current.netSales, 100)
@@ -117,12 +117,10 @@ test('invoice reconciliation includes unknown sale dates without assigning them 
   assert.equal(invoiceLedger.records[0].invoice.date, '2026-10-10')
   assert.equal(invoiceLedger.records[0].order.raw.line_items.reduce((s, x) => s + x.quantity, 0), 2)
 })
-test('missing dates must suppress growth instead of showing growth from a smaller prior-year subset', async () => {
+test('Siigo historical basis includes invoices with no sale date in notes and does not drop the denominator', async () => {
   const report = await route.GET({ url: 'https://example.test/api/marketing/executive?view=ytd&start_date=2026-01-01&end_date=2026-10-28' })
-  assert.equal(report.saleDateCoverage.undatedUnits, 2)
-  assert.equal(report.comparability.netSales, false)
-  assert.equal(report.comparability.units, false)
-  assert.equal(report.comparisons.netSales.change, null)
-  assert.equal(report.onlineUnitComparison.change, null)
+  assert.equal(report.saleDateCoverage.undatedUnits, 0)
+  assert.equal(report.current.units, 6)
   assert.equal(report.invoiceUnitReconciliation.current, 6)
+  assert.equal(report.current.netSales, 600)
 })
