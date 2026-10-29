@@ -359,7 +359,7 @@ export default function MarketingPage() {
           <DesignSalesChart report={report} />
           <SizeSalesChart report={report} />
         </div>
-        <WeekdayCityCharts report={report} />
+        <CitySalesChart report={report} />
 
         <div className="flex justify-center">
           <Button variant="outline" size="lg" onClick={() => setShowDetails(!showDetails)} className="min-w-64 bg-white">
@@ -405,18 +405,16 @@ export default function MarketingPage() {
 
 const DESIGN_COLORS = ['#7378f4', '#17356f', '#f7bb1b', '#ff5a2a', '#1f9d55', '#147d77', '#c62828', '#ea7ba7', '#40523d', '#70b7ec', '#a965ef']
 
-function WeekdayCityCharts({ report }: { report: MarketingExecutiveReport }) {
-  const weekdays = report.salesByWeekday || []
+function CitySalesChart({ report }: { report: MarketingExecutiveReport }) {
   const cities = report.salesByCity || []
-  const total = weekdays.reduce((sum, row) => sum + row.units, 0)
+  const total = cities.reduce((sum, row) => sum + row.units, 0)
   const namedCities = cities.filter(row => row.name !== 'Sin ciudad registrada')
   const top = namedCities.slice(0, 8)
   const otherUnits = namedCities.slice(8).reduce((sum, row) => sum + row.units, 0)
   const cityData = [...top, ...(otherUnits > 0 ? [{ name: 'Otras ciudades', units: otherUnits }] : []), ...cities.filter(row => row.name === 'Sin ciudad registrada')]
   return <section className="space-y-4">
-    <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#168fc6]">Cuándo y dónde compran</p><h2 className="text-2xl font-bold text-[#172239]">Distribución de ventas</h2><p className="mt-1 text-xs text-slate-500">{readableRange(report.periods.current.start, report.periods.current.end)}</p></div><div className="rounded-xl border bg-white px-5 py-3"><p className="text-xs font-semibold uppercase text-slate-500">Gran total · unidades</p><p className="text-3xl font-bold text-[#183675]">{number(total)}</p></div></div>
-    <div className="grid items-stretch gap-6 lg:grid-cols-2">
-      <SalesDistributionChart title="Ventas por día de semana" data={weekdays} detail="Unidades por fecha de cada fuente: Shopify, Excel 2025 y WhatsApp Siigo 2026, con los mismos filtros que el resto del tablero." />
+    <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#168fc6]">Dónde compran</p><h2 className="text-2xl font-bold text-[#172239]">Distribución de ventas</h2><p className="mt-1 text-xs text-slate-500">{readableRange(report.periods.current.start, report.periods.current.end)}</p></div><div className="rounded-xl border bg-white px-5 py-3"><p className="text-xs font-semibold uppercase text-slate-500">Gran total · unidades</p><p className="text-3xl font-bold text-[#183675]">{number(total)}</p></div></div>
+    <div className="mx-auto w-full max-w-3xl">
       <SalesDistributionChart title="Ventas por ciudad" data={cityData} detail="Ciudad del Excel o de envío del pedido Shopify. Se unifican variantes como Bogotá y Bogota. Las ventas de WhatsApp Siigo sin ciudad disponible aparecen como “Sin ciudad registrada”." />
     </div>
   </section>
