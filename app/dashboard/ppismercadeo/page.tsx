@@ -6,7 +6,7 @@ import { presetDates } from '@/lib/marketing/global-filters'
 import {
   BarChart3, Boxes, ChevronDown, ChevronRight, ChevronUp, CircleDollarSign, FileText, Gauge, Loader2,
   LogOut, Megaphone, MessageCircle, Package, Plus, RefreshCw, ShoppingCart,
-  Store, Target, Tent, TrendingUp, Users, WalletCards, X,
+  Store, Target, Tent, TrendingUp, X,
 } from 'lucide-react'
 import {
   Bar, BarChart, CartesianGrid, Cell, ComposedChart, LabelList, Legend, Line, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -330,23 +330,6 @@ export default function MarketingPage() {
     : false
   const comparisonReliable = !report || report.comparability.netSales
 
-  const topProduct = report ? [...report.current.products].sort((a, b) => b.sales - a.sales)[0] ?? null : null
-  const soldOutSizes = report?.current.sizes.filter(item => item.units > 0 && item.stock !== null && item.stock <= 0) ?? []
-  const reviewableAds = (metaAds?.items || []).filter(item => ['REVISAR', 'PAUSAR'].includes(classification(item, objectives, sufficient).action))
-  const simpleActions: Array<{ title: string; detail: string; href?: string }> = []
-  if (soldOutSizes.length > 0) {
-    simpleActions.push({ title: 'Revisar inventario', detail: `${soldOutSizes.length} combinaciones de producto y talla vendieron, pero hoy aparecen agotadas.`, href: '#productos' })
-  }
-  if (reviewableAds.length > 0) {
-    simpleActions.push({ title: 'Revisar publicidad', detail: `${reviewableAds.length} anuncios no cumplen los objetivos que configuraste.`, href: '#meta' })
-  }
-  if (topProduct) {
-    simpleActions.push({ title: 'Cuidar el producto líder', detail: `${topProduct.reference} fue la referencia con más ventas: ${currency(topProduct.sales)}.`, href: `#product-${slug(topProduct.reference)}` })
-  }
-  if (Object.keys(objectives).length === 0) {
-    simpleActions.unshift({ title: 'Definir qué significa “ir bien”', detail: 'Configura los objetivos de la empresa para activar los semáforos y recomendaciones.' })
-  }
-
   const insights: string[] = []
   if (report) {
     const salesChange = report.comparisons.netSales.change
@@ -370,7 +353,6 @@ export default function MarketingPage() {
 
       {loading ? <div className="flex items-center justify-center py-24 text-slate-500"><Loader2 className="mr-3 h-7 w-7 animate-spin" />Construyendo reporte…</div> : error ? <Card className="border-rose-200 bg-rose-50"><CardContent className="p-6 text-rose-800">{error}</CardContent></Card> : report && <>
         {metaError && <Card className="border-rose-200 bg-rose-50"><CardContent className="flex flex-col gap-3 p-5 text-rose-900 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">Meta Ads necesita reconexión</p><p className="mt-1 text-sm">{metaError.includes('Session has expired') ? 'El token de acceso venció. Gasto, campañas y anuncios no se pueden consultar hasta renovarlo.' : metaError}</p></div><Link href="/dashboard/configuracion"><Button variant="outline" className="border-rose-300 bg-white text-rose-900">Ir a configuración</Button></Link></CardContent></Card>}
-        <SimpleExecutiveSummary report={report} spend={spend} previousSpend={previousSpend} mer={mer} insights={insights} actions={simpleActions.slice(0, 3)} onOpenDetails={() => setShowDetails(true)} comparisonReliable={comparisonReliable} />
         {comparisonMode !== 'none' && <YtdComparison report={report} spend={spend} previousSpend={previousSpend} mer={mer} previousMer={previousMer} comparisonReliable={comparisonReliable} />}
         <CategoryChannelUnitsChart report={report} />
         <div className="grid items-stretch gap-6 lg:grid-cols-2">
@@ -602,59 +584,6 @@ function CategoryChannelUnitsChart({ report }: { report: MarketingExecutiveRepor
       </CardContent>
     </Card>
   </section>
-}
-
-function SimpleExecutiveSummary({
-  report,
-  spend,
-  previousSpend,
-  mer,
-  insights,
-  actions,
-  onOpenDetails,
-  comparisonReliable,
-}: {
-  report: MarketingExecutiveReport
-  spend: number | null
-  previousSpend: number | null
-  mer: number | null
-  insights: string[]
-  actions: Array<{ title: string; detail: string; href?: string }>
-  onOpenDetails: () => void
-  comparisonReliable: boolean
-}) {
-  const salesChange = comparisonReliable ? report.comparisons.netSales.change : null
-  const spendChange = spend !== null && previousSpend !== null && previousSpend > 0 ? (spend - previousSpend) / previousSpend : null
-  return <section className="space-y-5" aria-label="Indicadores y recomendaciones">
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <PlainMetricCard icon={CircleDollarSign} label="Ventas online antes de IVA" value={currency(report.current.netSales)} change={salesChange} detail="Shopify + Excel / Siigo" />
-      <PlainMetricCard icon={WalletCards} label="Invertimos en publicidad" value={spend === null ? 'Dato no disponible' : currency(spend)} change={spendChange} detail="Gasto registrado por Meta" />
-      <PlainMetricCard icon={TrendingUp} label="Ventas por cada $1 de publicidad" value={mer === null ? 'Dato no disponible' : `${mer.toFixed(2)} veces`} change={null} detail="Ventas reales ÷ gasto Meta; no es utilidad" />
-      <PlainMetricCard icon={Users} label="Clientes nuevos" value={number(report.current.customers.new)} change={comparisonReliable ? report.comparisons.newCustomers.change : null} detail="Identificados en las ventas seleccionadas vinculadas a Shopify" />
-    </div>
-
-    <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
-      <Card className="border-0 bg-[#172239] text-white shadow-sm">
-        <CardHeader><CardTitle className="text-lg">Lo más importante</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          {insights.length === 0 ? <p className="text-sm text-slate-300">Datos insuficientes para concluir.</p> : insights.slice(0, 3).map(item => <p key={item} className="border-l-2 border-[#54c3f1] pl-3 text-sm leading-6 text-slate-200">{item}</p>)}
-        </CardContent>
-      </Card>
-      <Card className="border-0 shadow-sm">
-        <CardHeader><CardTitle className="text-lg text-[#172239]">Qué hacer ahora</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          {actions.length === 0 ? <p className="text-sm text-slate-500">No hay una acción sustentada por los datos de este periodo.</p> : actions.map((action, index) => {
-            const content = <><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#eaf6fb] text-xs font-bold text-[#168fc6]">{index + 1}</span><span><span className="block text-sm font-semibold text-[#172239]">{action.title}</span><span className="mt-0.5 block text-xs leading-5 text-slate-500">{action.detail}</span></span>{action.href && <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-slate-400" />}</>
-            return action.href ? <button key={action.title} type="button" onClick={() => { onOpenDetails(); window.setTimeout(() => document.querySelector(action.href || '')?.scrollIntoView({ behavior: 'smooth' }), 0) }} className="flex w-full items-start gap-3 rounded-xl border p-3 text-left transition hover:bg-slate-50">{content}</button> : <div key={action.title} className="flex items-start gap-3 rounded-xl border p-3">{content}</div>
-          })}
-        </CardContent>
-      </Card>
-    </div>
-  </section>
-}
-
-function PlainMetricCard({ icon: Icon, label, value, change, detail }: { icon: typeof CircleDollarSign; label: string; value: string; change: number | null; detail: string }) {
-  return <Card className="border-0 shadow-sm"><CardContent className="p-5"><div className="flex items-start justify-between gap-3"><div className="rounded-xl bg-[#eaf6fb] p-2.5 text-[#168fc6]"><Icon className="h-5 w-5" /></div>{change !== null && <span className={`rounded-full px-2 py-1 text-xs font-semibold ${change >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}>{change >= 0 ? '+' : ''}{(change * 100).toFixed(1)}% vs. antes</span>}</div><p className="mt-4 text-sm font-medium text-slate-500">{label}</p><p className="mt-1 text-2xl font-bold tracking-tight text-[#172239]">{value}</p><p className="mt-2 text-xs leading-5 text-slate-500">{detail}</p></CardContent></Card>
 }
 
 function YtdComparison({ report, spend, previousSpend, mer, previousMer, comparisonReliable }: { report: MarketingExecutiveReport; spend: number | null; previousSpend: number | null; mer: number | null; previousMer: number | null; comparisonReliable: boolean }) {
