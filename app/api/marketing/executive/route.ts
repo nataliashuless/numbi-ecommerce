@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server'
+import excelHistory from '@/data/marketing-online-excel-2025.json'
+import { applyExcelHistory } from '@/lib/marketing/excel-history'
+import { directShopifyInvoices } from '@/lib/marketing/shopify-ledger'
+import { classifyMarketingInvoice } from '@/lib/marketing/channel-reconciliation'
 import { getAdminClient, requireAuth } from '@/lib/auth-helpers'
 import { withoutIva } from '@/lib/siigo-values'
 import { historicalStoreEvidence } from '@/lib/marketing/channel-reconciliation'
@@ -168,7 +172,9 @@ export async function GET(request: Request) {
 
     const whatsappLinks = await loadPaged<{ siigo_invoice_id: string | null }>((from, to) => supabase.from('ventas_whatsapp').select('siigo_invoice_id').not('siigo_invoice_id', 'is', null).range(from, to))
     const reconciliationContext = { ...onlineSalesContext, ...marketingBusinessChannelRules, historicalStoreEvidence: historicalStoreEvidence(siigoInvoices), firstShopifyOrderDate: shopifyFrom, whatsappInvoiceIds: new Set(whatsappLinks.map(row => row.siigo_invoice_id).filter((id): id is string => Boolean(id))) }
-    const ledger = buildMarketingLedger(siigoInvoices, orders, reconciliationContext, nonRetailProductCodes, filters, 'invoice')
+    const excel = applyExcelHistory(siigoInvoices, reconciliationContext, excelHistory)
+    const unifiedInvoices = [...excel.invoices.filter(invoice => classifyMarketingInvoice(invoice, reconciliationContext).channel !== 'shopify'), ...directShopifyInvoices(orders)]
+    const ledger = buildMarketingLedger(unifiedInvoices, orders, reconciliationContext, nonRetailProductCodes, filters, 'invoice')
     const salesOrders = ledger.records.map(record => record.order)
     const previous = aggregatePeriod(comparisonMode === 'none' ? [] : salesOrders, periods.previous, stockBySku)
     let current = addProductComparisons(aggregatePeriod(salesOrders, periods.current, stockBySku), previous)
@@ -177,10 +183,14 @@ export async function GET(request: Request) {
     const pendingCurrent = ledger.reconciliation.filter(row => row.channel === 'pending' && inPeriod(row.date, periods.current))
     const pendingPrevious = ledger.reconciliation.filter(row => row.channel === 'pending' && inPeriod(row.date, periods.previous))
     const classificationComplete = pendingCurrent.length === 0 && pendingPrevious.length === 0
-    const salesComparable = classificationComplete && comparisonMode !== 'none' && hasCompleteSiigoCoverage(periods.current, siigoFrom, siigoSyncedThrough) && hasCompleteSiigoCoverage(periods.previous, siigoFrom, siigoSyncedThrough)
+    const periodCovered = (period: typeof periods.current) => hasCompleteSiigoCoverage(period, siigoFrom, siigoSyncedThrough) && Boolean(shopifyFrom && shopifyTo && period.end <= shopifyTo && (period.start >= shopifyFrom || period.start >= excelHistory.from && period.end <= excelHistory.to))
+    const salesComparable = classificationComplete && comparisonMode !== 'none' && periodCovered(periods.current) && periodCovered(periods.previous)
     if (!salesComparable) {
       current = { ...current, products: current.products.map(product => ({ ...product, variation: null, sizes: product.sizes.map(size => ({ ...size, variation: null })) })), sizes: current.sizes.map(size => ({ ...size, variation: null })) }
     }
+    const missingExcelValues = ledger.records.filter(record => record.invoice.marketingSource?.missingValue && (inPeriod(record.invoice.date, periods.current) || inPeriod(record.invoice.date, periods.previous)))
+    const financialComparable = salesComparable && missingExcelValues.length === 0
+    if (!financialComparable) current = { ...current, products: current.products.map(product => ({ ...product, variation: null, sizes: product.sizes.map(size => ({ ...size, variation: null })) })), sizes: current.sizes.map(size => ({ ...size, variation: null })) }
     const shopifyComparable = salesComparable
     const ordersComparable = salesComparable
     const historicalOrderMissingDates = HISTORICAL_ORDER_MISSING_DATES.filter(date =>
@@ -278,7 +288,8 @@ export async function GET(request: Request) {
       .maybeSingle()
 
     const report: MarketingExecutiveReport = {
-      source: 'Histórico de ventas online Siigo · fecha de factura',
+      source: 'Shopify directo + Excel no Shopify 2025 + WhatsApp Siigo 2026',
+      excelHistory: { from: excelHistory.from, to: excelHistory.to, missingValueUnits: missingExcelValues.reduce((sum, record) => sum + record.order.raw!.line_items!.reduce((n, item) => n + Number(item.quantity || 0), 0), 0) },
       currency: 'COP',
       timeZone: 'America/Bogota',
       view,
@@ -323,19 +334,19 @@ export async function GET(request: Request) {
         b.year.localeCompare(a.year) || b.sales - a.sales,
       ),
       comparisons: {
-        netSales: comparison(current.netSales, salesComparable ? previous.netSales : null),
+        netSales: comparison(current.netSales, financialComparable ? previous.netSales : null),
         orders: comparison(current.onlineOrders, ordersComparable ? previous.onlineOrders : null),
         units: comparison(current.units, shopifyComparable ? previous.units : null),
-        aov: comparison(current.aov, shopifyComparable ? previous.aov : null),
+        aov: comparison(current.aov, financialComparable ? previous.aov : null),
         newCustomers: comparison(current.customers.new, shopifyComparable ? previous.customers.new : null),
         repeatPurchaseRate: comparison(current.customers.repeatPurchaseRate, shopifyComparable ? previous.customers.repeatPurchaseRate : null),
         discounts: comparison(current.discounts, shopifyComparable ? previous.discounts : null),
         refunds: comparison(current.refunds, shopifyComparable ? previous.refunds : null),
       },
       comparability: {
-        netSales: salesComparable,
+        netSales: financialComparable,
         orders: ordersComparable,
-        aov: shopifyComparable,
+        aov: financialComparable,
         units: shopifyComparable,
         customers: shopifyComparable,
       },
@@ -350,17 +361,17 @@ export async function GET(request: Request) {
         exactNewCustomerAttribution: false,
       },
       limitations: [
-        'Todas las ventas, unidades, pedidos facturados y gráficas usan la misma selección global y la fecha de factura Siigo. Se excluyen tiendas, ferias, envíos y materias primas.',
-        'La fecha de factura Siigo define ambos períodos. Mercado Pago se identifica como WooCommerce por confirmación de la dueña. Otros medios de pago o la fecha de feria no prueban canal. Las facturas sin canal confirmado se muestran en conciliación y bloquean el crecimiento, en lugar de suponerse WhatsApp.',
-        'La ciudad procede de la dirección de envío del pedido Shopify; sin ciudad disponible se conserva como Sin ciudad registrada.',
+        'Todas las gráficas usan el mismo registro: Shopify directo por fecha procesada, Excel no Shopify 2025 por fecha de venta y WhatsApp 2026 de Siigo por fecha de factura. Se excluyen tiendas, ferias, envíos y materias primas.',
+        'El Excel reemplaza las ventas no Shopify de Siigo durante 2025. Se excluyen filas identificadas como Shopify y cruces por factura o número de pedido. Las facturas Shopify no se vuelven a sumar.',
+        'La ciudad procede del Excel o de la dirección de envío Shopify; WhatsApp Siigo sin ciudad se conserva sin ciudad registrada.',
         'Meta y GA4 solo están disponibles sin filtros de canal, categoría, diseño, talla o ciudad: no se puede atribuir su gasto o tráfico a esos filtros. Usan el período global.',
-        'Las notas crédito parciales reducen ventas en pesos; no reducen unidades sin cruce por línea. Los pedidos aún sin factura no se incluyen.',
+        'Shopify incluye pedidos pagados válidos aunque todavía no tengan factura; excluye cancelados, pruebas y POS. Las cantidades actuales reflejan devoluciones de Shopify. Las notas crédito parciales de Siigo no reducen unidades sin cruce por línea.',
         'Los clientes nuevos y recurrentes solo pueden identificarse en las ventas vinculadas a Shopify; los demás quedan sin identificar. El inventario es actual.',
       ],
       formulas: [
-        { metric: 'Ventas', formula: 'Venta neta antes de IVA de las facturas seleccionadas, distribuida entre sus productos y fechada con la factura Siigo.', source: 'Siigo + Shopify' },
-        { metric: 'Unidades', formula: 'Cantidad de producto terminado de las mismas facturas seleccionadas.', source: 'Siigo' },
-        { metric: 'Pedidos facturados', formula: 'Una factura válida por venta seleccionada; no incluye pedidos aún sin factura.', source: 'Siigo' },
+        { metric: 'Ventas', formula: 'Ventas netas antes de IVA de Shopify, Excel y WhatsApp Siigo; no se compara dinero si faltan importes del Excel.', source: 'Shopify + Excel + Siigo' },
+        { metric: 'Unidades', formula: 'Cantidades actuales de Shopify + cantidades del Excel no Shopify 2025 + producto facturado WhatsApp Siigo 2026.', source: 'Shopify + Excel + Siigo' },
+        { metric: 'Ventas registradas', formula: 'Pedidos Shopify, facturas WhatsApp y grupos del Excel por fecha/factura; filas sin factura se cuentan como registros, no como pedidos únicos.', source: 'Shopify + Excel + Siigo' },
         { metric: 'Variación', formula: '(Actual − anterior) ÷ anterior, para los períodos seleccionados.', source: 'Selección global' },
       ],
     }

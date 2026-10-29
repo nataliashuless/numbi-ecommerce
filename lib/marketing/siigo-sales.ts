@@ -2,6 +2,7 @@ import { withoutIva } from '@/lib/siigo-values'
 import type { DatePeriod, PeriodMetrics } from '@/lib/marketing/metrics'
 
 export interface CachedSiigoInvoice {
+  marketingSource?: { channel: 'woocommerce' | 'whatsapp' | 'shopify'; city: string; reason: string; allowZeroValue: boolean; missingValue?: boolean }
   id: string
   name?: string
   date: string

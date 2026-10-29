@@ -26,12 +26,12 @@ export function buildMarketingLedger(invoices: CachedSiigoInvoice[], orders: Cac
     ids.add(invoice.id)
     const total = Number(invoice.total) || 0
     const credited = Number(invoice.credited_amount) || 0
-    if (total <= 0 || credited >= total) continue
+    if ((total <= 0 && !invoice.marketingSource?.allowZeroValue) || (total > 0 && credited >= total)) continue
     const date = dateBasis === 'invoice' ? invoice.date.slice(0, 10) : marketingSaleDate(invoice, dates)
     const classification = classifyMarketingInvoice(invoice, context)
     const channel = classification.channel === 'whatsapp' ? 'whatsapp' : 'web'
     const linked = byNumber.get(Number((invoice.observations || '').match(/#(\d+)/)?.[1]))
-    const city = normalizeMarketingCity(linked?.raw?.shipping_address?.city)
+    const city = normalizeMarketingCity(invoice.marketingSource?.city || linked?.raw?.shipping_address?.city)
     const items = marketingProductItems(invoice, nonRetailCodes)
     if (!items.length) continue
     options.cities.add(city)

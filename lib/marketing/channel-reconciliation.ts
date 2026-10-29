@@ -14,6 +14,7 @@ export function historicalStoreEvidence(invoices: CachedSiigoInvoice[]) {
   return evidence
 }
 export function classifyMarketingInvoice(invoice: CachedSiigoInvoice, context: ReconciliationContext): { channel: ReconciledChannel; reason: string } {
+  if (invoice.marketingSource) return { channel: invoice.marketingSource.channel, reason: invoice.marketingSource.reason }
   const text = (invoice.observations || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   if (invoice.name && context.confirmedStoreInvoiceNames?.has(invoice.name)) return { channel: 'tienda', reason: 'Corrección confirmada por la dueña el 2026-10-29: factura Activetress asignada erróneamente a feria' }
   if (invoice.name && context.confirmedParaisoInvoiceNames?.has(invoice.name)) return { channel: 'tienda', reason: 'Venta del punto Paraíso confirmada por la dueña el 2026-10-29; excluida de online' }

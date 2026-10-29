@@ -136,6 +136,7 @@ export interface MetricComparison {
 }
 
 export interface MarketingExecutiveReport {
+  excelHistory?: { from: string; to: string; missingValueUnits: number }
   source: string
   currency: string
   timeZone: string

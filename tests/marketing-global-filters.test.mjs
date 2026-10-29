@@ -55,7 +55,7 @@ test('period presets handle year boundaries, closed months and Colombian time', 
 })
 
 const tables = {
-  shopify_orders: orders,
+  shopify_orders: orders.map(order => ({ ...order, created_at: '2026-10-10T12:00:00-05:00', financial_status: 'paid', total_price: 238, raw: { ...order.raw, current_subtotal_price: '238', line_items: base.items.slice(0, 2).map(item => ({ sku: item.code, title: marketingItem(item.description).design, variant_title: marketingItem(item.description).size, quantity: 1, price: '119', tax_lines: [{ price: '19' }] })) } })),
   ventas_whatsapp: [{ siigo_invoice_id: 'wa' }, { siigo_invoice_id: 'unknown' }],
   siigo_invoices: [...invoices, { ...base, id: 'unknown', observations: '' }],
   shopify_orders_sync_state: [{ id: 1, earliest_at: '2025-01-01', latest_at: '2026-10-29' }],
@@ -82,6 +82,7 @@ function query(table) {
 const db = { from: query }
 const route = {}
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../app/api/marketing/executive/route.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: route, URL, Date, console, require(name) {
+  if (name === '@/data/marketing-online-excel-2025.json') return { default: { from: '2025-01-01', to: '2025-12-31', rows: [] } }
   if (name === 'next/server') return { NextResponse: { json: (value, options) => ({ ...value, status: options?.status || 200 }) } }
   if (name === '@/lib/auth-helpers') return { requireAuth: async () => ({}), getAdminClient: () => db }
   if (name === '@/lib/marketing/historical-orders') return { HISTORICAL_ORDER_MISSING_DATES: [] }
@@ -138,4 +139,41 @@ test('unclassified invoices are reconciled, not discarded or labelled WhatsApp, 
     const confirm = report.channelReconciliation.current.filter(row => ['shopify', 'woocommerce', 'whatsapp'].includes(row.channel)).reduce((sum, row) => sum + row.units, 0)
     assert.equal(confirm, report.current.units)
   } finally { tables.siigo_invoices.pop() }
+})
+
+const { applyExcelHistory } = load('excel-history')
+test('Excel replaces only covered non-Shopify invoices, deduplicates Shopify cross-links, and retains 2026', () => {
+  const old = { ...base, id: 'old', name: 'FV-2-1', date: '2025-01-15', observations: 'WhatsApp' }
+  const shopify = { ...base, id: 'shop', name: 'FV-2-2', date: '2025-07-15', observations: 'Pedido #100' }
+  const row = { row: 2, date: '2025-01-02', units: 2, design: 'Leo', size: '20', city: 'Cali', amount: 238, payment: 'Nequi', status: 'Enviado', invoice: 'FV-2-1', webOrder: '', flags: [] }
+  const history = { from: '2025-01-01', to: '2025-12-31', rows: [row, { ...row, row: 3, invoice: 'FV-2-2' }, { ...row, row: 4, invoice: null, payment: 'MercadoPago- Shopify' }, { ...row, row: 5, invoice: null, flags: ['gift'] }] }
+  const result = applyExcelHistory([old, shopify, invoices[1]], ctx, history)
+  assert.equal(result.invoices.length, 3)
+  assert.equal(result.invoices.some(x => x.id === 'old'), false)
+  assert.equal(result.excluded.length, 3)
+  const ledger = buildMarketingLedger(result.invoices, orders, ctx, new Set(), { channel: 'whatsapp', city: 'Cali' }, 'invoice')
+  assert.equal(ledger.records.length, 1)
+  assert.equal(ledger.records[0].invoice.date, '2025-01-02')
+  assert.equal(ledger.records[0].order.raw.line_items[0].quantity, 2)
+  assert.equal(aggregatePeriod(ledger.records.map(r => r.order), { start: '2025-01-01', end: '2025-01-31' }, new Map()).netSales, 200)
+})
+test('Excel missing price retains sold units, marks missing value, and exclusions never become sales', () => {
+  const row = { row: 2, date: '2025-01-02', units: 1, design: 'Leo', size: '20', city: 'Cali', amount: null, payment: 'Nequi', status: '', invoice: null, webOrder: '', flags: [] }
+  const { invoices: source } = applyExcelHistory([], ctx, { from: '2025-01-01', to: '2025-12-31', rows: [row, ...['gift', 'unpaid', 'cancelled', 'fair', 'store'].map((flag, i) => ({ ...row, row: i + 3, flags: [flag] }))] })
+  const ledger = buildMarketingLedger(source, [], ctx, new Set(), {}, 'invoice')
+  assert.equal(ledger.records.length, 1)
+  assert.equal(ledger.records[0].invoice.marketingSource.missingValue, true)
+  assert.equal(aggregatePeriod(ledger.records.map(r => r.order), { start: '2025-01-01', end: '2025-01-31' }, new Map()).units, 1)
+})
+
+const { directShopifyInvoices } = load('shopify-ledger')
+test('direct Shopify uses processed sale date, current quantities, and includes paid orders without an invoice', () => {
+  const order = { id: 123, created_at: '2026-10-02T12:00:00Z', financial_status: 'partially_refunded', total_price: 238, raw: { order_number: 100, processed_at: '2026-09-30T23:00:00-05:00', current_subtotal_price: '119', shipping_address: { city: 'Cali' }, line_items: [{ title: 'Leo', variant_title: '20', quantity: 2, current_quantity: 1, price: '119', tax_lines: [{ price: '38' }] }] } }
+  const source = directShopifyInvoices([order, order, { ...order, id: 124, raw: { ...order.raw, cancelled_at: '2026-10-03' } }, { ...order, id: 125, raw: { ...order.raw, test: true } }, { ...order, id: 126, financial_status: 'pending' }, { ...order, id: 127, raw: { ...order.raw, source_name: 'pos' } }])
+  assert.equal(source.length, 1)
+  const ledger = buildMarketingLedger(source, [order], ctx, new Set(), {}, 'invoice')
+  assert.equal(ledger.records[0].invoice.date, '2026-09-30')
+  assert.equal(ledger.records[0].city, 'Cali')
+  const result = aggregatePeriod(ledger.records.map(r => r.order), { start: '2026-09-01', end: '2026-09-30' }, new Map())
+  assert.equal(result.units, 1); assert.equal(result.netSales, 100)
 })
