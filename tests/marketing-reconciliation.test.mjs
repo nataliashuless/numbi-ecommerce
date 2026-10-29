@@ -26,7 +26,7 @@ test('owner-confirmed exclusive Mercado Pago rule reconciles historical WooComme
   const confirmed = { ...ctx, mercadoPagoWooCommerceOnly: true }
   assert.equal(classifyMarketingInvoice(inv({ observations: 'Pago Mercadopago' }), confirmed).channel, 'woocommerce')
   assert.equal(classifyMarketingInvoice(inv({ raw: { payments: [{ id: 8362 }] } }), confirmed).channel, 'woocommerce')
-  assert.equal(classifyMarketingInvoice(inv({ observations: 'Pedido #100 Mercado Pago' }), confirmed).channel, 'pending')
+  assert.equal(classifyMarketingInvoice(inv({ observations: 'Pedido #100 Mercado Pago' }), confirmed).channel, 'shopify')
 })
 
 test('historical distributor evidence excludes other invoices for the same store without contaminating generic consumers', async () => {
@@ -34,7 +34,7 @@ test('historical distributor evidence excludes other invoices for the same store
   const evidence = historicalStoreEvidence([inv({ name: 'FV-2-2746', customer_identification: '12.345-6', observations: 'Venta de 43 pares. Descuento distribuidor 50%' }), inv({ customer_identification: '222222222222', observations: 'Tienda Paraiso' })])
   const known = { ...ctx, historicalStoreEvidence: evidence }
   assert.equal(classifyMarketingInvoice(inv({ customer_identification: '123456', observations: 'Liquidación ventas Julio' }), known).channel, 'tienda')
-  assert.equal(classifyMarketingInvoice(inv({ customer_identification: '123456', assigned_feria_id: 'fair' }), known).channel, 'pending')
+  assert.equal(classifyMarketingInvoice(inv({ customer_identification: '123456', assigned_feria_id: 'fair' }), known).channel, 'tienda')
   assert.equal(evidence.has('222222222222'), false)
 })
 
@@ -50,4 +50,13 @@ test('specific owner corrections reconcile Activetress without rewriting other f
   const confirmed = { ...ctx, confirmedStoreInvoiceNames: new Set(['FV-2-2710', 'FV-2-2596']) }
   assert.equal(classifyMarketingInvoice(inv({ name: 'FV-2-2710', assigned_feria_id: 'fair' }), confirmed).channel, 'tienda')
   assert.equal(classifyMarketingInvoice(inv({ name: 'FV-2-other', assigned_feria_id: 'fair' }), confirmed).channel, 'feria')
+})
+
+test('a consumer purchase at a shop is excluded individually but never turns all later purchases by that person into store sales', async () => {
+  const { historicalStoreEvidence } = await import('../lib/marketing/channel-reconciliation.ts')
+  const receipt = inv({ customer_identification: '12345', observations: 'Compra de zapato en Tienda Paraiso' })
+  const evidence = historicalStoreEvidence([receipt])
+  assert.equal(evidence.size, 0)
+  assert.equal(classifyMarketingInvoice(receipt, ctx).channel, 'tienda')
+  assert.equal(classifyMarketingInvoice(inv({ customer_identification: '12345', observations: 'Pedido #100' }), { ...ctx, historicalStoreEvidence: evidence }).channel, 'shopify')
 })

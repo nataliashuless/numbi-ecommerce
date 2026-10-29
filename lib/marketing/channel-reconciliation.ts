@@ -9,7 +9,7 @@ export function historicalStoreEvidence(invoices: CachedSiigoInvoice[]) {
     const customer = normalizeCustomerId(invoice.customer_identification || '')
     // Never propagate evidence through generic final-consumer identifiers.
     if (!customer || /^(\d)\1{5,}$/.test(customer)) continue
-    if (/descuento\s+(?:de\s+)?distribuidor|\btienda\s+(?!virtual\b|online\b|web\b)\S+/.test(text)) evidence.set(customer, `Cliente histórico de tienda demostrado en ${invoice.name || invoice.id}`)
+    if (/descuento\s+(?:de\s+)?distribuidor|\b(?:venta|compra)\s+en\s+firme\b/.test(text)) evidence.set(customer, `Cliente histórico de tienda demostrado en ${invoice.name || invoice.id}`)
   }
   return evidence
 }
@@ -17,7 +17,7 @@ export function classifyMarketingInvoice(invoice: CachedSiigoInvoice, context: R
   const text = (invoice.observations || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   if (invoice.name && context.confirmedStoreInvoiceNames?.has(invoice.name)) return { channel: 'tienda', reason: 'Corrección confirmada por la dueña el 2026-10-29: factura Activetress asignada erróneamente a feria' }
   const historicStore = context.historicalStoreEvidence?.get(normalizeCustomerId(invoice.customer_identification || ''))
-  if (historicStore && invoice.assigned_feria_id) return { channel: 'pending', reason: `${historicStore}, pero asignada a feria: requiere confirmar` }
+  if (historicStore && invoice.assigned_feria_id) return { channel: 'tienda', reason: `${historicStore}; la evidencia de venta a distribuidor corrige la etiqueta de feria solo en esta conciliación` }
   if (invoice.assigned_feria_id) return { channel: 'feria', reason: 'Factura asignada a una feria' }
   if (invoice.customer_identification && Array.from(context.tiendaNits).some(nit => normalizeCustomerId(nit) === normalizeCustomerId(invoice.customer_identification!))) return { channel: 'tienda', reason: 'NIT registrado como tienda, incluida tienda inactiva' }
   if (historicStore) return { channel: 'tienda', reason: historicStore }
@@ -29,8 +29,10 @@ export function classifyMarketingInvoice(invoice: CachedSiigoInvoice, context: R
   const explicitWoo = /\bwoo\s*commerce\b|\bwoocommerce\b/.test(text)
   const historicalWeb = Boolean(context.firstShopifyOrderDate && invoice.date.slice(0, 10) < context.firstShopifyOrderDate) && /\bpagina\s*(?:web)?\b|\btienda\s+(?:virtual|online)\b|\bpedido\s+(?:web|online)\b/.test(text)
   const fair = /\bferia\b|\bplaytime\b|\bvassar\b/.test(text)
-  const signals = [shopify, Boolean(whatsapp), explicitWoo || historicalWeb || confirmedPaymentWoo, fair].filter(Boolean).length
+  const explicitStore = /\btienda\s+(?!virtual\b|online\b|web\b)\S+|\bpunto\s+de\s+venta\s+paraiso\b|(?:^|\n)\s*paraiso\s*(?:\n|$)/.test(text)
+  const signals = [shopify, Boolean(whatsapp), explicitWoo || historicalWeb, fair, explicitStore].filter(Boolean).length
   if (signals > 1) return { channel: 'pending', reason: 'Señales de canal en conflicto; requiere revisar la factura' }
+  if (explicitStore) return { channel: 'tienda', reason: 'Observación explícita de tienda o punto de venta Paraíso; no es venta online' }
   if (fair) return { channel: 'feria', reason: 'Observación explícita de feria, incluso fuera de sus fechas' }
   if (shopify) return { channel: 'shopify', reason: references.some(number => context.shopifyOrderNumbers.has(number)) ? 'Pedido cruzado con Shopify' : 'Registro automático Moship con número de pedido' }
   if (whatsapp) return { channel: 'whatsapp', reason: context.whatsappInvoiceIds?.has(invoice.id) ? 'Venta WhatsApp vinculada explícitamente a esta factura' : 'Observación explícita de venta WhatsApp' }
