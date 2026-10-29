@@ -5,7 +5,10 @@
  * The two Activetress invoices below were incorrectly assigned to fairs.
  */
 export const marketingBusinessChannelRules = {
+  // Audited Shopify link: same buyer, sale 2026-05-27, COP 187320, one pair.
+  reconciledShopifyInvoiceNumbers: new Map([['FV-2-4198', 2473]]),
   mercadoPagoWooCommerceOnly: true,
+  mercadoPagoWooCommerceThrough: '2025-12-31',
   directPaymentsWhatsAppOnly: true,
   confirmedStoreInvoiceNames: new Set(['FV-2-2710', 'FV-2-2596']),
   // Individual exceptions confirmed as Paraíso; do not infer a cash rule for other invoices.

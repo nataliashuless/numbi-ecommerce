@@ -68,3 +68,13 @@ test('a consumer purchase at a shop is excluded individually but never turns all
   assert.equal(classifyMarketingInvoice(inv({ name: 'FV-2-4347' }), confirmed).channel, 'whatsapp')
   assert.equal(classifyMarketingInvoice(inv({ observations: 'Pago efectivo' }), confirmed).channel, 'pending')
 })
+
+test('audited Shopify invoice link takes precedence over reused Mercado Pago payment without double counting', () => {
+  const context = { ...ctx, mercadoPagoWooCommerceOnly: true, reconciledShopifyInvoiceNumbers: new Map([['FV-2-4198', 100]]) }
+  assert.equal(classifyMarketingInvoice(inv({ name: 'FV-2-4198', observations: 'Mayo 27 Pagina Web Mercadopago' }), context).channel, 'shopify')
+  assert.equal(classifyMarketingInvoice(inv({ name: 'other', observations: 'Mercadopago' }), context).channel, 'woocommerce')
+})
+
+test('post-migration Mercado Pago alone is never treated as a new WooCommerce sale', () => {
+  assert.equal(classifyMarketingInvoice(inv({ date: '2026-01-01', observations: 'Mercadopago' }), { ...ctx, mercadoPagoWooCommerceOnly: true, mercadoPagoWooCommerceThrough: '2025-12-31' }).channel, 'pending')
+})

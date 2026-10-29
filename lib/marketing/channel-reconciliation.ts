@@ -1,6 +1,6 @@
 import type { CachedSiigoInvoice, OnlineSalesClassificationContext } from './siigo-sales'
 export type ReconciledChannel = 'woocommerce' | 'shopify' | 'whatsapp' | 'tienda' | 'feria' | 'pending'
-export interface ReconciliationContext extends OnlineSalesClassificationContext { whatsappInvoiceIds?: Set<string>; firstShopifyOrderDate?: string | null; mercadoPagoWooCommerceOnly?: boolean; historicalStoreEvidence?: Map<string, string>; directPaymentsWhatsAppOnly?: boolean; confirmedStoreInvoiceNames?: Set<string>; confirmedParaisoInvoiceNames?: Set<string>; confirmedWhatsappInvoiceNames?: Set<string> }
+export interface ReconciliationContext extends OnlineSalesClassificationContext { reconciledShopifyInvoiceNumbers?: Map<string, number>; whatsappInvoiceIds?: Set<string>; firstShopifyOrderDate?: string | null; mercadoPagoWooCommerceThrough?: string; mercadoPagoWooCommerceOnly?: boolean; historicalStoreEvidence?: Map<string, string>; directPaymentsWhatsAppOnly?: boolean; confirmedStoreInvoiceNames?: Set<string>; confirmedParaisoInvoiceNames?: Set<string>; confirmedWhatsappInvoiceNames?: Set<string> }
 export function normalizeCustomerId(value: string) { return value.toUpperCase().replace(/[^A-Z0-9]/g, '') }
 export function historicalStoreEvidence(invoices: CachedSiigoInvoice[]) {
   const evidence = new Map<string, string>()
@@ -15,6 +15,8 @@ export function historicalStoreEvidence(invoices: CachedSiigoInvoice[]) {
 }
 export function classifyMarketingInvoice(invoice: CachedSiigoInvoice, context: ReconciliationContext): { channel: ReconciledChannel; reason: string } {
   if (invoice.marketingSource) return { channel: invoice.marketingSource.channel, reason: invoice.marketingSource.reason }
+  const reconciledOrder = invoice.name ? context.reconciledShopifyInvoiceNumbers?.get(invoice.name) : undefined
+  if (reconciledOrder && context.shopifyOrderNumbers.has(reconciledOrder)) return { channel: 'shopify', reason: `Cruce auditado con Shopify #${reconciledOrder}: cliente, fecha real de venta, importe total y cantidad coincidentes; no sumar la factura aparte` }
   const text = (invoice.observations || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   if (invoice.name && context.confirmedStoreInvoiceNames?.has(invoice.name)) return { channel: 'tienda', reason: 'Corrección confirmada por la dueña el 2026-10-29: factura Activetress asignada erróneamente a feria' }
   if (invoice.name && context.confirmedParaisoInvoiceNames?.has(invoice.name)) return { channel: 'tienda', reason: 'Venta del punto Paraíso confirmada por la dueña el 2026-10-29; excluida de online' }
@@ -28,7 +30,7 @@ export function classifyMarketingInvoice(invoice: CachedSiigoInvoice, context: R
   const shopify = references.some(number => context.shopifyOrderNumbers.has(number)) || (references.length === 1 && /registro\s+automatico\s+moship\s+api\s+para\s+el\s+pedido/.test(text))
   const whatsapp = context.whatsappInvoiceIds?.has(invoice.id) || /\bwhats\s*app\b|\bwhatsapp\b|\bventa\s+wa\b/.test(text)
   const mercadoPago = (invoice.raw?.payments || []).some(payment => Number(payment.id) === 8362 || /mercado\s*pago/i.test(payment.name || '')) || /mercado\s*pago/.test(text)
-  const confirmedPaymentWoo = Boolean(context.mercadoPagoWooCommerceOnly && mercadoPago)
+  const confirmedPaymentWoo = Boolean(context.mercadoPagoWooCommerceOnly && mercadoPago && (!context.mercadoPagoWooCommerceThrough || invoice.date.slice(0, 10) <= context.mercadoPagoWooCommerceThrough))
   const explicitWoo = /\bwoo\s*commerce\b|\bwoocommerce\b/.test(text)
   const historicalWeb = Boolean(context.firstShopifyOrderDate && invoice.date.slice(0, 10) < context.firstShopifyOrderDate) && /\bpagina\s*(?:web)?\b|\btienda\s+(?:virtual|online)\b|\bpedido\s+(?:web|online)\b/.test(text)
   const fair = /\bferia\b|\bplaytime\b|\bvassar\b/.test(text)
