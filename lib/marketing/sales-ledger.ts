@@ -12,7 +12,7 @@ export function marketingItem(description: string) {
 }
 
 /** One shared, dated and filtered invoice ledger for every sales view. */
-export function buildMarketingLedger(invoices: CachedSiigoInvoice[], orders: CachedShopifyOrder[], context: OnlineSalesClassificationContext, nonRetailCodes: Set<string>, filters: MarketingFilters) {
+export function buildMarketingLedger(invoices: CachedSiigoInvoice[], orders: CachedShopifyOrder[], context: OnlineSalesClassificationContext, nonRetailCodes: Set<string>, filters: MarketingFilters, dateBasis: 'sale' | 'invoice' = 'sale') {
   const byNumber = new Map(orders.filter(order => order.raw?.order_number).map(order => [Number(order.raw!.order_number), order]))
   const dates = new Map(Array.from(byNumber, ([n, order]) => [n, isoDateInTimeZone(order.created_at)]))
   const options = { products: new Set<string>(), sizes: new Set<string>(), categories: new Set<string>(), cities: new Set<string>() }
@@ -25,7 +25,7 @@ export function buildMarketingLedger(invoices: CachedSiigoInvoice[], orders: Cac
     const total = Number(invoice.total) || 0
     const credited = Number(invoice.credited_amount) || 0
     if (total <= 0 || credited >= total) continue
-    const date = marketingSaleDate(invoice, dates)
+    const date = dateBasis === 'invoice' ? invoice.date.slice(0, 10) : marketingSaleDate(invoice, dates)
     const channel = onlineMarketingChannel(date ? { ...invoice, date } : invoice, context)
     if (!channel) continue
     const linked = byNumber.get(Number((invoice.observations || '').match(/#(\d+)/)?.[1]))
@@ -60,4 +60,8 @@ export function buildMarketingLedger(invoices: CachedSiigoInvoice[], orders: Cac
     } })
   }
   return { records, undated, options }
+}
+
+export function hasUndatedSales(undated: Array<{ invoiceDate: string }>, period: { start: string; end: string }): boolean {
+  return undated.some(row => row.invoiceDate >= period.start && row.invoiceDate <= period.end)
 }

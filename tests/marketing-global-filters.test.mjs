@@ -108,3 +108,21 @@ test('no comparison returns no growth and previous-period mode uses an equal-len
   const previous = await route.GET({ url: `https://example.test/api/marketing/executive?${params}&comparison=previous` })
   assert.equal(previous.periods.previous.start, '2026-08-02'); assert.equal(previous.periods.previous.end, '2026-08-31')
 })
+
+test('invoice reconciliation includes unknown sale dates without assigning them a fake sale date', () => {
+  const records = [{ ...base, id: 'unknown', observations: '' }]
+  assert.equal(buildMarketingLedger(records, [], ctx, new Set(), {}).records.length, 0)
+  const invoiceLedger = buildMarketingLedger(records, [], ctx, new Set(), {}, 'invoice')
+  assert.equal(invoiceLedger.records.length, 1)
+  assert.equal(invoiceLedger.records[0].invoice.date, '2026-10-10')
+  assert.equal(invoiceLedger.records[0].order.raw.line_items.reduce((s, x) => s + x.quantity, 0), 2)
+})
+test('missing dates must suppress growth instead of showing growth from a smaller prior-year subset', async () => {
+  const report = await route.GET({ url: 'https://example.test/api/marketing/executive?view=ytd&start_date=2026-01-01&end_date=2026-10-28' })
+  assert.equal(report.saleDateCoverage.undatedUnits, 2)
+  assert.equal(report.comparability.netSales, false)
+  assert.equal(report.comparability.units, false)
+  assert.equal(report.comparisons.netSales.change, null)
+  assert.equal(report.onlineUnitComparison.change, null)
+  assert.equal(report.invoiceUnitReconciliation.current, 6)
+})

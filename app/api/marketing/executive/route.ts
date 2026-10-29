@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAdminClient, requireAuth } from '@/lib/auth-helpers'
 import { withoutIva } from '@/lib/siigo-values'
-import { buildMarketingLedger, marketingItem } from '@/lib/marketing/sales-ledger'
+import { buildMarketingLedger, marketingItem, hasUndatedSales } from '@/lib/marketing/sales-ledger'
 import { MARKETING_WEEKDAYS, marketingWeekday } from '@/lib/marketing/distributions'
 import {
   addMonths,
@@ -167,9 +167,13 @@ export async function GET(request: Request) {
     const ledger = buildMarketingLedger(siigoInvoices, orders, onlineSalesContext, nonRetailProductCodes, filters)
     const salesOrders = ledger.records.map(record => record.order)
     const previous = aggregatePeriod(comparisonMode === 'none' ? [] : salesOrders, periods.previous, stockBySku)
-    const current = addProductComparisons(aggregatePeriod(salesOrders, periods.current, stockBySku), previous)
+    let current = addProductComparisons(aggregatePeriod(salesOrders, periods.current, stockBySku), previous)
     const yearAgo = null
-    const salesComparable = comparisonMode !== 'none' && hasCompleteSiigoCoverage(periods.current, siigoFrom, siigoSyncedThrough) && hasCompleteSiigoCoverage(periods.previous, siigoFrom, siigoSyncedThrough)
+    const dateCoverageComplete = !hasUndatedSales(ledger.undated, periods.current) && !hasUndatedSales(ledger.undated, periods.previous)
+    const salesComparable = dateCoverageComplete && comparisonMode !== 'none' && hasCompleteSiigoCoverage(periods.current, siigoFrom, siigoSyncedThrough) && hasCompleteSiigoCoverage(periods.previous, siigoFrom, siigoSyncedThrough)
+    if (!salesComparable) {
+      current = { ...current, products: current.products.map(product => ({ ...product, variation: null, sizes: product.sizes.map(size => ({ ...size, variation: null })) })), sizes: current.sizes.map(size => ({ ...size, variation: null })) }
+    }
     const shopifyComparable = salesComparable
     const ordersComparable = salesComparable
     const historicalOrderMissingDates = HISTORICAL_ORDER_MISSING_DATES.filter(date =>
@@ -302,6 +306,14 @@ export async function GET(request: Request) {
       salesByWeekday: Array.from(weekdayUnits, ([name, units]) => ({ name, units })).sort((a, b) => b.units - a.units),
       salesByCity: Array.from(cityUnits, ([name, units]) => ({ name, units })).sort((a, b) => b.units - a.units || a.name.localeCompare(b.name, 'es')),
       onlineUnitComparison: comparison(current.units, salesComparable ? previous.units : null),
+      invoiceUnitReconciliation: (() => {
+        const invoiceLedger = buildMarketingLedger(siigoInvoices, orders, onlineSalesContext, nonRetailProductCodes, filters, 'invoice')
+        const invoiceOrders = invoiceLedger.records.map(record => record.order)
+        const invoiceCurrent = aggregatePeriod(invoiceOrders, periods.current, stockBySku).units
+        const invoicePrevious = aggregatePeriod(invoiceOrders, periods.previous, stockBySku).units
+        const complete = comparisonMode !== 'none' && hasCompleteSiigoCoverage(periods.current, siigoFrom, siigoSyncedThrough) && hasCompleteSiigoCoverage(periods.previous, siigoFrom, siigoSyncedThrough)
+        return comparison(invoiceCurrent, complete ? invoicePrevious : null)
+      })(),
       saleDateCoverage,
       designSales: Array.from(designSalesBuckets.values()).sort((a, b) =>
         b.year.localeCompare(a.year) || b.sales - a.sales,
