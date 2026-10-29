@@ -5,6 +5,7 @@
  * The two Activetress invoices below were incorrectly assigned to fairs.
  */
 export const marketingBusinessChannelRules = {
+  historicalUnitsReview: { year: 2025, status: 'pending', reportedUnits: 1414, message: 'Base 2025 pendiente de validar: confirmaste que el reporte de 1.414 unidades cubre todo el año. El Excel registra 1.234 unidades hasta el 28 de octubre y 1.782 en todo 2025. El total 1.414 se reproduce al excluir 368 registros Mercadopago del año completo, pero falta confirmar los filtros del otro reporte.' },
   // Audited Shopify link: same buyer, sale 2026-05-27, COP 187320, one pair.
   reconciledShopifyInvoiceNumbers: new Map([['FV-2-4198', 2473]]),
   mercadoPagoWooCommerceOnly: true,

@@ -136,6 +136,7 @@ export interface MetricComparison {
 }
 
 export interface MarketingExecutiveReport {
+  unitComparisonReview?: { status: string; reportedUnits: number; message: string }
   excelHistory?: { from: string; to: string; missingValueUnits: number }
   source: string
   currency: string

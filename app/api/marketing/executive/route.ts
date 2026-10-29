@@ -184,7 +184,10 @@ export async function GET(request: Request) {
     const pendingPrevious = ledger.reconciliation.filter(row => row.channel === 'pending' && inPeriod(row.date, periods.previous))
     const classificationComplete = pendingCurrent.length === 0 && pendingPrevious.length === 0
     const periodCovered = (period: typeof periods.current) => hasCompleteSiigoCoverage(period, siigoFrom, siigoSyncedThrough) && Boolean(shopifyFrom && shopifyTo && period.end <= shopifyTo && (period.start >= shopifyFrom || period.start >= excelHistory.from && period.end <= excelHistory.to))
-    const salesComparable = classificationComplete && comparisonMode !== 'none' && periodCovered(periods.current) && periodCovered(periods.previous)
+    const review = marketingBusinessChannelRules.historicalUnitsReview
+    const intersectsReviewYear = (period: typeof periods.current) => period.start <= `${review.year}-12-31` && period.end >= `${review.year}-01-01`
+    const pendingUnitsReview = review.status === 'pending' && comparisonMode !== 'none' && filters.channel !== 'shopify' && (intersectsReviewYear(periods.current) || intersectsReviewYear(periods.previous))
+    const salesComparable = !pendingUnitsReview && classificationComplete && comparisonMode !== 'none' && periodCovered(periods.current) && periodCovered(periods.previous)
     if (!salesComparable) {
       current = { ...current, products: current.products.map(product => ({ ...product, variation: null, sizes: product.sizes.map(size => ({ ...size, variation: null })) })), sizes: current.sizes.map(size => ({ ...size, variation: null })) }
     }
@@ -289,6 +292,7 @@ export async function GET(request: Request) {
 
     const report: MarketingExecutiveReport = {
       source: 'Shopify directo + Excel no Shopify 2025 + WhatsApp Siigo 2026',
+      unitComparisonReview: pendingUnitsReview ? review : undefined,
       excelHistory: { from: excelHistory.from, to: excelHistory.to, missingValueUnits: missingExcelValues.reduce((sum, record) => sum + record.order.raw!.line_items!.reduce((n, item) => n + Number(item.quantity || 0), 0), 0) },
       currency: 'COP',
       timeZone: 'America/Bogota',

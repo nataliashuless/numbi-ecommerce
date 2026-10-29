@@ -177,3 +177,16 @@ test('direct Shopify uses processed sale date, current quantities, and includes 
   const result = aggregatePeriod(ledger.records.map(r => r.order), { start: '2026-09-01', end: '2026-09-30' }, new Map())
   assert.equal(result.units, 1); assert.equal(result.netSales, 100)
 })
+
+test('disputed 2025 online baseline suppresses growth without changing source unit counts', async () => {
+  const report = await route.GET({ url: 'https://example.test/api/marketing/executive?view=ytd&start_date=2026-01-01&end_date=2026-10-28' })
+  assert.equal(report.current.units, 6)
+  assert.equal(report.unitComparisonReview.reportedUnits, 1414)
+  assert.equal(report.unitComparisonReview.status, 'pending')
+  assert.equal(report.onlineUnitComparison.change, null)
+  assert.equal(report.comparisons.units.change, null)
+  assert.equal(report.comparability.units, false)
+  const sameYear = await route.GET({ url: 'https://example.test/api/marketing/executive?view=monthly&start_date=2026-09-01&end_date=2026-09-30&comparison=previous' })
+  assert.equal(sameYear.unitComparisonReview, undefined)
+  assert.equal(sameYear.comparability.units, true)
+})

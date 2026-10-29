@@ -654,12 +654,12 @@ function SimpleExecutiveSummary({
   const pendingChannels = [...report.channelReconciliation.current, ...report.channelReconciliation.previous].filter(row => row.channel === 'pending').length > 0
   const hasUnverifiedDates = report.saleDateCoverage.undatedUnits > 0 || report.saleDateCoverage.previousUndatedUnits > 0
   const headline = report.filters.comparisonMode === 'none' ? 'Ventas del período seleccionado' : !comparisonReliable
-    ? report.comparability.units ? 'Comparación de unidades vendidas' : 'La comparación anual todavía está incompleta'
+    ? report.unitComparisonReview ? 'Comparación pendiente de validar' : report.comparability.units ? 'Comparación de unidades vendidas' : 'La comparación anual todavía está incompleta'
     : salesChange === null
     ? 'Así va el negocio en el periodo seleccionado'
     : `Las ventas ${hasUnverifiedDates ? 'con fecha ' : ''}${salesChange >= 0 ? 'subieron' : 'bajaron'} ${Math.abs(salesChange * 100).toFixed(1)}%`
   const explanation = report.filters.comparisonMode === 'none' ? 'Sin comparación.' : !comparisonReliable
-    ? pendingChannels ? 'No calculamos crecimiento mientras existan facturas sin canal confirmado. Revisa la conciliación debajo.' : report.excelHistory?.missingValueUnits ? 'Las unidades sí son comparables. Faltan algunos importes del Excel para comparar ventas en pesos.' : 'El historial no cubre ambos períodos completos.'
+    ? report.unitComparisonReview ? report.unitComparisonReview.message : pendingChannels ? 'No calculamos crecimiento mientras existan facturas sin canal confirmado. Revisa la conciliación debajo.' : report.excelHistory?.missingValueUnits ? 'Las unidades sí son comparables. Faltan algunos importes del Excel para comparar ventas en pesos.' : 'El historial no cubre ambos períodos completos.'
     : salesChange === null
     ? 'No hay un periodo anterior comparable para indicar si crecimos.'
     : report.filters.comparisonMode === 'none' ? 'Sin comparación.' : `Comparamos ventas con fecha de cada fuente con ${readableRange(report.periods.previous.start, report.periods.previous.end)}.`
@@ -673,7 +673,7 @@ function SimpleExecutiveSummary({
           <p className="mt-2 text-sm text-slate-600">{explanation}</p>
           <div className="mt-5 border-t border-slate-200/70 pt-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-[#168fc6]">Unidades online · Shopify + Excel / Siigo</p>
-            <p className="mt-1 text-2xl font-bold text-[#172239]">{report.onlineUnitComparison.change !== null ? report.onlineUnitComparison.change === 0 ? 'Las unidades no cambiaron' : `Las unidades ${hasUnverifiedDates ? 'con fecha ' : ''}${report.onlineUnitComparison.change > 0 ? 'subieron' : 'bajaron'} ${Math.abs(report.onlineUnitComparison.change * 100).toFixed(1)}%` : report.filters.comparisonMode === 'none' ? 'Unidades del período' : 'Variación no concluyente: clasificación pendiente'}</p>
+            <p className="mt-1 text-2xl font-bold text-[#172239]">{report.onlineUnitComparison.change !== null ? report.onlineUnitComparison.change === 0 ? 'Las unidades no cambiaron' : `Las unidades ${hasUnverifiedDates ? 'con fecha ' : ''}${report.onlineUnitComparison.change > 0 ? 'subieron' : 'bajaron'} ${Math.abs(report.onlineUnitComparison.change * 100).toFixed(1)}%` : report.filters.comparisonMode === 'none' ? 'Unidades del período' : report.unitComparisonReview ? 'Crecimiento pendiente de validar' : 'Variación no concluyente: clasificación pendiente'}</p>
             <p className="mt-1 text-sm text-slate-600">{number(report.onlineUnitComparison.current || 0)} unidades actuales{report.onlineUnitComparison.previous !== null ? ` frente a ${number(report.onlineUnitComparison.previous)} anteriores · ${(report.onlineUnitComparison.current || 0) - report.onlineUnitComparison.previous > 0 ? '+' : ''}${number((report.onlineUnitComparison.current || 0) - report.onlineUnitComparison.previous)} unidades de diferencia.` : report.filters.comparisonMode === 'none' ? '' : ' · No se calcula crecimiento con una base incompleta.'}</p>
             <p className="mt-1 text-xs text-slate-500">Excel 2025: fecha real de venta y unidades de las ventas no Shopify. Shopify: fecha de venta del pedido. WhatsApp 2026: fecha de factura Siigo. Excluye regalos, pagos pendientes y ventas presenciales identificadas.</p>
 
