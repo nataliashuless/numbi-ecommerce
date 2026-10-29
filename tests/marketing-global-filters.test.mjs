@@ -84,7 +84,7 @@ function query(table) {
 const db = { from: query }
 const route = {}
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../app/api/marketing/executive/route.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: route, URL, Date, console, require(name) {
-  if (name === '@/data/marketing-2025-audit-inputs.json') return { default: { targets: [], fairInvoiceNames: [] } }
+  if (name === '@/data/marketing-2025-audit-inputs.json') return { default: { targets: [], fairInvoiceNames: [], invoiceLinks: [] } }
   if (name === '@/data/marketing-online-excel-2025.json') return { default: { from: '2025-01-01', to: '2025-12-31', rows: [] } }
   if (name === 'next/server') return { NextResponse: { json: (value, options) => ({ ...value, status: options?.status || 200 }) } }
   if (name === '@/lib/auth-helpers') return { requireAuth: async () => ({}), getAdminClient: () => db }
@@ -212,4 +212,21 @@ test('paid Shopify evidence supersedes stale unpaid flags; cancelled orders and 
   assert.equal(reconcileHistory(history, inputs, [], [order], new Set()).decisions[0].decision, 'shopify')
   assert.equal(reconcileHistory(history, inputs, [], [{ ...order, raw: { ...order.raw, cancelled_at: '2025-01-03' } }], new Set()).decisions[0].decision, 'excluded')
   assert.equal(reconcileHistory(history, { ...inputs, targets: [{ ...auditTarget, explicitRefund: true }] }, [], [order], new Set()).decisions[0].decision, 'excluded')
+})
+
+test('historical sale invoiced next year is counted once in the Excel sale year, never again as current WhatsApp', () => {
+  const late = { ...base, id: 'late', name: 'FV-2-late', date: '2026-01-20', observations: 'WhatsApp', total: 119, items: [base.items[0]] }
+  const history = { from: '2025-01-01', to: '2025-12-31', rows: [{ ...auditRow, date: '2025-12-29', invoice: 'FV-2-late' }] }
+  const result = applyExcelHistory([late], ctx, history, [{ row: 2, invoice: 'FV-2-late', decision: 'online', reason: 'Venta de diciembre documentada' }])
+  const ledger = buildMarketingLedger(result.invoices, [], ctx, new Set(), {}, 'invoice')
+  const metrics = year => aggregatePeriod(ledger.records.map(r => r.order), { start: `${year}-01-01`, end: `${year}-12-31` }, new Map())
+  assert.equal(metrics(2025).units, 1); assert.equal(metrics(2026).units, 0)
+})
+test('unresolved rows remain explicit pending units and owner-confirmed physical stores override spreadsheet inference', () => {
+  const history = { from: '2025-01-01', to: '2025-12-31', rows: [auditRow] }
+  const source = applyExcelHistory([], ctx, history, [{ row: 2, decision: 'pending', reason: 'Nota crédito por aclarar' }])
+  const ledger = buildMarketingLedger(source.invoices, [], ctx, new Set(), {}, 'invoice')
+  assert.equal(ledger.records.length, 0); assert.equal(ledger.reconciliation[0].channel, 'pending'); assert.equal(ledger.reconciliation[0].units, 1)
+  const physical = { ...base, id: 'physical', name: 'FV-2-10', date: '2025-01-03', customer_identification: 'store' }
+  assert.equal(applyExcelHistory([physical], ctx, history).invoices.length, 0)
 })

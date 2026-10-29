@@ -174,8 +174,10 @@ export async function GET(request: Request) {
 
     const whatsappLinks = await loadPaged<{ siigo_invoice_id: string | null }>((from, to) => supabase.from('ventas_whatsapp').select('siigo_invoice_id').not('siigo_invoice_id', 'is', null).range(from, to))
     const reconciliationContext = { ...onlineSalesContext, ...marketingBusinessChannelRules, historicalStoreEvidence: historicalStoreEvidence(siigoInvoices), firstShopifyOrderDate: shopifyFrom, whatsappInvoiceIds: new Set(whatsappLinks.map(row => row.siigo_invoice_id).filter((id): id is string => Boolean(id))) }
-    const historyAudit = reconcileHistory(excelHistory, historyAuditInputs, siigoInvoices, orders, new Set([...marketingBusinessChannelRules.confirmedStoreInvoiceNames, ...marketingBusinessChannelRules.confirmedParaisoInvoiceNames]))
-    const excel = applyExcelHistory(siigoInvoices, reconciliationContext, excelHistory)
+    const invoiceLinks = new Map(historyAuditInputs.invoiceLinks.map(link => [link.row, link.invoice]))
+    const historicalSales = { ...excelHistory, rows: excelHistory.rows.map(row => ({ ...row, invoice: row.invoice || invoiceLinks.get(row.row) || null })) }
+    const historyAudit = reconcileHistory(historicalSales, historyAuditInputs, siigoInvoices, orders, new Set([...marketingBusinessChannelRules.confirmedStoreInvoiceNames, ...marketingBusinessChannelRules.confirmedParaisoInvoiceNames, ...siigoInvoices.filter(invoice => classifyMarketingInvoice(invoice, reconciliationContext).channel === 'tienda').map(invoice => invoice.name || '')]))
+    const excel = applyExcelHistory(siigoInvoices, reconciliationContext, historicalSales, historyAudit.decisions)
     const unifiedInvoices = [...excel.invoices.filter(invoice => classifyMarketingInvoice(invoice, reconciliationContext).channel !== 'shopify'), ...directShopifyInvoices(orders)]
     const ledger = buildMarketingLedger(unifiedInvoices, orders, reconciliationContext, nonRetailProductCodes, filters, 'invoice')
     const salesOrders = ledger.records.map(record => record.order)
@@ -187,7 +189,9 @@ export async function GET(request: Request) {
     const pendingPrevious = ledger.reconciliation.filter(row => row.channel === 'pending' && inPeriod(row.date, periods.previous))
     const classificationComplete = pendingCurrent.length === 0 && pendingPrevious.length === 0
     const periodCovered = (period: typeof periods.current) => hasCompleteSiigoCoverage(period, siigoFrom, siigoSyncedThrough) && Boolean(shopifyFrom && shopifyTo && period.end <= shopifyTo && (period.start >= shopifyFrom || period.start >= excelHistory.from && period.end <= excelHistory.to))
-    const review = marketingBusinessChannelRules.historicalUnitsReview
+    const unresolvedHistoryRows = historyAudit.decisions.filter(decision => decision.decision === 'pending')
+    const historyReconciled = historyAuditInputs.targets.length > 0 && historyAudit.decisions.length === historyAuditInputs.targets.length && historyAuditInputs.fairInvoiceNames.length > 0 && historyAudit.fair.every(row => row.online) && unresolvedHistoryRows.length === 0
+    const review = { ...marketingBusinessChannelRules.historicalUnitsReview, status: historyReconciled ? 'reconciled' : 'pending', message: unresolvedHistoryRows.length ? `Conciliación de 2025: faltan ${unresolvedHistoryRows.length} filas por confirmar. No calculamos crecimiento hasta aclarar esas ventas. Revisa la tabla de conciliación detallada.` : marketingBusinessChannelRules.historicalUnitsReview.message }
     const intersectsReviewYear = (period: typeof periods.current) => period.start <= `${review.year}-12-31` && period.end >= `${review.year}-01-01`
     const pendingUnitsReview = review.status === 'pending' && comparisonMode !== 'none' && filters.channel !== 'shopify' && (intersectsReviewYear(periods.current) || intersectsReviewYear(periods.previous))
     const salesComparable = !pendingUnitsReview && classificationComplete && comparisonMode !== 'none' && periodCovered(periods.current) && periodCovered(periods.previous)

@@ -6,7 +6,7 @@ import { marketingSaleDate } from './siigo-sales'
 import type { ExcelHistory, ExcelSaleRow } from './excel-history'
 import { marketingItem } from './sales-ledger'
 
-interface Target { row: number; invoiceCandidates: string[]; buyerHash: string | null; nameHash: string | null; emailHash: string | null; shipping: number; explicitRefund: boolean; explicitFair: boolean }
+interface Target { row: number; invoiceCandidates: string[]; buyerHash: string | null; nameHash: string | null; emailHash: string | null; shipping: number; explicitRefund: boolean; explicitFair: boolean; duplicateOf?: number; productAmount?: number | null; totalPaid?: number | null }
 interface Inputs { targets: Target[]; fairInvoiceNames: string[]; fairInvoiceRows?: Array<{ row: number; invoice: string }> }
 export interface HistoryDecision { row: number; decision: 'online' | 'shopify' | 'excluded' | 'pending'; reason: string; invoice?: string; order?: number; credited?: boolean; replacement?: string }
 const normalize = (value: unknown) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -27,7 +27,8 @@ export function reconcileHistory(history: ExcelHistory, inputs: Inputs, invoices
     if (!row) continue
     const refs = target.invoiceCandidates.map(name => byName.get(name)).filter((invoice): invoice is CachedSiigoInvoice => Boolean(invoice))
     const original = refs[0]
-    const base = { row: row.row, invoice: original?.name, credited: original ? !validInvoice(original) : undefined }
+    const base = { row: row.row, invoice: original?.name, order: Number((original?.observations || '').match(/(?:#|pedido\s+)(\d+)/i)?.[1]) || undefined, credited: original ? !validInvoice(original) : undefined }
+    if (target.duplicateOf) { decisions.push({ ...base, decision: 'excluded', reason: `Repetición exacta de la fila ${target.duplicateOf}; Shopify cuenta el pedido una sola vez` }); continue }
     if (row.flags.includes('gift') || target.explicitRefund || target.explicitFair) {
       decisions.push({ ...base, decision: 'excluded', reason: target.explicitRefund ? 'Devolución de dinero explícita en Excel' : target.explicitFair ? 'Venta de feria explícita en Excel' : 'Regalo comercial o de marketing' }); continue
     }
@@ -50,19 +51,32 @@ export function reconcileHistory(history: ExcelHistory, inputs: Inputs, invoices
     if (row.flags.includes('unpaid')) { decisions.push({ ...base, decision: 'excluded', reason: 'Pago pendiente explícito sin pedido pagado confirmado' }); continue }
     let linked = refs.find(validInvoice)
     if (!linked) {
-      const related = invoices.filter(invoice => validInvoice(invoice) && (target.buyerHash ? hash(invoice.customer_identification) === target.buyerHash : original?.customer_identification && invoice.customer_identification === original.customer_identification))
-      const replacements = related.filter(invoice => target.invoiceCandidates.some(name => new RegExp(`(?:reemplaza|corrige|factura)[\\s\\S]{0,45}\\b${name.split('-').at(-1)}\\b`, 'i').test(invoice.observations || '')))
+      const related = invoices.filter(invoice => validInvoice(invoice) && (Boolean(target.buyerHash && hash(invoice.customer_identification) === target.buyerHash) || Boolean(original?.customer_identification && !/^(\d)\1{5,}$/.test(original.customer_identification) && invoice.customer_identification === original.customer_identification)))
+      const replacements = invoices.filter(validInvoice).filter(invoice => target.invoiceCandidates.some(name => new RegExp(`(?:reemplaza|corrige|factura)[\\s\\S]{0,45}\\b${name.split('-').at(-1)}\\b`, 'i').test(invoice.observations || '')))
       const saleMatches = related.filter(invoice => (invoice.items || []).some(item => sameProduct(item.description || '', row)) && marketingSaleDate(invoice, dates) === row.date)
+      const variantMatches = related.filter(invoice => (invoice.items || []).some(item => design(marketingItem(item.description || '').design) === design(row.design)) && marketingSaleDate(invoice, dates) === row.date)
+      const priceMatches = related.filter(invoice => dayDistance(row.date, invoice.date.slice(0, 10)) <= 90 && (invoice.items || []).some(item => sameProduct(item.description || '', row) && (Math.abs(Number(item.total || 0) - Number(target.productAmount || row.amount || 0)) < 1 && Number(target.productAmount || row.amount || 0) > 0 || Boolean(target.totalPaid && Math.abs(invoice.total - target.totalPaid) < 1))))
       if (replacements.length === 1) linked = replacements[0]
       else if (saleMatches.length === 1) linked = saleMatches[0]
+      else if (priceMatches.length === 1) linked = priceMatches[0]
+      else if (variantMatches.length === 1) linked = variantMatches[0]
     }
     if (linked) {
       if (linked.name && storeNames.has(linked.name)) { decisions.push({ ...base, invoice: linked.name, decision: 'excluded', reason: 'Tienda o Paraíso confirmado por la dueña; no es venta online' }); continue }
       decisions.push({ ...base, invoice: linked.name, replacement: linked.name !== original?.name ? linked.name : undefined, decision: 'online', reason: linked.name !== original?.name ? 'Factura vigente localizada por comprador, producto y fecha de venta o reemplazo explícito' : 'Factura vigente y registro online del Excel conciliados' }); continue
     }
+    if (original && !validInvoice(original) && /^pend/i.test(row.payment)) { decisions.push({ ...base, decision: 'excluded', reason: 'Factura con nota crédito total y pago pendiente en Excel, sin reemplazo pagado' }); continue }
     if (original && !validInvoice(original)) { decisions.push({ ...base, decision: 'pending', reason: 'Factura con nota crédito total; no hay reemplazo ni pedido pagado verificable para esta fila' }); continue }
     if (/enviado/i.test(row.status) && (row.amount || 0) > 0) { decisions.push({ ...base, decision: 'online', reason: 'Venta pagada y enviada del Excel autorizado; sin factura vigente localizada en Siigo' }); continue }
     decisions.push({ ...base, decision: 'pending', reason: 'No se encontró factura vigente ni evidencia suficiente de pago/entrega para cerrar esta fila' })
+  }
+  // A credited sale reissued with another size is one sale, not two Excel rows.
+  for (const decision of decisions.filter(decision => decision.decision === 'online' && decision.replacement && decision.credited)) {
+    const invoice = byName.get(decision.invoice)
+    const row = history.rows.find(row => row.row === decision.row)
+    if (!invoice || !row || (invoice.items || []).some(item => sameProduct(item.description || '', row))) continue
+    const represented = decisions.some(other => other.row !== decision.row && other.decision === 'online' && other.invoice === decision.invoice && history.rows.some(source => source.row === other.row && source.date === row.date && (invoice.items || []).some(item => sameProduct(item.description || '', source))))
+    if (represented) { decision.decision = 'excluded'; decision.reason = 'Factura anulada y cambio de talla: la venta vigente ya está representada por otra fila del mismo día' }
   }
   const fair = inputs.fairInvoiceNames.map(name => {
     const invoice = byName.get(name)
