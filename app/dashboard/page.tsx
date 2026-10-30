@@ -122,6 +122,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<ConsolidatedData | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [salesError, setSalesError] = useState<string | null>(null)
   const shop = ''
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month' | 'quarter' | 'year'>('month')
@@ -190,6 +191,7 @@ export default function DashboardPage() {
   async function fetchData() {
     if (!dateRange?.from || !dateRange?.to) return
 
+    setSalesError(null)
     const initialLoad = data === null
     if (initialLoad) setLoading(true)
     else setRefreshing(true)
@@ -215,6 +217,7 @@ export default function DashboardPage() {
 
     } catch (error) {
       console.error('Error fetching data:', error)
+      setSalesError(error instanceof Error ? error.message : 'No se pudieron cargar las ventas')
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -353,6 +356,7 @@ export default function DashboardPage() {
 
       {/* Main */}
       <main className="container mx-auto px-4 py-8">
+        {salesError && <p role="alert" className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-900">No se pudieron cargar las ventas: {salesError}. Actualiza para reintentar; los datos no representan ventas en cero.</p>}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-[#1A2238] mb-2">Ventas Consolidadas</h1>
@@ -378,7 +382,7 @@ export default function DashboardPage() {
             <Loader2 className="h-8 w-8 animate-spin text-[#1A2238]" />
             <span className="ml-2 text-[#545454]">Cargando datos...</span>
           </div>
-        ) : (
+        ) : salesError && !data ? null : (
           <>
             {/* Total KPIs (click to switch chart metric) */}
             <div className="grid gap-4 md:grid-cols-3 mb-8">

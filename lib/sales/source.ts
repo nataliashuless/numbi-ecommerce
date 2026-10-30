@@ -19,16 +19,35 @@ export async function paged<T>(query: (from: number, to: number) => PromiseLike<
 }
 
 /** All consumers use this same deduplication, channel evidence and product/date policy. */
-export async function loadSalesSource() {
+async function readSnapshot() {
   const db = getAdminClient()
-  const [orders, invoices, stores, fairs, links, stock] = await Promise.all([
-    paged<CachedShopifyOrder>((a, b) => db.from('shopify_orders').select('*').order('id').range(a, b)),
-    paged<CachedSiigoInvoice>((a, b) => db.from('siigo_invoices').select('*').lte('date', isoDateInTimeZone(new Date())).order('id').range(a, b)),
+  return Promise.all([
+    paged<CachedShopifyOrder>((a, b) => db.from('shopify_orders').select('id,order_number,name,created_at,total_price,currency,financial_status,fulfillment_status,customer_name,customer_email,raw').order('created_at').order('id').range(a, b)),
+    paged<CachedSiigoInvoice>((a, b) => db.from('siigo_invoices').select('id,name,date,total,credited_amount,customer_id,customer_identification,assigned_feria_id,observations,items,raw').lte('date', isoDateInTimeZone(new Date())).order('date').order('id').range(a, b)),
     paged<{ id: string; nombre: string; nombre_corto: string | null; siigo_customer_identification: string }>((a, b) => db.from('tiendas_terceros').select('id,nombre,nombre_corto,siigo_customer_identification').order('id').range(a, b)),
     paged<{ fecha_inicio: string; fecha_fin: string }>((a, b) => db.from('ferias').select('id,fecha_inicio,fecha_fin').eq('activa', true).order('id').range(a, b)),
     paged<{ siigo_invoice_id: string | null }>((a, b) => db.from('ventas_whatsapp').select('id,siigo_invoice_id').not('siigo_invoice_id', 'is', null).order('id').range(a, b)),
-    paged<{ product_code: string | null; account_group_id: number | null }>((a, b) => db.from('siigo_product_stock').select('product_code,account_group_id').order('product_code').order('warehouse_id').range(a, b)),
+    paged<{ product_code: string | null; account_group_id: number | null }>((a, b) => db.from('siigo_product_stock').select('product_code,account_group_id').order('product_id').order('warehouse_id').range(a, b)),
   ])
+}
+
+// Concurrent report requests share a short server-memory snapshot. No raw
+// customer data is placed in a public or persistent response cache.
+let snapshot: { expires: number; value: Awaited<ReturnType<typeof readSnapshot>> } | undefined
+let inFlight: ReturnType<typeof readSnapshot> | undefined
+async function loadSnapshot() {
+  const cacheEnabled = typeof process !== 'undefined' && process.env.NODE_ENV === 'production'
+  if (!cacheEnabled) return readSnapshot()
+  if (snapshot && snapshot.expires > Date.now()) return snapshot.value
+  if (!inFlight) inFlight = readSnapshot().then(value => {
+    snapshot = { value, expires: Date.now() + 30_000 }
+    return value
+  }).finally(() => { inFlight = undefined })
+  return inFlight
+}
+
+export async function loadSalesSource() {
+  const [orders, invoices, stores, fairs, links, stock] = await loadSnapshot()
   const retail = new Set(stock.filter(row => row.account_group_id === 339).map(row => row.product_code?.trim()))
   const nonRetail = new Set(stock.filter(row => row.account_group_id !== null && row.account_group_id !== 339).map(row => row.product_code?.trim()).filter((code): code is string => Boolean(code) && !retail.has(code)))
   const context = {

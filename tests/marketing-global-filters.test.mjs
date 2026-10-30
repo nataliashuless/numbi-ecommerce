@@ -284,6 +284,7 @@ test('confirmed-only growth excludes the authorized pending unit while retaining
 
 const sharedSource = {}
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../lib/sales/source.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: sharedSource, Date, console, require(name) {
+  if (name === 'next/cache') return { unstable_cache: fn => fn }
   if (name === '@/lib/auth-helpers') return { getAdminClient: () => db }
   if (name.startsWith('@/lib/marketing/')) return load(name.split('/').at(-1))
   return load(name)
