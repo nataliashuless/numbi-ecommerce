@@ -21,7 +21,11 @@ export async function GET(request: Request) {
 
   const source = await loadSalesSource()
   const originalById = new Map(source.invoices.map(invoice => [invoice.id, invoice as typeof invoice & { customer_id?: string }]))
-  const whatsappInvoices = reportingInvoices(source, startDate, endDate).filter(invoice => invoice.salesChannel === 'whatsapp').map(invoice => ({ ...invoice, customer_id: originalById.get(invoice.id)?.customer_id || null }))
+  const originalByName = new Map(source.invoices.map(invoice => [invoice.name, invoice as typeof invoice & { customer_id?: string }]))
+  const whatsappInvoices = reportingInvoices(source, startDate, endDate).filter(invoice => invoice.salesChannel === 'whatsapp').map(invoice => {
+    const original = originalById.get(invoice.id) || originalByName.get(invoice.name)
+    return { ...invoice, customer_id: original?.customer_id || null, original_invoice_id: original?.id || null }
+  })
 
   const customerIds = Array.from(
     new Set(whatsappInvoices.map(i => i.customer_id).filter(Boolean) as string[])
@@ -63,7 +67,7 @@ export async function GET(request: Request) {
       precio_unitario: cantidad > 0 ? inv.total / cantidad : inv.total,
       total: inv.total,
       notas: inv.observations,
-      siigo_invoice_id: originalById.has(inv.id) ? inv.id : null,
+      siigo_invoice_id: inv.original_invoice_id,
       siigo_invoice_number: inv.name,
     }
   })

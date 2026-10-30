@@ -11,6 +11,7 @@ export const maxDuration = 60
 type Item = { code: string; description: string; quantity: number; price: number; total?: number }
 type CachedInvoice = {
   id: string
+  marketingSource?: { missingValue?: boolean }
   salesChannel?: string
   date: string
   total: number
@@ -300,6 +301,7 @@ export async function GET(request: Request) {
     })).sort((x, y) => y.current.ventas - x.current.ventas)
 
     return NextResponse.json({
+      amountsComplete: ![...curInv, ...prevInv].some(invoice => invoice.marketingSource?.missingValue),
       currentMonth: `${year}-${String(month0 + 1).padStart(2, '0')}`,
       previousMonth: `${year - 1}-${String(month0 + 1).padStart(2, '0')}`,
       currentRange: cur,

@@ -10,6 +10,7 @@ export async function GET(request: Request) {
   if (!start || !end || !/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || start > end) return NextResponse.json({ error: 'Fechas inválidas' }, { status: 400 })
   try {
     const source = await loadSalesSource()
+    const amountsComplete = !reportingInvoices(source, start, end).some(invoice => invoice.marketingSource?.missingValue)
     const empty = () => ({ ventas: 0, ordenes: 0, unidades: 0 })
     const channels = { shopify: empty(), woocommerce: empty(), whatsapp: empty(), tiendas: empty(), ferias: empty() }
     const daily = new Map<string, Record<string, number>>()
@@ -28,6 +29,6 @@ export async function GET(request: Request) {
     const web = { ventas: channels.shopify.ventas + channels.woocommerce.ventas, ordenes: channels.shopify.ordenes + channels.woocommerce.ordenes, unidades: channels.shopify.unidades + channels.woocommerce.unidades }
     const total = Object.values(channels).reduce((sum, row) => ({ ventas: sum.ventas + row.ventas, ordenes: sum.ordenes + row.ordenes, unidades: sum.unidades + row.unidades }), empty())
     const chartData = Array.from(daily, ([date, values]) => ({ date, ...Object.fromEntries(['shopify', 'whatsapp', 'tiendas', 'ferias'].flatMap(channel => ['ventas', 'ordenes', 'unidades'].map(metric => [`${channel}_${metric}`, values[`${channel}_${metric}`] || 0]))) })).sort((a,b) => a.date.localeCompare(b.date))
-    return NextResponse.json({ shopify: web, whatsapp: channels.whatsapp, tiendas: channels.tiendas, ferias: channels.ferias, total, chartData, source: 'Histórico conciliado compartido · ventas de producto antes de IVA', channels })
+    return NextResponse.json({ amountsComplete, shopify: web, whatsapp: channels.whatsapp, tiendas: channels.tiendas, ferias: channels.ferias, total, chartData, source: 'Histórico conciliado compartido · ventas de producto antes de IVA', channels })
   } catch (err) { return NextResponse.json({ error: err instanceof Error ? err.message : 'Error de ventas' }, { status: 500 }) }
 }

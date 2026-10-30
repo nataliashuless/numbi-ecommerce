@@ -74,6 +74,7 @@ interface ConsolidatedData {
 }
 
 interface ChannelTotals {
+  amountsComplete?: boolean
   shopify: ChannelStats
   whatsapp: ChannelStats
   tiendas: ChannelStats
@@ -718,7 +719,7 @@ export default function DashboardPage() {
                           }
                           const pctColor = (v: number) => !isFinite(v) || v === 0 ? 'text-[#6B7280]' : v > 0 ? 'text-green-600' : 'text-red-600'
                           return rows.map(({ key, label, color, cur, prev }) => {
-                            const pctVentas = pct(cur.ventas, prev.ventas)
+                            const pctVentas = ytd.thisYear.amountsComplete === false || ytd.lastYear.amountsComplete === false ? NaN : pct(cur.ventas, prev.ventas)
                             const pctUnidades = pct(cur.unidades, prev.unidades)
                             const pctOrdenes = pct(cur.ordenes, prev.ordenes)
                             const isTotal = key === 'total'

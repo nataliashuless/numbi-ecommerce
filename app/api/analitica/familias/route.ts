@@ -97,6 +97,7 @@ const DESIGN_CANONICAL: Record<string, string> = {
 type Item = { code: string; description: string; quantity: number; price: number; total?: number }
 type CachedInvoice = {
   id: string
+  marketingSource?: { missingValue?: boolean }
   salesChannel?: string
   date: string
   total: number
@@ -344,6 +345,7 @@ export async function GET(request: Request) {
       .slice(0, 40)
 
     return NextResponse.json({
+      amountsComplete: ![...thisYear, ...lastYear].some(invoice => invoice.marketingSource?.missingValue),
       asOf: fmt(asOf),
       currentRange: { start: thisStart, end: thisEnd },
       previousRange: { start: lastStart, end: lastEnd },

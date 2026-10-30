@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     const orders = reportingInvoices(source, startDate, endDate).filter(invoice => invoice.salesChannel === 'shopify').map(invoice => {
       const order = rawById.get(invoice.id.replace('shopify:', ''))!
       const cached = order as typeof order & { order_number?: number; name?: string; currency?: string; customer_name?: string; customer_email?: string; fulfillment_status?: string }
-      return { id: order.id, order_number: order.raw?.order_number || cached.order_number, name: cached.name, created_at: `${invoice.date}T12:00:00-05:00`, total_price: invoice.total, currency: cached.currency || 'COP', financial_status: order.financial_status, fulfillment_status: cached.fulfillment_status, customer_name: cached.customer_name, customer_email: cached.customer_email, item_count: invoice.items.reduce((sum, item) => sum + item.quantity, 0) }
+      return { id: order.id, order_number: order.raw?.order_number || cached.order_number, name: cached.name, created_at: order.raw?.processed_at || order.created_at, sale_date: invoice.date, total_price: invoice.total, currency: cached.currency || 'COP', financial_status: order.financial_status, fulfillment_status: cached.fulfillment_status, customer_name: cached.customer_name, customer_email: cached.customer_email, item_count: invoice.items.reduce((sum, item) => sum + item.quantity, 0) }
     })
 
     const totalRevenue = orders.reduce((sum, o) => sum + Number(o.total_price || 0), 0)
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
 
     const aggregated: Record<string, { sales: number; orders: number; units: number }> = {}
     for (const o of orders) {
-      const k = getGroupKey(o.created_at)
+      const k = getGroupKey(o.sale_date)
       if (!aggregated[k]) aggregated[k] = { sales: 0, orders: 0, units: 0 }
       aggregated[k].sales += Number(o.total_price || 0)
       aggregated[k].orders += 1
