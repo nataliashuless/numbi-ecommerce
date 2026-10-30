@@ -1,3 +1,4 @@
+import { loadSalesSource, reportingInvoices } from '@/lib/sales/source'
 import { NextResponse } from 'next/server'
 import { businessDateBogota, buildSchoolSeasonPeriods } from '@/lib/forecast/calendar'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
@@ -193,7 +194,6 @@ export async function GET(request: Request) {
       const matching = feriaWindows.filter(feria => invoice.date >= feria.fecha_inicio && invoice.date <= feria.fecha_fin)
       return matching.length === 1 && evaWindows.includes(matching[0])
     }
-    const isFeriaDate = (date: string) => feriaWindows.some(feria => date >= feria.fecha_inicio && date <= feria.fecha_fin)
 
     // 1. Stock per SKU from siigo_product_stock (paginated)
     type StockRow = {
@@ -317,6 +317,7 @@ export async function GET(request: Request) {
     }
 
     type Invoice = {
+      salesChannel?: string
       id: string
       date: string
       customer_identification: string | null
@@ -326,25 +327,9 @@ export async function GET(request: Request) {
       credited_amount: number | null
       assigned_feria_id: string | null
     }
+    const canonicalSource = await loadSalesSource()
     async function fetchInvoices(from: string, to: string): Promise<Invoice[]> {
-      const result: Invoice[] = []
-      let pageStart = 0
-      const pageSize = 1000
-      for (;;) {
-        const { data: page, error: invoiceError } = await supabase
-          .from('siigo_invoices')
-          .select('id, date, customer_identification, observations, items, total, credited_amount, assigned_feria_id')
-          .gte('date', from)
-          .lte('date', to)
-          .order('id').range(pageStart, pageStart + pageSize - 1)
-        if (invoiceError) throw new Error(invoiceError.message)
-        if (!page || page.length === 0) break
-        const fresh = (page as Invoice[]).filter(p => (p.credited_amount || 0) < p.total)
-        result.push(...fresh)
-        if (page.length < pageSize) break
-        pageStart += pageSize
-      }
-      return result
+      return reportingInvoices(canonicalSource, from, to)
     }
     // Load all available history. The cache currently begins in Nov-2023;
     // asking from 2000 keeps this logic future-proof as older data is added.
@@ -359,7 +344,7 @@ export async function GET(request: Request) {
     const invoicedStoreMonths = new Set<string>()
     for (const inv of uniqueInvoices) {
       const store = identificationKeys(inv.customer_identification).map(nit => storeByNit.get(nit)).find(Boolean)
-      if (!store || excludedStoreIds.has(store.id) || inv.assigned_feria_id != null) continue
+      if (!store || excludedStoreIds.has(store.id) || inv.salesChannel !== 'tienda') continue
       for (const item of inv.items || []) {
         if (item.code && item.code !== 'ENVIO') invoicedStoreMonths.add(`${store.id}|${item.code}|${inv.date.slice(0, 7)}`)
       }
@@ -375,11 +360,9 @@ export async function GET(request: Request) {
     for (const inv of invoices) {
       const invoiceStore = identificationKeys(inv.customer_identification).map(nit => storeByNit.get(nit)).find(Boolean)
       if (invoiceStore && excludedStoreIds.has(invoiceStore.id)) continue
-      const orderNum = extractOrderNum(inv.observations)
-      const knownShopify = orderNum !== null && shopOrderNumbers.has(orderNum)
-      const isFeria = inv.assigned_feria_id != null || (!invoiceStore && !knownShopify && isFeriaDate(inv.date))
-      const isTienda = invoiceStore != null && !isFeria
-      const isShopify = !isFeria && !isTienda && knownShopify
+      const isFeria = inv.salesChannel === 'feria'
+      const isTienda = inv.salesChannel === 'tienda'
+      const isShopify = inv.salesChannel === 'shopify' || inv.salesChannel === 'woocommerce'
       // Default: WhatsApp (direct sale)
       const channel: keyof Sales = isFeria ? 'ferias' : isTienda ? 'tiendas' : isShopify ? 'shopify' : 'whatsapp'
 
@@ -448,9 +431,8 @@ export async function GET(request: Request) {
         for (const item of inv.items || []) if (item.code) excludedSalesSkus.add(item.code)
         continue
       }
-      const orderNum = extractOrderNum(inv.observations)
-      const knownShopify = orderNum !== null && shopOrderNumbers.has(orderNum)
-      const isFeriaInvoice = inv.assigned_feria_id != null || (!matchedStore && !knownShopify && isFeriaDate(inv.date))
+      const knownShopify = inv.salesChannel === 'shopify' || inv.salesChannel === 'woocommerce'
+      const isFeriaInvoice = inv.salesChannel === 'feria'
       // Ferias are event demand, not recurring Online/WhatsApp demand and not
       // a monthly store replenishment proxy.
       if (isFeriaInvoice) continue

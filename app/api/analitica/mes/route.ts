@@ -1,3 +1,4 @@
+import { loadSalesSource, reportingInvoices, type SalesSource } from '@/lib/sales/source'
 import { NextResponse } from 'next/server'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 
@@ -10,6 +11,7 @@ export const maxDuration = 60
 type Item = { code: string; description: string; quantity: number; price: number; total?: number }
 type CachedInvoice = {
   id: string
+  salesChannel?: string
   date: string
   total: number
   customer_identification: string | null
@@ -79,25 +81,9 @@ type Channel = 'shopify' | 'whatsapp' | 'tiendas' | 'ferias'
 type Bucket = { ventas: number; unidades: number; ordenes: number }
 function emptyBucket(): Bucket { return { ventas: 0, unidades: 0, ordenes: 0 } }
 
-async function loadInvoicesInRange(start: string, end: string): Promise<CachedInvoice[]> {
-  const supabase = getAdminClient()
-  const out: CachedInvoice[] = []
-  const pageSize = 1000
-  for (let off = 0; off < 100000; off += pageSize) {
-    const { data: page } = await supabase
-      .from('siigo_invoices')
-      .select('id, date, total, customer_identification, observations, items, credited_amount, assigned_feria_id')
-      .gte('date', start)
-      .lte('date', end)
-      .range(off, off + pageSize - 1)
-    if (!page || page.length === 0) break
-    for (const row of (page as CachedInvoice[])) {
-      if ((row.credited_amount || 0) >= row.total) continue
-      out.push(row)
-    }
-    if (page.length < pageSize) break
-  }
-  return out
+async function loadInvoicesInRange(start: string, end: string, source: SalesSource): Promise<CachedInvoice[]> {
+  return reportingInvoices(source, start, end)
+
 }
 
 function monthBounds(year: number, month0: number): { start: string; end: string } {
@@ -138,7 +124,10 @@ function aggregate(
     // Channel classification (priority matches the dashboard)
     let channel: Channel
     let tiendaName: string | null = null
-    if (inv.assigned_feria_id) channel = 'ferias'
+    if (inv.salesChannel) {
+      channel = inv.salesChannel === 'tienda' ? 'tiendas' : inv.salesChannel === 'feria' ? 'ferias' : inv.salesChannel === 'whatsapp' ? 'whatsapp' : 'shopify'
+      if (channel === 'tiendas') tiendaName = tiendaByNit.get(inv.customer_identification || '') || 'Paraíso / tienda histórica'
+    } else if (inv.assigned_feria_id) channel = 'ferias'
     else if (inv.customer_identification && tiendaByNit.has(inv.customer_identification)) {
       channel = 'tiendas'
       tiendaName = tiendaByNit.get(inv.customer_identification) || 'Tienda'
@@ -265,9 +254,10 @@ export async function GET(request: Request) {
       if (page.length < pageSize) break
     }
 
+    const source = await loadSalesSource()
     const [curInv, prevInv] = await Promise.all([
-      loadInvoicesInRange(cur.start, cur.end),
-      loadInvoicesInRange(prev.start, prev.end),
+      loadInvoicesInRange(cur.start, cur.end, source),
+      loadInvoicesInRange(prev.start, prev.end, source),
     ])
 
     const a = aggregate(curInv, tiendaByNit, shopifyOrderNumbers, feriaWindows)

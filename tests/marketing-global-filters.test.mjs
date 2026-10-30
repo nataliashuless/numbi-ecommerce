@@ -6,6 +6,8 @@ import ts from 'typescript'
 import { createHash } from 'node:crypto'
 const cache = new Map()
 function load(name) {
+  if (name === '@/data/marketing-2025-audit-inputs.json') return { default: auditInputsFixture }
+  if (name === '@/data/marketing-online-excel-2025.json') return { default: excelHistoryFixture }
   if (name === 'node:crypto') return { createHash }
   if (name === '@/lib/siigo-values') return { withoutIva: n => n / 1.19 }
   const path = new URL(`../lib/marketing/${name.replace('./', '')}.ts`, import.meta.url)
@@ -278,4 +280,56 @@ test('confirmed-only growth excludes the authorized pending unit while retaining
     tables.siigo_invoices.splice(-2)
     auditInputsFixture.targets.length = 0; auditInputsFixture.fairInvoiceNames.length = 0; excelHistoryFixture.rows.length = 0
   }
+})
+
+const sharedSource = {}
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../lib/sales/source.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: sharedSource, Date, console, require(name) {
+  if (name === '@/lib/auth-helpers') return { getAdminClient: () => db }
+  if (name.startsWith('@/lib/marketing/')) return load(name.split('/').at(-1))
+  return load(name)
+} })
+function reportingRoute(path) {
+  const exports = {}
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports, URL, Date, console, require(name) {
+    if (name === 'next/server') return { NextResponse: { json: (value, options) => ({ ...value, status: options?.status || 200 }) } }
+    if (name === '@/lib/auth-helpers') return { requireAuth: async () => ({}), getAdminClient: () => db, getShopifyCredentials: async () => null }
+    if (name === '@/lib/sales/source') return sharedSource
+    return load(name)
+  } })
+  return exports
+}
+test('Ventas, Shopify and WhatsApp reconcile to Marketing from the same confirmed ledger', async () => {
+  const params = 'start_date=2026-01-01&end_date=2026-10-28'
+  const marketing = await route.GET({ url: `https://example.test/api/marketing/executive?view=ytd&${params}` })
+  const summary = await reportingRoute('app/api/sales/summary/route.ts').GET({ url: `https://example.test/api/sales/summary?${params}` })
+  const shopify = await reportingRoute('app/api/shopify/orders/route.ts').GET({ url: `https://example.test/api/shopify/orders?${params}` })
+  const whatsapp = await reportingRoute('app/api/whatsapp/route.ts').GET({ url: `https://example.test/api/whatsapp?${params}` })
+  assert.equal(summary.status, 200)
+  assert.equal(shopify.stats.totalUnits + whatsapp.stats.totalUnidades, marketing.current.units)
+  assert.equal(summary.shopify.unidades + summary.whatsapp.unidades, marketing.current.units)
+  assert.equal(summary.shopify.ventas + summary.whatsapp.ventas, marketing.current.netSales)
+  assert.equal(shopify.stats.totalRevenue + whatsapp.stats.totalVentas, marketing.current.netSales)
+  assert.equal(whatsapp.ventas.reduce((sum, row) => sum + row.cantidad, 0), whatsapp.stats.totalUnidades)
+  assert.equal(summary.chartData.reduce((sum, row) => sum + row.shopify_unidades + row.whatsapp_unidades, 0), marketing.current.units)
+})
+test('shared loader paginates beyond 1000 rows and fails instead of returning partial totals', async () => {
+  const rows = Array.from({ length: 2005 }, (_, id) => ({ id }))
+  const result = await sharedSource.paged((from, to) => Promise.resolve({ data: rows.slice(from, to + 1), error: null }))
+  assert.equal(result.length, 2005)
+  await assert.rejects(sharedSource.paged((from, to) => Promise.resolve(from === 0 ? { data: rows.slice(from, to + 1), error: null } : { data: null, error: { message: 'Cache incompleto' } })), /Cache incompleto/)
+})
+
+test('shared source keeps physical 2025 invoices without restoring unknown or canceled online sales', async () => {
+  const original = tables.siigo_invoices, originalOrders = tables.shopify_orders, originalStores = tables.tiendas_terceros
+  try {
+    tables.tiendas_terceros = [{ id: 'store', siigo_customer_identification: 'physical' }]
+    tables.siigo_invoices = [{ ...base, id: 'store2025', name: 'Store 2025', date: '2025-09-01', customer_identification: 'physical' }, { ...base, id: 'unproven', name: 'Unknown 2026', date: '2026-09-01', observations: '' }]
+    tables.shopify_orders = [{ ...originalOrders[0], id: 9999, raw: { ...originalOrders[0].raw, cancelled_at: '2026-10-10T12:00:00Z' } }]
+    const source = await sharedSource.loadSalesSource()
+    const rows = sharedSource.reportingInvoices(source, '2025-01-01', '2026-12-31')
+    assert.equal(rows.length, 1)
+    assert.equal(rows[0].salesChannel, 'tienda')
+    assert.equal(rows[0].items.reduce((sum, item) => sum + item.quantity, 0), 2)
+    assert.ok(source.ledger.reconciliation.some(row => row.id === 'unproven' && row.channel === 'pending'))
+  } finally { tables.siigo_invoices = original; tables.shopify_orders = originalOrders; tables.tiendas_terceros = originalStores }
 })

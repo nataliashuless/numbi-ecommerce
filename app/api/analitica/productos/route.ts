@@ -1,23 +1,10 @@
+import { loadSalesSource, reportingInvoices } from '@/lib/sales/source'
 import { NextResponse } from 'next/server'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 
-interface Item {
-  code: string
-  description: string
-  quantity: number
-  price: number
-  total?: number
-}
 
-interface CachedInvoice {
-  id: string
-  date: string
-  total: number
-  customer_identification: string | null
-  observations: string | null
-  items: Item[]
-  credited_amount: number | null
-}
+
+
 
 function extractOrderNumber(observations: string | null): number | null {
   if (!observations) return null
@@ -40,6 +27,8 @@ function parseProductName(desc: string): { reference: string; size: string | nul
   return { reference: trimmed || '—', size: null }
 }
 
+export const maxDuration = 60
+
 export async function GET(request: Request) {
   const { error } = await requireAuth()
   if (error) return error
@@ -55,26 +44,8 @@ export async function GET(request: Request) {
   try {
     const supabase = getAdminClient()
 
-    const allInvoices: CachedInvoice[] = []
-    const pageSize = 1000
-    let pageStart = 0
-    for (let i = 0; i < 50; i++) {
-      const { data: page, error: pErr } = await supabase
-        .from('siigo_invoices')
-        .select('id, date, total, customer_identification, observations, items, credited_amount')
-        .gte('date', startDate)
-        .lte('date', endDate)
-        .range(pageStart, pageStart + pageSize - 1)
-      if (pErr) {
-        return NextResponse.json({ error: pErr.message }, { status: 500 })
-      }
-      if (!page || page.length === 0) break
-      const fresh = (page as CachedInvoice[]).filter(p => (p.credited_amount || 0) < p.total)
-      allInvoices.push(...fresh)
-      if (page.length < pageSize) break
-      pageStart += pageSize
-    }
-    const invoices = allInvoices
+    const source = await loadSalesSource()
+    const invoices = reportingInvoices(source, startDate, endDate)
 
     const { data: tiendasWithSiigo } = await supabase
       .from('tiendas_terceros')
@@ -169,9 +140,12 @@ export async function GET(request: Request) {
       const tiendaMatch = inv.customer_identification
         ? tiendasByNit.get(inv.customer_identification)
         : undefined
+      const store = tiendaMatch || (inv.salesChannel === 'tienda' ? { id: 'historica', nombre: 'Paraíso / tienda histórica' } : undefined)
       let channel: 'shopify' | 'whatsapp' | 'tienda' = 'whatsapp'
-      if (tiendaMatch) channel = 'tienda'
-      else if (hasShopifyTag) channel = 'shopify'
+      if (inv.salesChannel === 'feria') continue
+      if (inv.salesChannel === 'tienda') channel = 'tienda'
+      else if (inv.salesChannel === 'shopify' || inv.salesChannel === 'woocommerce') channel = 'shopify'
+      else if (!inv.salesChannel && hasShopifyTag) channel = 'shopify'
 
       for (const it of inv.items || []) {
         if (it.code === 'ENVIO' || !it.code) continue
@@ -195,10 +169,10 @@ export async function GET(request: Request) {
         if (channel === 'shopify') {
           writeChannel(r.byChannel.shopify, v.byChannel.shopify)
           totalShopify += itemTotal
-        } else if (channel === 'tienda' && tiendaMatch) {
-          if (!r.byChannel.tiendas[tiendaMatch.id]) r.byChannel.tiendas[tiendaMatch.id] = { qty: 0, amount: 0, invoices: 0 }
-          if (!v.byChannel.tiendas[tiendaMatch.id]) v.byChannel.tiendas[tiendaMatch.id] = { qty: 0, amount: 0, invoices: 0 }
-          writeChannel(r.byChannel.tiendas[tiendaMatch.id], v.byChannel.tiendas[tiendaMatch.id])
+        } else if (channel === 'tienda' && store) {
+          if (!r.byChannel.tiendas[store.id]) r.byChannel.tiendas[store.id] = { qty: 0, amount: 0, invoices: 0 }
+          if (!v.byChannel.tiendas[store.id]) v.byChannel.tiendas[store.id] = { qty: 0, amount: 0, invoices: 0 }
+          writeChannel(r.byChannel.tiendas[store.id], v.byChannel.tiendas[store.id])
           totalTienda += itemTotal
         } else {
           writeChannel(r.byChannel.whatsapp, v.byChannel.whatsapp)

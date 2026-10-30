@@ -1096,7 +1096,7 @@ export default function WhatsAppPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-[#1A2238] mb-2">Ventas WhatsApp</h1>
-            <p className="text-[#545454]">Registro manual de ventas por WhatsApp</p>
+            <p className="text-[#545454]">Ventas WhatsApp confirmadas · Excel 2025 y Siigo desde 2026 · producto antes de IVA</p>
           </div>
           <div className="flex items-center gap-2 mt-4 md:mt-0">
             <DateRangePicker date={dateRange} onDateChange={setDateRange} />
@@ -1446,7 +1446,7 @@ Diseño: chocolate`}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-[#545454]">Ventas Totales</CardTitle>
+                  <CardTitle className="text-sm font-medium text-[#545454]">Ventas antes de IVA</CardTitle>
                   <DollarSign className="h-4 w-4 text-[#545454]" />
                 </CardHeader>
                 <CardContent>

@@ -1,6 +1,6 @@
+import { loadSalesSource, reportingInvoices } from '@/lib/sales/source'
 import { NextResponse } from 'next/server'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
-import { withoutIva } from '@/lib/siigo-values'
 
 export const maxDuration = 60
 
@@ -23,14 +23,7 @@ export const maxDuration = 60
 const DEFAULT_UNIT_COST = 57000
 
 type Item = { code: string; quantity: number; price: number; total?: number }
-type CachedInvoice = {
-  id: string
-  date: string
-  total: number
-  customer_identification: string | null
-  items: Item[]
-  credited_amount: number | null
-}
+
 
 // Convert a period return into an effective annual rate (EA / tasa efectiva anual).
 //   EA = (1 + r_periodo)^(365/días) − 1
@@ -90,31 +83,16 @@ export async function GET(request: Request) {
     //    been selling for 1 month shouldn't be annualized over a full year).
     const salesByTienda = new Map<string, { ventas: number; unidades: number; facturas: number; firstDate: string | null }>()
     const pageSize = 1000
-    for (let off = 0; off < 100000; off += pageSize) {
-      const { data: page } = await supabase
-        .from('siigo_invoices')
-        .select('id, date, total, customer_identification, items, credited_amount')
-        .gte('date', startDate)
-        .lte('date', endDate)
-        .range(off, off + pageSize - 1)
-      if (!page || page.length === 0) break
-      for (const inv of (page as CachedInvoice[])) {
-        if ((inv.credited_amount || 0) >= inv.total) continue
-        if (!inv.customer_identification) continue
-        const t = tiendaByNit.get(inv.customer_identification)
-        if (!t) continue
-        const units = (inv.items || []).filter(it => it.code && it.code !== 'ENVIO').reduce((s, it) => s + (Number(it.quantity) || 0), 0)
-        const amountWithIva = (inv.items || []).filter(it => it.code && it.code !== 'ENVIO').reduce((s, it) => s + (Number(it.total ?? it.quantity * it.price) || 0), 0)
-        const amountWithoutIva = withoutIva(amountWithIva)
-        const cur = salesByTienda.get(t.id) || { ventas: 0, unidades: 0, facturas: 0, firstDate: null }
-        cur.ventas += amountWithoutIva
-        cur.unidades += units
-        cur.facturas += 1
-        const d = (inv.date || '').slice(0, 10)
-        if (d && (cur.firstDate === null || d < cur.firstDate)) cur.firstDate = d
-        salesByTienda.set(t.id, cur)
-      }
-      if (page.length < pageSize) break
+    const source = await loadSalesSource()
+    for (const inv of reportingInvoices(source, startDate, endDate).filter(row => row.salesChannel === 'tienda')) {
+      if (!inv.customer_identification) continue
+      const t = tiendaByNit.get(inv.customer_identification)
+      if (!t) continue
+      const units = inv.items.reduce((sum, item) => sum + item.quantity, 0)
+      const current = salesByTienda.get(t.id) || { ventas: 0, unidades: 0, facturas: 0, firstDate: null }
+      current.ventas += inv.total; current.unidades += units; current.facturas++
+      if (!current.firstDate || inv.date < current.firstDate) current.firstDate = inv.date
+      salesByTienda.set(t.id, current)
     }
 
     // 3. Inventory units per store warehouse. Store warehouses are dedicated

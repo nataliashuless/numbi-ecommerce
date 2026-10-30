@@ -153,7 +153,7 @@ function monthLabel(ym: string): string {
 }
 
 const CHANNEL_META: Record<string, { label: string; color: string }> = {
-  shopify: { label: 'Shopify', color: '#1A2238' },
+  shopify: { label: 'Web · Shopify + WooCommerce', color: '#1A2238' },
   whatsapp: { label: 'WhatsApp', color: '#14B8A6' },
   online: { label: 'Online', color: '#1A2238' },
   tiendas: { label: 'Tiendas', color: '#1DA9EF' },
@@ -1042,7 +1042,7 @@ export default function AnaliticaPage() {
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm text-[#545454]">Por canal</CardTitle></CardHeader>
               <CardContent className="text-xs space-y-1">
-                <div className="flex justify-between"><span className="text-[#1A2238]">Shopify</span><span className="font-mono">{formatCurrency(totals.byChannel.shopify)}</span></div>
+                <div className="flex justify-between"><span className="text-[#1A2238]">Web · Shopify + WooCommerce</span><span className="font-mono">{formatCurrency(totals.byChannel.shopify)}</span></div>
                 <div className="flex justify-between"><span className="text-[#0F766E]">WhatsApp</span><span className="font-mono">{formatCurrency(totals.byChannel.whatsapp)}</span></div>
                 <div className="flex justify-between"><span className="text-[#0073D1]">Tiendas</span><span className="font-mono">{formatCurrency(totals.byChannel.tienda)}</span></div>
               </CardContent>
@@ -1096,7 +1096,7 @@ export default function AnaliticaPage() {
                       <TableHead className="w-8"></TableHead>
                       <SortHead k="referencia" label="Referencia" />
                       <SortHead k="total" label="Total" className="text-right" />
-                      <SortHead k="shopify" label="Shopify" className="text-right bg-[#1A2238]/5 text-[#1A2238]" />
+                      <SortHead k="shopify" label="Web · Shopify + WooCommerce" className="text-right bg-[#1A2238]/5 text-[#1A2238]" />
                       <SortHead k="whatsapp" label="WhatsApp" className="text-right bg-[#14B8A6]/5 text-[#0F766E]" />
                       {tiendasExpanded ? (
                         <>

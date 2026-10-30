@@ -1,5 +1,8 @@
+import { loadSalesSource, reportingInvoices } from '@/lib/sales/source'
 import { NextResponse } from 'next/server'
-import { requireAuth, getAdminClient, getShopifyCredentials } from '@/lib/auth-helpers'
+import { requireAuth, getShopifyCredentials } from '@/lib/auth-helpers'
+
+export const maxDuration = 60
 
 export async function GET(request: Request) {
   const { error } = await requireAuth()
@@ -14,43 +17,13 @@ export async function GET(request: Request) {
   const shop = credentials?.shopify_shop
 
   try {
-    const supabase = getAdminClient()
-    const allRows: Array<Record<string, unknown>> = []
-    const pageSize = 1000
-    let pageStart = 0
-    for (let pageIdx = 0; pageIdx < 50; pageIdx++) {
-      let query = supabase
-        .from('shopify_orders')
-        .select('id, order_number, name, created_at, total_price, currency, financial_status, fulfillment_status, customer_name, customer_email, item_count')
-        .order('created_at', { ascending: false })
-        .range(pageStart, pageStart + pageSize - 1)
-      if (startDate) query = query.gte('created_at', `${startDate}T00:00:00-05:00`)
-      if (endDate) query = query.lte('created_at', `${endDate}T23:59:59-05:00`)
-      const { data: page, error: pErr } = await query
-      if (pErr) {
-        return NextResponse.json({ error: pErr.message }, { status: 500 })
-      }
-      if (!page || page.length === 0) break
-      allRows.push(...page)
-      if (page.length < pageSize) break
-      pageStart += pageSize
-    }
-    const ordersRows = allRows
-
-    type Row = {
-      id: number
-      order_number: number
-      name: string
-      created_at: string
-      total_price: number
-      currency: string
-      financial_status: string
-      fulfillment_status: string | null
-      customer_name: string
-      customer_email: string | null
-      item_count: number
-    }
-    const orders = (ordersRows || []) as Row[]
+    const source = await loadSalesSource()
+    const rawById = new Map(source.orders.map(order => [String(order.id), order]))
+    const orders = reportingInvoices(source, startDate, endDate).filter(invoice => invoice.salesChannel === 'shopify').map(invoice => {
+      const order = rawById.get(invoice.id.replace('shopify:', ''))!
+      const cached = order as typeof order & { order_number?: number; name?: string; currency?: string; customer_name?: string; customer_email?: string; fulfillment_status?: string }
+      return { id: order.id, order_number: order.raw?.order_number || cached.order_number, name: cached.name, created_at: `${invoice.date}T12:00:00-05:00`, total_price: invoice.total, currency: cached.currency || 'COP', financial_status: order.financial_status, fulfillment_status: cached.fulfillment_status, customer_name: cached.customer_name, customer_email: cached.customer_email, item_count: invoice.items.reduce((sum, item) => sum + item.quantity, 0) }
+    })
 
     const totalRevenue = orders.reduce((sum, o) => sum + Number(o.total_price || 0), 0)
     const totalOrders = orders.length
@@ -119,7 +92,7 @@ export async function GET(request: Request) {
         newestOrder: dates[dates.length - 1] || null,
         requestedStartDate: startDate,
         requestedEndDate: endDate,
-        source: 'cache',
+        source: 'Histórico conciliado compartido · producto antes de IVA',
       },
       chartData,
       shop: shop || null,

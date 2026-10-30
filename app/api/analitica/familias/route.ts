@@ -1,3 +1,4 @@
+import { loadSalesSource, reportingInvoices, type SalesSource } from '@/lib/sales/source'
 import { NextResponse } from 'next/server'
 import { requireAuth, getAdminClient, getShopifyCredentials } from '@/lib/auth-helpers'
 
@@ -96,6 +97,7 @@ const DESIGN_CANONICAL: Record<string, string> = {
 type Item = { code: string; description: string; quantity: number; price: number; total?: number }
 type CachedInvoice = {
   id: string
+  salesChannel?: string
   date: string
   total: number
   customer_identification: string | null
@@ -114,6 +116,7 @@ function classifyChannel(
   shopifyOrderNumbers: Set<number>,
   feriaWindows: Array<{ inicio: string; fin: string }>,
 ): DisplayChannel {
+  if (inv.salesChannel) return inv.salesChannel === 'tienda' ? 'tiendas' : inv.salesChannel === 'feria' ? 'ferias' : 'online'
   if (inv.assigned_feria_id) return 'ferias'
   if (inv.customer_identification && tiendaNits.has(inv.customer_identification)) return 'tiendas'
   const m = (inv.observations || '').match(/#(\d+)/)
@@ -168,25 +171,9 @@ function canonicalDesign(desc: string): string | null {
 
 type Bucket = { unidades: number; monto: number; ordenes: number }
 
-async function loadInvoicesInRange(start: string, end: string): Promise<CachedInvoice[]> {
-  const supabase = getAdminClient()
-  const out: CachedInvoice[] = []
-  const pageSize = 1000
-  for (let off = 0; off < 100000; off += pageSize) {
-    const { data: page } = await supabase
-      .from('siigo_invoices')
-      .select('id, date, total, customer_identification, observations, items, credited_amount, assigned_feria_id')
-      .gte('date', start)
-      .lte('date', end)
-      .range(off, off + pageSize - 1)
-    if (!page || page.length === 0) break
-    for (const row of (page as CachedInvoice[])) {
-      if ((row.credited_amount || 0) >= row.total) continue
-      out.push(row)
-    }
-    if (page.length < pageSize) break
-  }
-  return out
+async function loadInvoicesInRange(start: string, end: string, source: SalesSource): Promise<CachedInvoice[]> {
+  return reportingInvoices(source, start, end)
+
 }
 
 type DesignBucket = Bucket & { byFamily: Record<string, Bucket> }
@@ -296,9 +283,10 @@ export async function GET(request: Request) {
       if (page.length < 1000) break
     }
 
+    const source = await loadSalesSource()
     const [thisYear, lastYear, shopifyMap] = await Promise.all([
-      loadInvoicesInRange(thisStart, thisEnd),
-      loadInvoicesInRange(lastStart, lastEnd),
+      loadInvoicesInRange(thisStart, thisEnd, source),
+      loadInvoicesInRange(lastStart, lastEnd, source),
       loadShopifyMap(),
     ])
     const skuMap = shopifyMap?.skuToType || null

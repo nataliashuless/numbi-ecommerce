@@ -122,7 +122,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<ConsolidatedData | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [shop, setShop] = useState('')
+  const shop = ''
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month' | 'quarter' | 'year'>('month')
   const [metric, setMetric] = useState<Metric>('ventas')
@@ -176,83 +176,11 @@ export default function DashboardPage() {
   // but doesn't touch chart state or main `data` state.
   async function computeChannelTotals(startDate: string, endDate: string): Promise<ChannelTotals | null> {
     try {
-      const [shopifyRes, siigoRes, feriasRes] = await Promise.all([
-        fetch(`/api/shopify/orders?start_date=${startDate}&end_date=${endDate}&group_by=day`),
-        fetch(`/api/siigo/invoices?start_date=${startDate}&end_date=${endDate}`),
-        fetch('/api/ferias'),
-      ])
-      const shopifyData = shopifyRes.ok ? await shopifyRes.json() : null
-      const siigoData = siigoRes.ok ? await siigoRes.json() : null
-      const feriasData = feriasRes.ok ? await feriasRes.json() : null
+      const response = await fetch(`/api/sales/summary?start_date=${startDate}&end_date=${endDate}`)
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Error de ventas')
+      return result
 
-      type FeriaWindow = { id: string; nombre: string; fecha_inicio: string; fecha_fin: string; activa: boolean }
-      const feriaWindows: FeriaWindow[] = (feriasData?.ferias || []).filter((f: FeriaWindow) => f.activa)
-      const isFeriaDate = (dateStr: string): boolean => {
-        const d = dateStr.slice(0, 10)
-        return feriaWindows.some(f => d >= f.fecha_inicio && d <= f.fecha_fin)
-      }
-
-      type ShopOrder = { orderNumber: number }
-      const shopOrders: ShopOrder[] = shopifyData?.orders || []
-      const shopifyOrderNumbers = new Set<number>(shopOrders.map(o => o.orderNumber))
-
-      const shopifyStats: ChannelStats = {
-        ventas: shopifyData?.stats?.totalRevenue || 0,
-        ordenes: shopifyData?.stats?.totalOrders || 0,
-        unidades: shopifyData?.stats?.totalUnits || 0,
-      }
-
-      type SiigoItem = { code: string; quantity: number }
-      type SiigoInv = {
-        date: string; total: number; tienda_id: string | null; observations: string
-        items: SiigoItem[]; assigned_feria_id: string | null
-      }
-      const siigoInvoices: SiigoInv[] = siigoData?.invoices || []
-      const extractOrderNum = (obs: string) => {
-        if (!obs) return null
-        const m = obs.match(/#(\d+)/)
-        return m ? parseInt(m[1], 10) : null
-      }
-
-      const manualFeriaInvoices = siigoInvoices.filter(i => i.assigned_feria_id)
-      const restAfterManual = siigoInvoices.filter(i => !i.assigned_feria_id)
-      const tiendaInvoices = restAfterManual.filter(i => i.tienda_id)
-      const directInvoices = restAfterManual.filter(i => {
-        if (i.tienda_id) return false
-        const on = extractOrderNum(i.observations)
-        if (on && shopifyOrderNumbers.has(on)) return false
-        return true
-      })
-      const windowFeriaInvoices = directInvoices.filter(i => isFeriaDate(i.date))
-      const feriaInvoices = [...manualFeriaInvoices, ...windowFeriaInvoices]
-      const whatsappInvoices = directInvoices.filter(i => !isFeriaDate(i.date))
-
-      const sumUnits = (invs: SiigoInv[]) =>
-        invs.reduce((s, i) =>
-          s + (i.items || []).filter(it => it.code !== 'ENVIO').reduce((u, it) => u + (it.quantity || 0), 0),
-        0)
-
-      const tiendas: ChannelStats = {
-        ventas: tiendaInvoices.reduce((s, i) => s + (i.total || 0), 0),
-        ordenes: tiendaInvoices.length,
-        unidades: sumUnits(tiendaInvoices),
-      }
-      const whatsapp: ChannelStats = {
-        ventas: whatsappInvoices.reduce((s, i) => s + (i.total || 0), 0),
-        ordenes: whatsappInvoices.length,
-        unidades: sumUnits(whatsappInvoices),
-      }
-      const ferias: ChannelStats = {
-        ventas: feriaInvoices.reduce((s, i) => s + (i.total || 0), 0),
-        ordenes: feriaInvoices.length,
-        unidades: sumUnits(feriaInvoices),
-      }
-      const total: ChannelStats = {
-        ventas: shopifyStats.ventas + whatsapp.ventas + tiendas.ventas + ferias.ventas,
-        ordenes: shopifyStats.ordenes + whatsapp.ordenes + tiendas.ordenes + ferias.ordenes,
-        unidades: shopifyStats.unidades + whatsapp.unidades + tiendas.unidades + ferias.unidades,
-      }
-      return { shopify: shopifyStats, whatsapp, tiendas, ferias, total }
     } catch (e) {
       console.error('computeChannelTotals error:', e)
       return null
@@ -269,171 +197,22 @@ export default function DashboardPage() {
       const startDate = format(dateRange.from, 'yyyy-MM-dd')
       const endDate = format(dateRange.to, 'yyyy-MM-dd')
 
-      // Shopify orders for matching + their own totals; Siigo invoices for tiendas + whatsapp;
-      // ferias for date-window classification (Siigo invoices in a feria window become 'feria')
-      const [shopifyRes, siigoRes, feriasRes] = await Promise.all([
-        fetch(`/api/shopify/orders?start_date=${startDate}&end_date=${endDate}&group_by=day`),
-        fetch(`/api/siigo/invoices?start_date=${startDate}&end_date=${endDate}`),
-        fetch('/api/ferias'),
-      ])
-
-      const shopifyData = shopifyRes.ok ? await shopifyRes.json() : null
-      const siigoData = siigoRes.ok ? await siigoRes.json() : null
-      const feriasData = feriasRes.ok ? await feriasRes.json() : null
-
-      type FeriaWindow = { id: string; nombre: string; fecha_inicio: string; fecha_fin: string; activa: boolean }
-      const feriaWindows: FeriaWindow[] = (feriasData?.ferias || []).filter((f: FeriaWindow) => f.activa)
-      const isFeriaDate = (dateStr: string): boolean => {
-        const d = dateStr.slice(0, 10)
-        return feriaWindows.some(f => d >= f.fecha_inicio && d <= f.fecha_fin)
+      const response = await fetch(`/api/sales/summary?start_date=${startDate}&end_date=${endDate}`)
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Error de ventas')
+      const chartDataMap = new Map<string, ChartPoint>()
+      for (const point of result.chartData as ChartPoint[]) {
+        const date = getGroupKey(point.date, groupBy)
+        const bucket = chartDataMap.get(date) || { ...point, date }
+        if (chartDataMap.has(date)) {
+          for (const key of Object.keys(point) as Array<keyof ChartPoint>) {
+            if (key !== 'date') bucket[key] += point[key]
+          }
+        }
+        chartDataMap.set(date, bucket)
       }
+      setData({ ...result, chartData: Array.from(chartDataMap.values()).sort((a, b) => a.date.localeCompare(b.date)) })
 
-      if (shopifyData?.shop) {
-        setShop(shopifyData.shop)
-      }
-
-      type ShopOrder = { orderNumber: number; createdAt: string; totalPrice: number; itemCount: number }
-      const shopOrders: ShopOrder[] = shopifyData?.orders || []
-      const shopifyOrderNumbers = new Set<number>(shopOrders.map(o => o.orderNumber))
-
-      const shopifyStats: ChannelStats = {
-        ventas: shopifyData?.stats?.totalRevenue || 0,
-        ordenes: shopifyData?.stats?.totalOrders || 0,
-        unidades: shopifyData?.stats?.totalUnits || 0,
-      }
-
-      type SiigoItem = { code: string; quantity: number }
-      type SiigoInv = {
-        date: string
-        total: number
-        tienda_id: string | null
-        observations: string
-        items: SiigoItem[]
-        assigned_feria_id: string | null
-      }
-      const siigoInvoices: SiigoInv[] = siigoData?.invoices || []
-
-      const extractOrderNum = (obs: string): number | null => {
-        if (!obs) return null
-        const m = obs.match(/#(\d+)/)
-        return m ? parseInt(m[1], 10) : null
-      }
-
-      // Priority rules for classification:
-      // 1) assigned_feria_id present → 'feria' (manual override always wins)
-      // 2) tienda_id present → 'tienda'
-      // 3) #orderNumber matches a Shopify order → 'shopify' (already counted via Shopify side)
-      // 4) date within an active feria window → 'feria'
-      // 5) else → 'whatsapp'
-      const manualFeriaInvoices = siigoInvoices.filter(i => i.assigned_feria_id)
-      const restAfterManual = siigoInvoices.filter(i => !i.assigned_feria_id)
-      const tiendaInvoices = restAfterManual.filter(i => i.tienda_id)
-      // "Direct" sales = not tienda, not shopify-matched. These split into feria vs whatsapp by date.
-      const directInvoices = restAfterManual.filter(i => {
-        if (i.tienda_id) return false
-        const orderNum = extractOrderNum(i.observations)
-        if (orderNum && shopifyOrderNumbers.has(orderNum)) return false
-        return true
-      })
-      const windowFeriaInvoices = directInvoices.filter(i => isFeriaDate(i.date))
-      const feriaInvoices = [...manualFeriaInvoices, ...windowFeriaInvoices]
-      const whatsappInvoices = directInvoices.filter(i => !isFeriaDate(i.date))
-
-      const sumUnits = (invs: SiigoInv[]) =>
-        invs.reduce(
-          (s, i) =>
-            s +
-            (i.items || [])
-              .filter(it => it.code !== 'ENVIO')
-              .reduce((u, it) => u + (it.quantity || 0), 0),
-          0
-        )
-
-      const tiendasStats: ChannelStats = {
-        ventas: tiendaInvoices.reduce((s, i) => s + (i.total || 0), 0),
-        ordenes: tiendaInvoices.length,
-        unidades: sumUnits(tiendaInvoices),
-      }
-
-      const whatsappStats: ChannelStats = {
-        ventas: whatsappInvoices.reduce((s, i) => s + (i.total || 0), 0),
-        ordenes: whatsappInvoices.length,
-        unidades: sumUnits(whatsappInvoices),
-      }
-
-      const feriasStats: ChannelStats = {
-        ventas: feriaInvoices.reduce((s, i) => s + (i.total || 0), 0),
-        ordenes: feriaInvoices.length,
-        unidades: sumUnits(feriaInvoices),
-      }
-
-      const totalStats: ChannelStats = {
-        ventas: shopifyStats.ventas + whatsappStats.ventas + tiendasStats.ventas + feriasStats.ventas,
-        ordenes: shopifyStats.ordenes + whatsappStats.ordenes + tiendasStats.ordenes + feriasStats.ordenes,
-        unidades: shopifyStats.unidades + whatsappStats.unidades + tiendasStats.unidades + feriasStats.unidades,
-      }
-
-      type Bucket = {
-        shopify_ventas: number; shopify_ordenes: number; shopify_unidades: number
-        whatsapp_ventas: number; whatsapp_ordenes: number; whatsapp_unidades: number
-        tiendas_ventas: number; tiendas_ordenes: number; tiendas_unidades: number
-        ferias_ventas: number; ferias_ordenes: number; ferias_unidades: number
-      }
-      const empty = (): Bucket => ({
-        shopify_ventas: 0, shopify_ordenes: 0, shopify_unidades: 0,
-        whatsapp_ventas: 0, whatsapp_ordenes: 0, whatsapp_unidades: 0,
-        tiendas_ventas: 0, tiendas_ordenes: 0, tiendas_unidades: 0,
-        ferias_ventas: 0, ferias_ordenes: 0, ferias_unidades: 0,
-      })
-      const chartDataMap: Record<string, Bucket> = {}
-
-      shopifyData?.chartData?.forEach((d: { date: string; sales: number; orders: number; units: number }) => {
-        const key = getGroupKey(d.date, groupBy)
-        if (!chartDataMap[key]) chartDataMap[key] = empty()
-        chartDataMap[key].shopify_ventas += d.sales || 0
-        chartDataMap[key].shopify_ordenes += d.orders || 0
-        chartDataMap[key].shopify_unidades += d.units || 0
-      })
-
-      const itemUnits = (items: SiigoItem[]) =>
-        items.filter(it => it.code !== 'ENVIO').reduce((u, it) => u + (it.quantity || 0), 0)
-
-      tiendaInvoices.forEach(inv => {
-        const key = getGroupKey(inv.date, groupBy)
-        if (!chartDataMap[key]) chartDataMap[key] = empty()
-        chartDataMap[key].tiendas_ventas += inv.total || 0
-        chartDataMap[key].tiendas_ordenes += 1
-        chartDataMap[key].tiendas_unidades += itemUnits(inv.items || [])
-      })
-
-      whatsappInvoices.forEach(inv => {
-        const key = getGroupKey(inv.date, groupBy)
-        if (!chartDataMap[key]) chartDataMap[key] = empty()
-        chartDataMap[key].whatsapp_ventas += inv.total || 0
-        chartDataMap[key].whatsapp_ordenes += 1
-        chartDataMap[key].whatsapp_unidades += itemUnits(inv.items || [])
-      })
-
-      feriaInvoices.forEach(inv => {
-        const key = getGroupKey(inv.date, groupBy)
-        if (!chartDataMap[key]) chartDataMap[key] = empty()
-        chartDataMap[key].ferias_ventas += inv.total || 0
-        chartDataMap[key].ferias_ordenes += 1
-        chartDataMap[key].ferias_unidades += itemUnits(inv.items || [])
-      })
-
-      const chartData: ChartPoint[] = Object.entries(chartDataMap)
-        .map(([date, values]) => ({ date, ...values }))
-        .sort((a, b) => a.date.localeCompare(b.date))
-
-      setData({
-        shopify: shopifyStats,
-        whatsapp: whatsappStats,
-        tiendas: tiendasStats,
-        ferias: feriasStats,
-        total: totalStats,
-        chartData,
-      })
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
@@ -451,7 +230,7 @@ export default function DashboardPage() {
   }, [dateRange, groupBy, refreshTick])
 
   const pieData = data ? [
-    { name: 'Shopify', value: data.shopify.ventas, color: '#1A2238' },
+    { name: 'Web · Shopify + WooCommerce', value: data.shopify.ventas, color: '#1A2238' },
     { name: 'WhatsApp', value: data.whatsapp.ventas, color: '#14B8A6' },
     { name: 'Tiendas', value: data.tiendas.ventas, color: '#1DA9EF' },
     { name: 'Ferias', value: data.ferias.ventas, color: FERIA_COLOR },
@@ -577,7 +356,7 @@ export default function DashboardPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-[#1A2238] mb-2">Ventas Consolidadas</h1>
-            <p className="text-[#545454]">Resumen de todos los canales de venta</p>
+            <p className="text-[#545454]">Ventas confirmadas de todos los canales · producto antes de IVA · histórico conciliado compartido</p>
           </div>
           <div className="flex items-center gap-2 mt-4 md:mt-0">
             <DateRangePicker date={dateRange} onDateChange={setDateRange} />
@@ -672,7 +451,7 @@ export default function DashboardPage() {
               <Link href="/dashboard/shopify">
                 <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-[#1A2238]">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-[#545454]">Shopify</CardTitle>
+                    <CardTitle className="text-sm font-medium text-[#545454]">Web · Shopify + WooCommerce</CardTitle>
                     <ShoppingCart className="h-4 w-4 text-[#1A2238]" />
                   </CardHeader>
                   <CardContent>
@@ -822,7 +601,7 @@ export default function DashboardPage() {
                             }}
                           />
                           <Legend />
-                          <Bar dataKey={`shopify_${metric}`} name="Shopify" stackId="a" fill="#1A2238" />
+                          <Bar dataKey={`shopify_${metric}`} name="Web · Shopify + WooCommerce" stackId="a" fill="#1A2238" />
                           <Bar dataKey={`whatsapp_${metric}`} name="WhatsApp" stackId="a" fill="#14B8A6" />
                           <Bar dataKey={`tiendas_${metric}`} name="Tiendas" stackId="a" fill="#1DA9EF" />
                           <Bar dataKey={`ferias_${metric}`} name="Ferias" stackId="a" fill="#F59E0B" />

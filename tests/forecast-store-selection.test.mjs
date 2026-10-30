@@ -55,6 +55,12 @@ vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.Mo
   exports, URL, console, Date: AuditDate, require(name) {
     if (name === 'next/server') return { NextResponse: { json: (value, options) => { responseStatus.set(value, options?.status || 200); return value } } }
     if (name === '@/lib/auth-helpers') return { requireAuth: async () => ({}), getAdminClient: () => db }
+    // Forecast tests isolate planning from source reconciliation; the shared-source
+    // integration tests exercise the real source loader and channel evidence.
+    if (name === '@/lib/sales/source') return {
+      loadSalesSource: async () => ({ invoices: tables.siigo_invoices }),
+      reportingInvoices: (source, from, to) => source.invoices.filter(inv => inv.date >= from && inv.date <= to && Number(inv.credited_amount || 0) < inv.total).map(inv => ({ ...inv, salesChannel: inv.assigned_feria_id ? 'feria' : tables.tiendas_terceros.some(store => store.siigo_customer_identification === inv.customer_identification) ? 'tienda' : tables.shopify_orders.some(order => Number((inv.observations || '').match(/#(\d+)/)?.[1]) === order.order_number) ? 'shopify' : 'whatsapp' })),
+    }
     if (name === '@/lib/forecast/demand-model') return demandModel
     if (name === '@/lib/forecast/calendar') return calendar
     throw new Error(name)

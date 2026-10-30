@@ -1,10 +1,7 @@
+import { canonicalInvoices } from '@/lib/marketing/canonical-source'
 import { NextResponse } from 'next/server'
 import excelHistory from '@/data/marketing-online-excel-2025.json'
 import historyAuditInputs from '@/data/marketing-2025-audit-inputs.json'
-import { reconcileHistory } from '@/lib/marketing/history-reconciliation'
-import { applyExcelHistory } from '@/lib/marketing/excel-history'
-import { directShopifyInvoices } from '@/lib/marketing/shopify-ledger'
-import { classifyMarketingInvoice } from '@/lib/marketing/channel-reconciliation'
 import { getAdminClient, requireAuth } from '@/lib/auth-helpers'
 import { withoutIva } from '@/lib/siigo-values'
 import { historicalStoreEvidence } from '@/lib/marketing/channel-reconciliation'
@@ -98,8 +95,6 @@ export async function GET(request: Request) {
     const start = new Date(end.getTime() - (days - 1) * 86400000)
     periods.previous = { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10), label: 'Período anterior', complete: true }
   }
-  const designHistoryStart = `${Number(periods.current.end.slice(0, 4)) - 1}-01-01`
-  const siigoQueryStart = periods.previous.start < designHistoryStart ? periods.previous.start : designHistoryStart
   const supabase = getAdminClient()
 
   try {
@@ -113,7 +108,6 @@ export async function GET(request: Request) {
       loadPaged<CachedSiigoInvoice>((from, to) => supabase
         .from('siigo_invoices')
         .select('id, name, date, total, credited_amount, customer_identification, assigned_feria_id, observations, items, raw')
-        .gte('date', siigoQueryStart)
         // Include later invoices: their evidenced sale can belong to the selected period.
         .lte('date', isoDateInTimeZone(new Date()))
         .order('date', { ascending: true }).order('id', { ascending: true })
@@ -174,12 +168,7 @@ export async function GET(request: Request) {
 
     const whatsappLinks = await loadPaged<{ siigo_invoice_id: string | null }>((from, to) => supabase.from('ventas_whatsapp').select('siigo_invoice_id').not('siigo_invoice_id', 'is', null).range(from, to))
     const reconciliationContext = { ...onlineSalesContext, ...marketingBusinessChannelRules, historicalStoreEvidence: historicalStoreEvidence(siigoInvoices), firstShopifyOrderDate: shopifyFrom, whatsappInvoiceIds: new Set(whatsappLinks.map(row => row.siigo_invoice_id).filter((id): id is string => Boolean(id))) }
-    const invoiceLinks = new Map(historyAuditInputs.invoiceLinks.map(link => [link.row, link.invoice]))
-    const historicalSales = { ...excelHistory, rows: excelHistory.rows.map(row => ({ ...row, invoice: row.invoice || invoiceLinks.get(row.row) || null })) }
-    const historyAudit = reconcileHistory(historicalSales, historyAuditInputs, siigoInvoices, orders, new Set([...marketingBusinessChannelRules.confirmedStoreInvoiceNames, ...marketingBusinessChannelRules.confirmedParaisoInvoiceNames, ...siigoInvoices.filter(invoice => classifyMarketingInvoice(invoice, reconciliationContext).channel === 'tienda').map(invoice => invoice.name || '')]))
-    const excel = applyExcelHistory(siigoInvoices, reconciliationContext, historicalSales, historyAudit.decisions)
-    const excludedPhysicalOrders = new Set(historyAudit.decisions.filter(decision => decision.decision === 'excluded' && decision.reason === 'Venta de feria explícita en Excel').map(decision => decision.order).filter((number): number is number => Boolean(number)))
-    const unifiedInvoices = [...excel.invoices.filter(invoice => classifyMarketingInvoice(invoice, reconciliationContext).channel !== 'shopify'), ...directShopifyInvoices(orders, excludedPhysicalOrders)]
+    const { unifiedInvoices, historyAudit } = canonicalInvoices(siigoInvoices, orders, reconciliationContext)
     const ledger = buildMarketingLedger(unifiedInvoices, orders, reconciliationContext, nonRetailProductCodes, filters, 'invoice')
     const salesOrders = ledger.records.map(record => record.order)
     const previous = aggregatePeriod(comparisonMode === 'none' ? [] : salesOrders, periods.previous, stockBySku)

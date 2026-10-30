@@ -1,3 +1,4 @@
+import { loadSalesSource, reportingInvoices } from '@/lib/sales/source'
 import { NextResponse } from 'next/server'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 
@@ -39,6 +40,8 @@ function shiftDate(dateStr: string, days: number): string {
   d.setDate(d.getDate() + days)
   return d.toISOString().slice(0, 10)
 }
+
+export const maxDuration = 60
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { error } = await requireAuth()
@@ -153,9 +156,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       return inExactWindow || c.has_eva
     })
 
+  const canonicalSource = await loadSalesSource()
+  const confirmedFair = new Map(reportingInvoices(canonicalSource).filter(row => row.salesChannel === 'feria').map(row => [row.id, row]))
   const assigned = (assignedRaw || [])
+    .filter(inv => confirmedFair.has(inv.id))
     .filter(inv => (inv.credited_amount || 0) < inv.total)
     .map(enrich)
+    .map(invoice => { const confirmed = confirmedFair.get(invoice.id)!; return { ...invoice, total: confirmed.total, units: confirmed.items.reduce((sum, item) => sum + item.quantity, 0) } })
 
   const assignedTotals = {
     facturas: assigned.length,

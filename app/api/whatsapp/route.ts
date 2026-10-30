@@ -1,24 +1,15 @@
+import { loadSalesSource, reportingInvoices } from '@/lib/sales/source'
 import { NextResponse } from 'next/server'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 
-interface VentaWhatsApp {
-  id: string
-  fecha: string
-  cliente_nombre: string | null
-  cliente_telefono: string | null
-  producto_nombre: string
-  producto_variante: string | null
-  producto_sku: string | null
-  cantidad: number
-  precio_unitario: number
-  total: number
-  notas: string | null
-}
+
 
 // WhatsApp tab now reads from Siigo invoices flagged as WhatsApp source
 // (i.e. invoices whose customer NIT is NOT a registered tienda AND whose
 // observations do NOT reference a Shopify order number). Each Siigo invoice
 // renders as one row in the WhatsApp view.
+export const maxDuration = 60
+
 export async function GET(request: Request) {
   const { error } = await requireAuth()
   if (error) return error
@@ -28,68 +19,9 @@ export async function GET(request: Request) {
   const startDate = searchParams.get('start_date')
   const endDate = searchParams.get('end_date')
 
-  type CachedInv = {
-    id: string
-    number: number
-    name: string
-    date: string
-    total: number
-    customer_id: string | null
-    customer_identification: string | null
-    observations: string | null
-    items: Array<{ code: string; description: string; quantity: number; price: number; total?: number }>
-    credited_amount: number | null
-  }
-  const allInvoices: CachedInv[] = []
-  const pageSize = 1000
-  let pageStart = 0
-  for (let i = 0; i < 50; i++) {
-    let q = supabase
-      .from('siigo_invoices')
-      .select('id, number, name, date, total, customer_id, customer_identification, observations, items, credited_amount')
-      .order('date', { ascending: false })
-      .range(pageStart, pageStart + pageSize - 1)
-    if (startDate) q = q.gte('date', startDate)
-    if (endDate) q = q.lte('date', endDate)
-    const { data: page, error: qErr } = await q
-    if (qErr) {
-      return NextResponse.json({ error: qErr.message }, { status: 500 })
-    }
-    if (!page || page.length === 0) break
-    const fresh = (page as CachedInv[]).filter(p => (p.credited_amount || 0) < p.total)
-    allInvoices.push(...fresh)
-    if (page.length < pageSize) break
-    pageStart += pageSize
-  }
-
-  const { data: tiendasWithSiigo } = await supabase
-    .from('tiendas_terceros')
-    .select('siigo_customer_identification')
-    .not('siigo_customer_identification', 'is', null)
-  const tiendaNits = new Set(
-    (tiendasWithSiigo || []).map((t: { siigo_customer_identification: string }) => t.siigo_customer_identification)
-  )
-
-  const { data: shopifyOrders } = await supabase
-    .from('shopify_orders')
-    .select('order_number')
-    .range(0, 49999)
-  const shopifyOrderNumbers = new Set(
-    (shopifyOrders || []).map((o: { order_number: number }) => o.order_number)
-  )
-
-  const extractOrderNum = (obs: string | null): number | null => {
-    if (!obs) return null
-    const m = obs.match(/#(\d+)/)
-    return m ? parseInt(m[1], 10) : null
-  }
-
-  const whatsappInvoices = allInvoices.filter(inv => {
-    if (inv.customer_identification && tiendaNits.has(inv.customer_identification)) return false
-    const orderNum = extractOrderNum(inv.observations)
-    if (orderNum && shopifyOrderNumbers.has(orderNum)) return false
-    return true
-  })
+  const source = await loadSalesSource()
+  const originalById = new Map(source.invoices.map(invoice => [invoice.id, invoice as typeof invoice & { customer_id?: string }]))
+  const whatsappInvoices = reportingInvoices(source, startDate, endDate).filter(invoice => invoice.salesChannel === 'whatsapp').map(invoice => ({ ...invoice, customer_id: originalById.get(invoice.id)?.customer_id || null }))
 
   const customerIds = Array.from(
     new Set(whatsappInvoices.map(i => i.customer_id).filter(Boolean) as string[])
@@ -131,7 +63,7 @@ export async function GET(request: Request) {
       precio_unitario: cantidad > 0 ? inv.total / cantidad : inv.total,
       total: inv.total,
       notas: inv.observations,
-      siigo_invoice_id: inv.id,
+      siigo_invoice_id: originalById.has(inv.id) ? inv.id : null,
       siigo_invoice_number: inv.name,
     }
   })
