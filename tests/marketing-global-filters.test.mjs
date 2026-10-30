@@ -86,10 +86,12 @@ function query(table) {
 const db = { from: query }
 const auditInputsFixture = { targets: [], fairInvoiceNames: [], invoiceLinks: [] }
 const excelHistoryFixture = { from: '2025-01-01', to: '2025-12-31', rows: [] }
+const auditPublicationStatus = { SALES_RECONCILIATION_PENDING: false, SALES_RECONCILIATION_MESSAGE: 'Conciliación contable pendiente' }
 const route = {}
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../app/api/marketing/executive/route.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: route, URL, Date, console, require(name) {
   if (name === '@/data/marketing-2025-audit-inputs.json') return { default: auditInputsFixture }
   if (name === '@/data/marketing-online-excel-2025.json') return { default: excelHistoryFixture }
+  if (name === '@/lib/sales/reconciliation-status') return auditPublicationStatus
   if (name === 'next/server') return { NextResponse: { json: (value, options) => ({ ...value, status: options?.status || 200 }) } }
   if (name === '@/lib/auth-helpers') return { requireAuth: async () => ({}), getAdminClient: () => db }
   if (name === '@/lib/marketing/historical-orders') return { HISTORICAL_ORDER_MISSING_DATES: [] }
@@ -292,7 +294,8 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../lib/sales/sour
 function reportingRoute(path) {
   const exports = {}
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports, URL, Date, console, require(name) {
-    if (name === 'next/server') return { NextResponse: { json: (value, options) => ({ ...value, status: options?.status || 200 }) } }
+    if (name === '@/lib/sales/reconciliation-status') return auditPublicationStatus
+  if (name === 'next/server') return { NextResponse: { json: (value, options) => ({ ...value, status: options?.status || 200 }) } }
     if (name === '@/lib/auth-helpers') return { requireAuth: async () => ({}), getAdminClient: () => db, getShopifyCredentials: async () => null }
     if (name.startsWith('@/lib/marketing/')) return load(name.split('/').at(-1))
     if (name === '@/lib/sales/source') return sharedSource
@@ -337,4 +340,17 @@ test('shared source keeps physical 2025 invoices without restoring unknown or ca
     assert.equal(rows[0].items.reduce((sum, item) => sum + item.quantity, 0), 2)
     assert.ok(source.ledger.reconciliation.some(row => row.id === 'unproven' && row.channel === 'pending'))
   } finally { tables.siigo_invoices = original; tables.shopify_orders = originalOrders; tables.tiendas_terceros = originalStores }
+})
+
+ test('pending accounting reconciliation suppresses definitive growth across reports', async () => {
+  auditPublicationStatus.SALES_RECONCILIATION_PENDING = true
+  try {
+    const params = 'start_date=2026-01-01&end_date=2026-08-31'
+    const report = await route.GET({ url: `https://example.test/api/marketing/executive?view=ytd&${params}` })
+    const summary = await reportingRoute('app/api/sales/summary/route.ts').GET({ url: `https://example.test/api/sales/summary?${params}` })
+    assert.equal(report.onlineUnitComparison.change, null)
+    assert.equal(report.unitComparisonReview.status, 'pending')
+    assert.equal(summary.unitsComparable, false)
+    assert.equal(summary.amountsComplete, false)
+  } finally { auditPublicationStatus.SALES_RECONCILIATION_PENDING = false }
 })

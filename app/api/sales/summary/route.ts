@@ -1,3 +1,4 @@
+import { SALES_RECONCILIATION_PENDING } from '@/lib/sales/reconciliation-status'
 import { reconcileAccounting } from '@/lib/sales/accounting-reconciliation'
 import accountingReview from '@/data/accounting/sales-review-2025-2026.json'
 import { listAccountingDocuments } from '@/lib/siigo-client'
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
         return NextResponse.json({ ...reconcileAccounting(source, accountingReview), liveReadError: 'La lectura directa de Siigo no terminó. El auxiliar de Siigo no está conciliado; se conserva únicamente el cruce con los datos cargados en Vercel.' })
       }
     }
-    const amountsComplete = !reportingInvoices(source, start, end).some(invoice => invoice.marketingSource?.missingValue)
+    const amountsComplete = !SALES_RECONCILIATION_PENDING && !reportingInvoices(source, start, end).some(invoice => invoice.marketingSource?.missingValue)
     const empty = () => ({ ventas: 0, ordenes: 0, unidades: 0 })
     const channels = { shopify: empty(), woocommerce: empty(), whatsapp: empty(), tiendas: empty(), ferias: empty() }
     const daily = new Map<string, Record<string, number>>()
@@ -45,6 +46,6 @@ export async function GET(request: Request) {
     const web = { ventas: channels.shopify.ventas + channels.woocommerce.ventas, ordenes: channels.shopify.ordenes + channels.woocommerce.ordenes, unidades: channels.shopify.unidades + channels.woocommerce.unidades }
     const total = Object.values(channels).reduce((sum, row) => ({ ventas: sum.ventas + row.ventas, ordenes: sum.ordenes + row.ordenes, unidades: sum.unidades + row.unidades }), empty())
     const chartData = Array.from(daily, ([date, values]) => ({ date, ...Object.fromEntries(['shopify', 'whatsapp', 'tiendas', 'ferias'].flatMap(channel => ['ventas', 'ordenes', 'unidades'].map(metric => [`${channel}_${metric}`, values[`${channel}_${metric}`] || 0]))) })).sort((a,b) => a.date.localeCompare(b.date))
-    return NextResponse.json({ amountsComplete, shopify: web, whatsapp: channels.whatsapp, tiendas: channels.tiendas, ferias: channels.ferias, total, chartData, source: 'Histórico conciliado compartido · ventas de producto antes de IVA', channels })
+    return NextResponse.json({ amountsComplete, unitsComparable: !SALES_RECONCILIATION_PENDING, shopify: web, whatsapp: channels.whatsapp, tiendas: channels.tiendas, ferias: channels.ferias, total, chartData, source: 'Histórico conciliado compartido · ventas de producto antes de IVA', channels })
   } catch (err) { return NextResponse.json({ error: err instanceof Error ? err.message : 'Error de ventas' }, { status: 500 }) }
 }

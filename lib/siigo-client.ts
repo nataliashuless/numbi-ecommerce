@@ -505,6 +505,8 @@ export interface AccountingSiigoDocument {
   date: string
   total: number
   invoice?: { id?: string; name?: string }
+  metadata?: { created?: string; last_updated?: string; stock_updated?: string | null }
+  stamp?: { status?: string }
   items?: Array<{ code?: string | null; description?: string | null; quantity?: number | null; price?: number | null; total?: number | null }>
 }
 
@@ -525,7 +527,9 @@ export async function listAccountingDocuments(kind: 'invoices' | 'credit-notes',
     }
     received += results.length
     const total = Number(payload.pagination?.total_results)
-    if (Number.isFinite(total) && received >= total || results.length < 100) return Array.from(records.values())
+    const hasTotal = payload.pagination?.total_results != null && Number.isFinite(total)
+    if (hasTotal && received >= total || !hasTotal && results.length < 100) return Array.from(records.values())
+    if (results.length === 0) throw new Error(`Lectura de ${kind} incompleta; no se emite un total parcial`)
   }
   throw new Error(`Lectura de ${kind} incompleta: se alcanzó el límite de paginación`)
 }

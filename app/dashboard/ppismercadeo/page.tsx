@@ -1,4 +1,5 @@
 'use client'
+import { SALES_RECONCILIATION_PENDING, SALES_RECONCILIATION_MESSAGE } from '@/lib/sales/reconciliation-status'
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -595,12 +596,13 @@ function YtdComparison({ report, spend, previousSpend, mer, previousMer, compari
     { label: 'Ventas antes de IVA', current: report.current.netSales, previous: report.previous.netSales, formatter: currency, reliable: comparisonReliable },
     { label: 'Gasto en publicidad Meta', current: spend, previous: previousSpend, formatter: currency, reliable: true },
     { label: 'Ventas registradas', current: report.current.onlineOrders, previous: report.previous.onlineOrders, formatter: number, reliable: report.comparability.orders },
-    { label: 'Unidades vendidas confirmadas', current: report.current.units, previous: report.previous.units, formatter: number, reliable: report.comparability.units },
+    { label: SALES_RECONCILIATION_PENDING ? 'Unidades registradas (provisionales)' : 'Unidades vendidas confirmadas', current: report.current.units, previous: report.previous.units, formatter: number, reliable: report.comparability.units },
     { label: 'Clientes nuevos Shopify', current: report.current.customers.new, previous: report.previous.customers.new, formatter: number, reliable: report.comparability.customers },
     { label: 'Ventas por cada $1 de publicidad', current: mer, previous: previousMer, formatter: ratio, reliable: comparisonReliable },
   ]
   return <section className="space-y-4">
     <SectionTitle eyebrow="Comparación anual" title="Comparación de períodos" badge="Acumulado" />
+    {SALES_RECONCILIATION_PENDING && <p className="text-sm text-amber-900">{SALES_RECONCILIATION_MESSAGE}</p>}
     <p className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">Todas las filas usan los filtros globales y las mismas fuentes: Excel para no Shopify en 2025; Shopify directo y Siigo para WhatsApp 2026. Las ventas sin fecha no se incluyen; los clientes identificados solo cubren ventas vinculadas a Shopify.</p>
     {report.confirmedSalesComparison && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{report.confirmedSalesComparison.note}</p>}
     <Card className="overflow-hidden border-0 shadow-sm"><CardContent className="overflow-x-auto p-0"><Table><TableHeader><TableRow><TableHead>Indicador</TableHead><TableHead className="text-right">{previousYear}<span className="block text-[10px] font-normal normal-case text-slate-400">{readableMonthRange(report.periods.previous.start, report.periods.previous.end)}</span></TableHead><TableHead className="text-right">{currentYear}<span className="block text-[10px] font-normal normal-case text-slate-400">{readableMonthRange(report.periods.current.start, report.periods.current.end)}</span></TableHead><TableHead className="text-right">Cambio</TableHead></TableRow></TableHeader><TableBody>{rows.map(row => { const change = row.reliable && row.current !== null && row.previous !== null && row.previous !== 0 ? (row.current - row.previous) / Math.abs(row.previous) : null; return <TableRow key={row.label}><TableCell className="font-medium text-[#172239]">{row.label}</TableCell><TableCell className="text-right">{row.previous === null ? 'Dato no disponible' : row.formatter(row.previous)}</TableCell><TableCell className="text-right font-semibold">{row.current === null ? 'Dato no disponible' : row.formatter(row.current)}</TableCell><TableCell className="text-right">{change === null ? <span className="text-xs text-slate-500">{row.reliable ? 'Sin comparación' : 'No concluyente'}</span> : <ChangeBadge value={change} />}</TableCell></TableRow> })}</TableBody></Table></CardContent></Card>

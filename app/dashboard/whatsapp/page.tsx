@@ -1,4 +1,5 @@
 'use client'
+import { SALES_RECONCILIATION_PENDING, SALES_RECONCILIATION_MESSAGE } from '@/lib/sales/reconciliation-status'
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -1093,6 +1094,7 @@ export default function WhatsAppPage() {
 
       {/* Main */}
       <main className="container mx-auto px-4 py-8">
+        {SALES_RECONCILIATION_PENDING && <p className="mb-4 text-sm text-amber-900">{SALES_RECONCILIATION_MESSAGE}</p>}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-[#1A2238] mb-2">Ventas WhatsApp</h1>

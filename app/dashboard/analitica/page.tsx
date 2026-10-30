@@ -1,4 +1,5 @@
 'use client'
+import { SALES_RECONCILIATION_PENDING, SALES_RECONCILIATION_MESSAGE } from '@/lib/sales/reconciliation-status'
 
 import { useEffect, useState, useMemo, Fragment } from 'react'
 import Link from 'next/link'
@@ -105,6 +106,7 @@ interface YtdDesignBucket extends YtdBucket { byFamily: Record<string, YtdBucket
 interface YtdDesignRow { design: string; current: YtdDesignBucket; previous: YtdDesignBucket }
 interface YtdResponse {
   amountsComplete?: boolean
+  unitsComparable?: boolean
   asOf: string
   currentRange: { start: string; end: string }
   previousRange: { start: string; end: string }
@@ -136,6 +138,7 @@ interface MesBucket { ventas: number; unidades: number; ordenes: number }
 interface MesDesignBucket extends MesBucket { byFamily: Record<string, MesBucket> }
 interface MesResponse {
   amountsComplete?: boolean
+  unitsComparable?: boolean
   currentMonth: string
   previousMonth: string
   currentRange: { start: string; end: string }
@@ -199,7 +202,7 @@ function MesComparacionView() {
   }, [month, syncTick])
 
   const kpi = (label: string, cur: number, prev: number, isMoney: boolean) => {
-    const delta = isMoney && data?.amountsComplete === false ? null : pctChange(cur, prev)
+    const delta = data?.unitsComparable === false ? null : isMoney && data?.amountsComplete === false ? null : pctChange(cur, prev)
     return (
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-sm text-[#545454]">{label}</CardTitle></CardHeader>
@@ -294,7 +297,7 @@ function MesComparacionView() {
                       return rows.map(c => {
                         const meta = CHANNEL_META[c.channel] || { label: c.channel, color: '#6B7280' }
                         const dV = data?.amountsComplete === false ? null : pctChange(c.current.ventas, c.previous.ventas)
-                        const dU = pctChange(c.current.unidades, c.previous.unidades)
+                        const dU = data?.unitsComparable === false ? null : pctChange(c.current.unidades, c.previous.unidades)
                         const isTiendas = c.channel === 'tiendas'
                         const canExpand = isTiendas && data.byTienda.length > 0
                         return (
@@ -327,7 +330,7 @@ function MesComparacionView() {
                         </tr>
                         {isTiendas && tiendasExpanded && data.byTienda.map(t => {
                           const tV = data?.amountsComplete === false ? null : pctChange(t.current.ventas, t.previous.ventas)
-                          const tU = pctChange(t.current.unidades, t.previous.unidades)
+                          const tU = data?.unitsComparable === false ? null : pctChange(t.current.unidades, t.previous.unidades)
                           return (
                             <tr key={`tienda-${t.tienda}`} className="border-b border-[#F3F4F6] bg-[#F9FAFB]/50">
                               <td className="py-2.5 px-3 pl-9 text-sm text-[#1A2238]">
@@ -352,7 +355,7 @@ function MesComparacionView() {
                     })()}
                     {(() => {
                       const dV = data?.amountsComplete === false ? null : pctChange(data.total.current.ventas, data.total.previous.ventas)
-                      const dU = pctChange(data.total.current.unidades, data.total.previous.unidades)
+                      const dU = data?.unitsComparable === false ? null : pctChange(data.total.current.unidades, data.total.previous.unidades)
                       return (
                         <tr className="font-semibold bg-[#F9FAFB] border-t-2 border-[#E5E7EB]">
                           <td className="py-3 px-3 text-[#1A2238]">Total</td>
@@ -393,7 +396,7 @@ function MesComparacionView() {
                   <tbody>
                     {data.families.map(f => {
                       const dV = data?.amountsComplete === false ? null : pctChange(f.current.ventas, f.previous.ventas)
-                      const dU = pctChange(f.current.unidades, f.previous.unidades)
+                      const dU = data?.unitsComparable === false ? null : pctChange(f.current.unidades, f.previous.unidades)
                       return (
                         <tr key={f.family} className="border-b border-[#F3F4F6]">
                           <td className="py-3 px-3 font-medium text-[#1A2238]">{f.family}</td>
@@ -437,7 +440,7 @@ function MesComparacionView() {
                   <tbody>
                     {data.designs.filter(d => d.current.ventas > 0 || d.previous.ventas > 0).map(d => {
                       const dV = data?.amountsComplete === false ? null : pctChange(d.current.ventas, d.previous.ventas)
-                      const dU = pctChange(d.current.unidades, d.previous.unidades)
+                      const dU = data?.unitsComparable === false ? null : pctChange(d.current.unidades, d.previous.unidades)
                       return (
                         <tr key={d.design} className="border-b border-[#F3F4F6]">
                           <td className="py-2.5 px-3 font-medium text-[#1A2238]">{d.design}</td>
@@ -660,7 +663,7 @@ function YtdFamiliasView() {
                   const designs = designsInFamily(f.family)
                   const expanded = expandedFamily.has(f.family)
                   const dMon = data?.amountsComplete === false ? null : pctChange(f.current.monto, f.previous.monto)
-                  const dUni = pctChange(f.current.unidades, f.previous.unidades)
+                  const dUni = data?.unitsComparable === false ? null : pctChange(f.current.unidades, f.previous.unidades)
                   return (
                     <Fragment key={f.family}>
                       <tr
@@ -684,7 +687,7 @@ function YtdFamiliasView() {
                       </tr>
                       {expanded && designs.map(d => {
                         const dDmon = data?.amountsComplete === false ? null : pctChange(d.current.monto, d.previous.monto)
-                        const dDuni = pctChange(d.current.unidades, d.previous.unidades)
+                        const dDuni = data?.unitsComparable === false ? null : pctChange(d.current.unidades, d.previous.unidades)
                         return (
                           <tr key={`${f.family}-${d.design}`} className="border-b border-[#F3F4F6] bg-[#F9FAFB]/50">
                             <td className="py-2.5 px-3 pl-8 text-sm text-[#1A2238]">
@@ -709,7 +712,7 @@ function YtdFamiliasView() {
                 })}
                 {(() => {
                   const dMon = data?.amountsComplete === false ? null : pctChange(totals.curMonto, totals.prevMonto)
-                  const dUni = pctChange(totals.curUnits, totals.prevUnits)
+                  const dUni = data?.unitsComparable === false ? null : pctChange(totals.curUnits, totals.prevUnits)
                   return (
                     <tr className="font-semibold bg-[#F9FAFB] border-t-2 border-[#E5E7EB]">
                       <td className="py-3 px-3 text-[#1A2238]">Total</td>
@@ -756,7 +759,7 @@ function YtdFamiliasView() {
               <tbody>
                 {data.designs.map(d => {
                   const dMon = data?.amountsComplete === false ? null : pctChange(d.current.monto, d.previous.monto)
-                  const dUni = pctChange(d.current.unidades, d.previous.unidades)
+                  const dUni = data?.unitsComparable === false ? null : pctChange(d.current.unidades, d.previous.unidades)
                   const pc = d.current.byFamily['Pequeños Caminantes']?.unidades || 0
                   const ex = d.current.byFamily['Exploradores']?.unidades || 0
                   const ot = d.current.byFamily['Otros']?.unidades || 0
@@ -955,6 +958,7 @@ export default function AnaliticaPage() {
       </div>
 
       <main className="container mx-auto px-4 py-8">
+        {SALES_RECONCILIATION_PENDING && <p className="mb-4 text-sm text-amber-900">{SALES_RECONCILIATION_MESSAGE}</p>}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
           <div>
             <h1 className="text-3xl font-bold text-[#1A2238] mb-2">Analítica</h1>

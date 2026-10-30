@@ -1,3 +1,4 @@
+import { SALES_RECONCILIATION_PENDING } from '@/lib/sales/reconciliation-status'
 import { loadSalesSource, reportingInvoices, type SalesSource } from '@/lib/sales/source'
 import { NextResponse } from 'next/server'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
@@ -301,7 +302,8 @@ export async function GET(request: Request) {
     })).sort((x, y) => y.current.ventas - x.current.ventas)
 
     return NextResponse.json({
-      amountsComplete: ![...curInv, ...prevInv].some(invoice => invoice.marketingSource?.missingValue),
+      unitsComparable: !SALES_RECONCILIATION_PENDING,
+      amountsComplete: !SALES_RECONCILIATION_PENDING && ![...curInv, ...prevInv].some(invoice => invoice.marketingSource?.missingValue),
       currentMonth: `${year}-${String(month0 + 1).padStart(2, '0')}`,
       previousMonth: `${year - 1}-${String(month0 + 1).padStart(2, '0')}`,
       currentRange: cur,

@@ -1,4 +1,5 @@
 'use client'
+import { SALES_RECONCILIATION_PENDING, SALES_RECONCILIATION_MESSAGE } from '@/lib/sales/reconciliation-status'
 
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
@@ -74,6 +75,7 @@ interface ConsolidatedData {
 }
 
 interface ChannelTotals {
+  unitsComparable?: boolean
   amountsComplete?: boolean
   shopify: ChannelStats
   whatsapp: ChannelStats
@@ -359,11 +361,12 @@ export default function DashboardPage() {
 
       {/* Main */}
       <main className="container mx-auto px-4 py-8">
+        {SALES_RECONCILIATION_PENDING && <p className="mb-4 text-sm text-amber-900">{SALES_RECONCILIATION_MESSAGE}</p>}
         {salesError && <p role="alert" className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-900">No se pudieron cargar las ventas: {salesError}. Actualiza para reintentar; los datos no representan ventas en cero.</p>}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-[#1A2238] mb-2">Ventas Consolidadas</h1>
-            <p className="text-[#545454]">Ventas confirmadas de todos los canales · producto antes de IVA · histórico conciliado compartido</p>
+            <p className="text-[#545454]">Ventas registradas de todos los canales · producto antes de IVA · conciliación con Siigo en curso</p>
           </div>
           <div className="flex items-center gap-2 mt-4 md:mt-0">
             <DateRangePicker date={dateRange} onDateChange={setDateRange} />
@@ -442,7 +445,7 @@ export default function DashboardPage() {
               >
                 <div className="p-6">
                   <div className="flex items-center justify-between pb-2">
-                    <span className="text-sm font-medium text-[#545454]">Unidades Vendidas</span>
+                    <span className="text-sm font-medium text-[#545454]">Unidades registradas</span>
                     <Box className={`h-4 w-4 ${metric === 'unidades' ? 'text-[#1DA9EF]' : 'text-[#545454]'}`} />
                   </div>
                   <div className={`text-3xl font-bold ${metric === 'unidades' ? 'text-[#1DA9EF]' : 'text-[#1A2238]'}`}>
@@ -722,8 +725,8 @@ export default function DashboardPage() {
                           const pctColor = (v: number) => !isFinite(v) || v === 0 ? 'text-[#6B7280]' : v > 0 ? 'text-green-600' : 'text-red-600'
                           return rows.map(({ key, label, color, cur, prev }) => {
                             const pctVentas = ytd.thisYear.amountsComplete === false || ytd.lastYear.amountsComplete === false ? NaN : pct(cur.ventas, prev.ventas)
-                            const pctUnidades = pct(cur.unidades, prev.unidades)
-                            const pctOrdenes = pct(cur.ordenes, prev.ordenes)
+                            const pctUnidades = ytd.thisYear.unitsComparable === false || ytd.lastYear.unitsComparable === false ? NaN : pct(cur.unidades, prev.unidades)
+                            const pctOrdenes = ytd.thisYear.unitsComparable === false || ytd.lastYear.unitsComparable === false ? NaN : pct(cur.ordenes, prev.ordenes)
                             const isTotal = key === 'total'
                             return (
                               <tr key={key} className={`border-b border-[#F3F4F6] ${isTotal ? 'font-semibold bg-[#F9FAFB]' : ''}`}>

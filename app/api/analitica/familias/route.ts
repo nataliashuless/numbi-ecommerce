@@ -1,3 +1,4 @@
+import { SALES_RECONCILIATION_PENDING } from '@/lib/sales/reconciliation-status'
 import { loadSalesSource, reportingInvoices, type SalesSource } from '@/lib/sales/source'
 import { NextResponse } from 'next/server'
 import { requireAuth, getAdminClient, getShopifyCredentials } from '@/lib/auth-helpers'
@@ -345,7 +346,8 @@ export async function GET(request: Request) {
       .slice(0, 40)
 
     return NextResponse.json({
-      amountsComplete: ![...thisYear, ...lastYear].some(invoice => invoice.marketingSource?.missingValue),
+      unitsComparable: !SALES_RECONCILIATION_PENDING,
+      amountsComplete: !SALES_RECONCILIATION_PENDING && ![...thisYear, ...lastYear].some(invoice => invoice.marketingSource?.missingValue),
       asOf: fmt(asOf),
       currentRange: { start: thisStart, end: thisEnd },
       previousRange: { start: lastStart, end: lastEnd },

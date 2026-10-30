@@ -1,3 +1,4 @@
+import { SALES_RECONCILIATION_PENDING, SALES_RECONCILIATION_MESSAGE } from '@/lib/sales/reconciliation-status'
 import { canonicalInvoices } from '@/lib/marketing/canonical-source'
 import { NextResponse } from 'next/server'
 import excelHistory from '@/data/marketing-online-excel-2025.json'
@@ -187,7 +188,7 @@ export async function GET(request: Request) {
     const review = { ...marketingBusinessChannelRules.historicalUnitsReview, status: historyReadyForConfirmedComparison ? 'confirmed_only' : 'pending', message: unresolvedHistoryRows.length ? `Conciliación de 2025: ${unresolvedHistoryRows.length === 1 ? 'falta 1 fila' : `faltan ${unresolvedHistoryRows.length} filas`} por confirmar. No calculamos crecimiento hasta aclarar esas ventas. Revisa la tabla de conciliación detallada.` : marketingBusinessChannelRules.historicalUnitsReview.message }
     const intersectsReviewYear = (period: typeof periods.current) => period.start <= `${review.year}-12-31` && period.end >= `${review.year}-01-01`
     const pendingUnitsReview = review.status === 'pending' && comparisonMode !== 'none' && filters.channel !== 'shopify' && (intersectsReviewYear(periods.current) || intersectsReviewYear(periods.previous))
-    const salesComparable = !pendingUnitsReview && classificationComplete && comparisonMode !== 'none' && periodCovered(periods.current) && periodCovered(periods.previous)
+    const salesComparable = !SALES_RECONCILIATION_PENDING && !pendingUnitsReview && classificationComplete && comparisonMode !== 'none' && periodCovered(periods.current) && periodCovered(periods.previous)
     if (!salesComparable) {
       current = { ...current, products: current.products.map(product => ({ ...product, variation: null, sizes: product.sizes.map(size => ({ ...size, variation: null })) })), sizes: current.sizes.map(size => ({ ...size, variation: null })) }
     }
@@ -293,7 +294,7 @@ export async function GET(request: Request) {
     const report: MarketingExecutiveReport = {
       source: 'Shopify directo + Excel no Shopify 2025 + WhatsApp Siigo 2026',
       historyAudit,
-      unitComparisonReview: pendingUnitsReview ? review : undefined,
+      unitComparisonReview: SALES_RECONCILIATION_PENDING ? { ...review, status: 'pending', message: SALES_RECONCILIATION_MESSAGE } : pendingUnitsReview ? review : undefined,
       confirmedSalesComparison: salesComparable ? { excludedCurrentUnits: pendingCurrent.filter(isAuthorizedPending).reduce((sum, row) => sum + row.units, 0), excludedPreviousUnits: pendingPrevious.filter(isAuthorizedPending).reduce((sum, row) => sum + row.units, 0), note: 'FV-2-1812 (1 unidad de 2025) sigue pendiente. No está incluida en los totales confirmados ni en el cálculo del crecimiento.' } : undefined,
       excelHistory: { from: excelHistory.from, to: excelHistory.to, missingValueUnits: missingExcelValues.reduce((sum, record) => sum + record.order.raw!.line_items!.reduce((n, item) => n + Number(item.quantity || 0), 0), 0) },
       currency: 'COP',

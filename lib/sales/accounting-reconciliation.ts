@@ -72,6 +72,24 @@ export function reconcileAccounting(source: SalesSource, book: AccountingReview,
     const positive = productTotals(invoices), negative = productTotals(credits)
     return { month: month.month, invoices: invoices.length, credits: credits.length, invoiceUnits: positive.units, creditUnits: negative.units, netUnits: positive.units - negative.units, netSales: positive.sales - negative.sales, accountingSales: month.accountingSales, difference: positive.sales - negative.sales - month.accountingSales }
   }) : []
-  const creditLinks = (live?.credits || []).map(row => ({ document: row.name, date: row.date, invoice: row.invoice?.name || '', invoiceIdPresent: Boolean(row.invoice?.id), grossAmount: row.total, units: (row.items || []).filter(item => !source.nonRetail.has(item.code || '') && item.code !== 'ENVIO').reduce((sum, item) => sum + Number(item.quantity || 0), 0) }))
-  return { monthly, documents, additional, totals, accounting, creditLinks, liveReadError: null as string | null }
+  const creditLinks = (live?.credits || []).map(row => ({ document: row.name, date: row.date, invoice: row.invoice?.name || '', invoiceIdPresent: Boolean(row.invoice?.id), grossAmount: row.total, stockUpdated: Boolean(row.metadata?.stock_updated), units: (row.items || []).filter(item => !source.nonRetail.has(item.code || '') && item.code !== 'ENVIO').reduce((sum, item) => sum + Number(item.quantity || 0), 0) }))
+  const productUnitsOf = (row: AccountingSiigoDocument | SalesSource['invoices'][number]) => marketingProductItems({ ...row, credited_amount: 0, customer_identification: null, assigned_feria_id: null, observations: null, raw: null }, source.nonRetail).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
+  const notesByInvoice = new Map<string, AccountingSiigoDocument[]>()
+  for (const note of live?.credits || []) {
+    const cached = source.invoices.find(invoice => invoice.id === note.invoice?.id || invoice.name === note.invoice?.name)
+    if (!cached) continue
+    const notes = notesByInvoice.get(cached.id) || []
+    notes.push(note); notesByInvoice.set(cached.id, notes)
+  }
+  const creditCacheIssues = Array.from(notesByInvoice, ([id, notes]) => {
+    const invoice = source.invoices.find(row => row.id === id)!
+    const liveCredit = notes.reduce((sum, row) => sum + Number(row.total || 0), 0)
+    const cachedCredit = Number(invoice.credited_amount || 0)
+    return { document: invoice.name || id, invoiceDate: invoice.date, notes: notes.map(row => `${row.name} (${row.date})`).join(' / '), invoiceGross: invoice.total, liveCredit, cachedCredit, difference: liveCredit - cachedCredit, units: productUnitsOf(invoice), fullyCreditedInSiigo: liveCredit + 1 >= invoice.total && invoice.total > 0, directlyPublishedUnits: published.filter(row => row.id === invoice.id).reduce((sum, row) => sum + unitsOf(row), 0) }
+  }).filter(row => Math.abs(row.difference) > 1)
+  const invoiceChecks = (live?.invoices || []).map(invoice => {
+    const cached = source.invoices.find(row => row.id === invoice.id || row.name === invoice.name)
+    return { document: invoice.name, date: invoice.date, liveUnits: productUnitsOf(invoice), cachedUnits: cached ? productUnitsOf(cached) : 0, liveGross: invoice.total, cachedGross: cached?.total ?? null, created: invoice.metadata?.created || '', updated: invoice.metadata?.last_updated || '', stamp: invoice.stamp?.status || '', differs: !cached || Math.abs(Number(cached.total) - Number(invoice.total)) > 1 || productUnitsOf(cached) !== productUnitsOf(invoice) || cached.date !== invoice.date }
+  })
+  return { monthly, documents, additional, totals, accounting, creditLinks, creditCacheIssues, invoiceChecks, liveReadError: null as string | null }
 }
