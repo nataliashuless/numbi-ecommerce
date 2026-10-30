@@ -505,14 +505,33 @@ export interface AccountingSiigoDocument {
   date: string
   total: number
   invoice?: { id?: string; name?: string }
+  annulled?: boolean
+  global_charges?: Array<{ value?: number }>
+  global_discounts?: Array<{ value?: number }>
   metadata?: { created?: string; last_updated?: string; stock_updated?: string | null }
   stamp?: { status?: string }
-  items?: Array<{ code?: string | null; description?: string | null; quantity?: number | null; price?: number | null; total?: number | null }>
+  items?: Array<{ code?: string | null; description?: string | null; quantity?: number | null; price?: number | null; total?: number | null; taxes?: Array<{ type?: string; percentage?: number; value?: number }> }>
+}
+
+export interface AccountingSiigoJournal {
+  id: string
+  name: string
+  date: string
+  items?: Array<{ account?: { code?: string; movement?: string }; value?: number; product?: { quantity?: number }; due?: { prefix?: string; consecutive?: number } }>
 }
 
 /** Read-only accounting-date queries; created-date filters are not a substitute. */
 export async function listAccountingDocuments(kind: 'invoices' | 'credit-notes', startDate: string, endDate: string): Promise<AccountingSiigoDocument[]> {
-  const records = new Map<string, AccountingSiigoDocument>()
+  return listAccountingPages<AccountingSiigoDocument>(kind, startDate, endDate)
+}
+
+/** Journals remain server-side; the audit only returns account codes and commercial amounts. */
+export async function listAccountingJournals(startDate: string, endDate: string): Promise<AccountingSiigoJournal[]> {
+  return listAccountingPages<AccountingSiigoJournal>('journals', startDate, endDate)
+}
+
+async function listAccountingPages<T extends { id: string; date: string }>(kind: string, startDate: string, endDate: string): Promise<T[]> {
+  const records = new Map<string, T>()
   let received = 0
   for (let page = 1; page <= 100; page++) {
     const params = new URLSearchParams({ date_start: startDate, date_end: endDate, page_size: '100', page: String(page) })
@@ -520,7 +539,7 @@ export async function listAccountingDocuments(kind: 'invoices' | 'credit-notes',
     if (!response.ok) throw new Error(`No se pudo leer ${kind} en Siigo (HTTP ${response.status}); no se emite un total parcial`)
     const payload = await response.json()
     if (!Array.isArray(payload.results)) throw new Error(`Siigo devolvió un formato inesperado para ${kind}`)
-    const results = payload.results as AccountingSiigoDocument[]
+    const results = payload.results as T[]
     for (const document of results) {
       if (!document.id || !document.date) throw new Error('Documento de Siigo sin identificador o fecha; requiere revisión')
       if (document.date.slice(0, 10) >= startDate && document.date.slice(0, 10) <= endDate) records.set(document.id, document)

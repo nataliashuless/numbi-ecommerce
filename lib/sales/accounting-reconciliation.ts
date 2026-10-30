@@ -1,4 +1,4 @@
-import type { AccountingSiigoDocument } from '@/lib/siigo-client'
+import type { AccountingSiigoDocument, AccountingSiigoJournal } from '@/lib/siigo-client'
 import { reportingInvoices, type SalesSource } from './source'
 import { classifyMarketingInvoice } from '@/lib/marketing/channel-reconciliation'
 import { marketingProductItems } from '@/lib/marketing/siigo-sales'
@@ -9,7 +9,7 @@ export interface AccountingReview { months: AccountingMonth[]; detailPeriod: { s
 const unitsOf = (row: { items?: Array<{ quantity?: number | null }> }) => (row.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
 
 /** Compare safe document identifiers and commercial figures; never export customer data or notes. */
-export function reconcileAccounting(source: SalesSource, book: AccountingReview, live?: { invoices: AccountingSiigoDocument[]; credits: AccountingSiigoDocument[] }) {
+export function reconcileAccounting(source: SalesSource, book: AccountingReview, live?: { invoices: AccountingSiigoDocument[]; credits: AccountingSiigoDocument[]; journals?: AccountingSiigoJournal[] }) {
   const published = reportingInvoices(source)
   const inRange = (date: string, start: string, end: string) => date >= start && date <= end
   const monthly = book.months.map(month => {
@@ -91,5 +91,27 @@ export function reconcileAccounting(source: SalesSource, book: AccountingReview,
     const cached = source.invoices.find(row => row.id === invoice.id || row.name === invoice.name)
     return { document: invoice.name, date: invoice.date, liveUnits: productUnitsOf(invoice), cachedUnits: cached ? productUnitsOf(cached) : 0, liveGross: invoice.total, cachedGross: cached?.total ?? null, created: invoice.metadata?.created || '', updated: invoice.metadata?.last_updated || '', stamp: invoice.stamp?.status || '', differs: !cached || Math.abs(Number(cached.total) - Number(invoice.total)) > 1 || productUnitsOf(cached) !== productUnitsOf(invoice) || cached.date !== invoice.date }
   })
-  return { monthly, documents, additional, totals, accounting, creditLinks, creditCacheIssues, invoiceChecks, liveReadError: null as string | null }
+  const journalEntries = (live?.journals || []).flatMap(journal => (journal.items || []).flatMap((item, index) => {
+    const account = item.account?.code || ''
+    if (!account.startsWith('41')) return []
+    if (item.account?.movement !== 'Credit' && item.account?.movement !== 'Debit') throw new Error('Movimiento contable de ingresos sin signo conocido')
+    return [{ document: journal.name, date: journal.date, line: index + 1, account, movement: item.account.movement, amount: Number(item.value || 0), netSales: Number(item.value || 0) * (item.account.movement === 'Credit' ? 1 : -1), invoice: item.due?.prefix && item.due?.consecutive ? `${item.due.prefix}-${item.due.consecutive}` : '', documentUnits: Number(item.product?.quantity || 0) }]
+  }))
+  const amountChecks = [...(live?.invoices || []), ...(live?.credits || [])].filter(row => row.date >= '2025-01-01' && row.date <= '2025-08-31').map(row => {
+    const items = row.items || []
+    const tax = items.reduce((sum, item) => sum + (item.taxes || []).filter(tax => tax.type === 'IVA').reduce((n, tax) => n + Number(tax.value || 0), 0), 0)
+    const itemGross = items.reduce((sum, item) => sum + Number(item.total || 0), 0)
+    const eligible = marketingProductItems({ ...row, credited_amount: 0, customer_identification: null, assigned_feria_id: null, observations: null, raw: null }, source.nonRetail)
+    const productGross = eligible.reduce((sum, item) => sum + Number(item.total || 0), 0)
+    const productTax = eligible.reduce((sum, item) => sum + ((item as NonNullable<AccountingSiigoDocument['items']>[number]).taxes || []).filter(tax => tax.type === 'IVA').reduce((n, tax) => n + Number(tax.value || 0), 0), 0)
+    return { document: row.name, date: row.date, credit: row.name.startsWith('NC-'), gross: row.total, itemGross, tax, netAllItems: itemGross - tax, netProduct: productGross - productTax, excludedNet: itemGross - tax - productGross + productTax, charges: (row.global_charges || []).reduce((sum, item) => sum + Number(item.value || 0), 0), discounts: (row.global_discounts || []).reduce((sum, item) => sum + Number(item.value || 0), 0), annulled: row.annulled === true }
+  })
+  const incomeBridge = book.months.filter(row => row.month.startsWith('2025')).map(month => {
+    const rows = amountChecks.filter(row => row.date.startsWith(month.month))
+    const invoiceNet = rows.filter(row => !row.credit).reduce((sum, row) => sum + row.netAllItems, 0)
+    const creditNet = rows.filter(row => row.credit).reduce((sum, row) => sum + row.netAllItems, 0)
+    const journals = journalEntries.filter(row => row.date.startsWith(month.month)).reduce((sum, row) => sum + row.netSales, 0)
+    return { month: month.month, invoiceNet, creditNet, journals, accountingSales: month.accountingSales, difference: invoiceNet - creditNet + journals - month.accountingSales }
+  })
+  return { monthly, documents, additional, totals, accounting, creditLinks, creditCacheIssues, invoiceChecks, journalEntries, amountChecks, incomeBridge, liveReadError: null as string | null }
 }

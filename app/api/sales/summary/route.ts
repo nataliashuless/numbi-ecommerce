@@ -1,7 +1,7 @@
 import { SALES_RECONCILIATION_PENDING } from '@/lib/sales/reconciliation-status'
 import { reconcileAccounting } from '@/lib/sales/accounting-reconciliation'
 import accountingReview from '@/data/accounting/sales-review-2025-2026.json'
-import { listAccountingDocuments } from '@/lib/siigo-client'
+import { listAccountingDocuments, listAccountingJournals } from '@/lib/siigo-client'
 import { isoDateInTimeZone } from '@/lib/marketing/metrics'
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth-helpers'
@@ -17,12 +17,13 @@ export async function GET(request: Request) {
     const source = await loadSalesSource()
     if (params.get('accounting_audit') === '1') {
       try {
-      const [invoices2025, invoices2026, credits] = await Promise.all([
+      const [invoices2025, invoices2026, credits, journals] = await Promise.all([
         listAccountingDocuments('invoices', '2025-01-01', '2025-08-31'),
         listAccountingDocuments('invoices', '2026-01-01', '2026-08-31'),
         listAccountingDocuments('credit-notes', '2025-01-01', isoDateInTimeZone(new Date())),
+        listAccountingJournals('2025-01-01', '2025-08-31'),
       ])
-      return NextResponse.json(reconcileAccounting(source, accountingReview, { invoices: [...invoices2025, ...invoices2026], credits }))
+      return NextResponse.json(reconcileAccounting(source, accountingReview, { invoices: [...invoices2025, ...invoices2026], credits, journals }))
       } catch {
         return NextResponse.json({ ...reconcileAccounting(source, accountingReview), liveReadError: 'La lectura directa de Siigo no terminó. El auxiliar de Siigo no está conciliado; se conserva únicamente el cruce con los datos cargados en Vercel.' })
       }

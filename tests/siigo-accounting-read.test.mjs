@@ -24,3 +24,11 @@ test('Siigo reconciliation reads accounting dates across pages and rejects parti
   responder = async url => url.searchParams.get('page') === '1' ? { ok: true, json: async () => ({ pagination: { total_results: 101 }, results: Array.from({ length: 100 }, (_, id) => ({ id: String(id), name: `NC-${id}`, date: '2026-08-01', total: 119 })) }) } : { ok: false, status: 500 }
   await assert.rejects(api.listAccountingDocuments('credit-notes','2026-01-01','2026-08-31'), /no se emite un total parcial/)
 })
+
+test('income journals paginate by accounting date and reject truncated page metadata', async () => {
+  calls = []
+  responder = async url => ({ ok: true, json: async () => ({ pagination: { total_results: 2 }, results: url.searchParams.get('page') === '1' ? [{ id: 'journal', name: 'CC-1', date: '2025-08-01', items: [] }] : [] }) })
+  await assert.rejects(api.listAccountingJournals('2025-01-01','2025-08-31'), /incompleta/)
+  assert.equal(calls[0].pathname, '/v1/journals')
+  assert.equal(calls[0].searchParams.get('date_start'), '2025-01-01')
+})

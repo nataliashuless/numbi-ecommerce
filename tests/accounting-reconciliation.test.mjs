@@ -33,3 +33,16 @@ test('accounting audit deduplicates linked Shopify records and keeps credits, pe
   assert.equal(result.monthly[0].containsBudget, true)
   assert.doesNotMatch(JSON.stringify(result), /PRIVATE/)
 })
+
+test('2025 income bridge uses actual VAT and signed income journals without exporting private notes or inventing units', () => {
+  const source = { invoices: [], orders: [], published: [], context: { reconciledShopifyInvoiceNumbers: new Map() }, nonRetail: new Set() }
+  const book = { months: [{ month: '2025-08', modelUnits: 1, modelSales: 0, accountingSales: 110, containsBudget: false }], detailPeriod: { start: '2026-08-01', end: '2026-08-31' }, detail: [] }
+  const live = { invoices: [{ id: 'a', name: 'FV-A', date: '2025-08-01', total: 119, observations: 'PRIVATE', items: [{ code: 'SKU', quantity: 1, total: 119, taxes: [{ type: 'IVA', value: 19 }] }] }], credits: [], journals: [{ id: 'j', name: 'CC-1', date: '2025-08-02', observations: 'PRIVATE', items: [{ account: { code: '41350101', movement: 'Credit' }, value: 15, customer: { identification: 'PRIVATE' } }, { account: { code: '41750501', movement: 'Debit' }, value: 5 }, { account: { code: '11050501', movement: 'Debit' }, value: 999 }] }] }
+  const report = moduleExports.reconcileAccounting(source, book, live)
+  assert.equal(report.incomeBridge[0].invoiceNet, 100)
+  assert.equal(report.incomeBridge[0].journals, 10)
+  assert.equal(report.incomeBridge[0].difference, 0)
+  assert.equal(report.journalEntries.length, 2)
+  assert.equal(report.journalEntries[0].documentUnits, 0)
+  assert.doesNotMatch(JSON.stringify(report), /PRIVATE/)
+})
