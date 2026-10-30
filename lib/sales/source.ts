@@ -6,14 +6,15 @@ import { buildMarketingLedger } from '@/lib/marketing/sales-ledger'
 import { marketingProductItems, type CachedSiigoInvoice } from '@/lib/marketing/siigo-sales'
 import { isoDateInTimeZone, type CachedShopifyOrder } from '@/lib/marketing/metrics'
 
-export async function paged<T>(query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>) {
+export async function paged<T>(query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>, table = 'histórico') {
   const rows: T[] = []
-  for (let from = 0; from < 100000; from += 1000) {
-    const { data, error } = await query(from, from + 999)
-    if (error) throw new Error(error.message)
+  const pageSize = ['shopify_orders', 'siigo_invoices'].includes(table) ? 100 : 1000
+  for (let from = 0; from < 100000; from += pageSize) {
+    const { data, error } = await query(from, from + pageSize - 1)
+    if (error) throw new Error(`${table}: ${error.message}`)
     if (!data?.length) return rows
     rows.push(...data)
-    if (data.length < 1000) return rows
+    if (data.length < pageSize) return rows
   }
   throw new Error('El histórico excede el límite de lectura; no se publican totales parciales')
 }
@@ -22,12 +23,12 @@ export async function paged<T>(query: (from: number, to: number) => PromiseLike<
 async function readSnapshot() {
   const db = getAdminClient()
   return Promise.all([
-    paged<CachedShopifyOrder>((a, b) => db.from('shopify_orders').select('id,order_number,name,created_at,total_price,currency,financial_status,fulfillment_status,customer_name,customer_email,raw').order('created_at').order('id').range(a, b)),
-    paged<CachedSiigoInvoice>((a, b) => db.from('siigo_invoices').select('id,name,date,total,credited_amount,customer_id,customer_identification,assigned_feria_id,observations,items,raw').lte('date', isoDateInTimeZone(new Date())).order('date').order('id').range(a, b)),
-    paged<{ id: string; nombre: string; nombre_corto: string | null; siigo_customer_identification: string }>((a, b) => db.from('tiendas_terceros').select('id,nombre,nombre_corto,siigo_customer_identification').order('id').range(a, b)),
-    paged<{ fecha_inicio: string; fecha_fin: string }>((a, b) => db.from('ferias').select('id,fecha_inicio,fecha_fin').eq('activa', true).order('id').range(a, b)),
-    paged<{ siigo_invoice_id: string | null }>((a, b) => db.from('ventas_whatsapp').select('id,siigo_invoice_id').not('siigo_invoice_id', 'is', null).order('id').range(a, b)),
-    paged<{ product_code: string | null; account_group_id: number | null }>((a, b) => db.from('siigo_product_stock').select('product_code,account_group_id').order('product_id').order('warehouse_id').range(a, b)),
+    paged<CachedShopifyOrder>((a, b) => db.from('shopify_orders').select('id,order_number,name,created_at,total_price,currency,financial_status,fulfillment_status,customer_name,customer_email,raw').order('created_at').order('id').range(a, b), 'shopify_orders'),
+    paged<CachedSiigoInvoice>((a, b) => db.from('siigo_invoices').select('id,name,date,total,credited_amount,customer_id,customer_identification,assigned_feria_id,observations,items,raw').lte('date', isoDateInTimeZone(new Date())).order('date').order('id').range(a, b), 'siigo_invoices'),
+    paged<{ id: string; nombre: string; nombre_corto: string | null; siigo_customer_identification: string }>((a, b) => db.from('tiendas_terceros').select('id,nombre,nombre_corto,siigo_customer_identification').order('id').range(a, b), 'tiendas_terceros'),
+    paged<{ fecha_inicio: string; fecha_fin: string }>((a, b) => db.from('ferias').select('id,fecha_inicio,fecha_fin').eq('activa', true).order('id').range(a, b), 'ferias'),
+    paged<{ siigo_invoice_id: string | null }>((a, b) => db.from('ventas_whatsapp').select('id,siigo_invoice_id').not('siigo_invoice_id', 'is', null).order('id').range(a, b), 'ventas_whatsapp'),
+    paged<{ product_code: string | null; account_group_id: number | null }>((a, b) => db.from('siigo_product_stock').select('product_code,account_group_id').order('product_id').order('warehouse_id').range(a, b), 'siigo_product_stock'),
   ])
 }
 
