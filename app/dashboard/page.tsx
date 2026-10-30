@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { DateRange } from 'react-day-picker'
 import { format, subMonths } from 'date-fns'
@@ -124,6 +124,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [salesError, setSalesError] = useState<string | null>(null)
+  const salesRequestVersion = useRef(0)
   const shop = ''
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month' | 'quarter' | 'year'>('month')
@@ -192,6 +193,7 @@ export default function DashboardPage() {
   async function fetchData() {
     if (!dateRange?.from || !dateRange?.to) return
 
+    const requestVersion = ++salesRequestVersion.current
     setSalesError(null)
     const initialLoad = data === null
     if (initialLoad) setLoading(true)
@@ -214,14 +216,14 @@ export default function DashboardPage() {
         }
         chartDataMap.set(date, bucket)
       }
+      if (requestVersion !== salesRequestVersion.current) return
       setData({ ...result, chartData: Array.from(chartDataMap.values()).sort((a, b) => a.date.localeCompare(b.date)) })
 
     } catch (error) {
       console.error('Error fetching data:', error)
-      setSalesError(error instanceof Error ? error.message : 'No se pudieron cargar las ventas')
+      if (requestVersion === salesRequestVersion.current) setSalesError(error instanceof Error ? error.message : 'No se pudieron cargar las ventas')
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      if (requestVersion === salesRequestVersion.current) { setLoading(false); setRefreshing(false) }
     }
   }
 

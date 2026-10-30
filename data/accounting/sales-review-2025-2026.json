@@ -1,0 +1,2694 @@
+{
+  "sourceFiles": [
+    "1AOLNHHLWNzdz8LW-zC62sqqLnw5U2QC_",
+    "1GGxFjVCULalQy8scTBDMGTnj54s0SgyD"
+  ],
+  "months": [
+    {
+      "month": "2025-01",
+      "modelUnits": 291,
+      "modelSales": 29897058.54,
+      "accountingSales": 30646058.54,
+      "containsBudget": false
+    },
+    {
+      "month": "2025-02",
+      "modelUnits": 188,
+      "modelSales": 19763529.37,
+      "accountingSales": 20204117.37,
+      "containsBudget": false
+    },
+    {
+      "month": "2025-03",
+      "modelUnits": 191,
+      "modelSales": 20938248.85,
+      "accountingSales": 21709318.97,
+      "containsBudget": false
+    },
+    {
+      "month": "2025-04",
+      "modelUnits": 176,
+      "modelSales": 18373110.6,
+      "accountingSales": 19172110.6,
+      "containsBudget": false
+    },
+    {
+      "month": "2025-05",
+      "modelUnits": 290,
+      "modelSales": 35215676.01,
+      "accountingSales": 35732676.01,
+      "containsBudget": false
+    },
+    {
+      "month": "2025-06",
+      "modelUnits": 167,
+      "modelSales": 17713523.52,
+      "accountingSales": 18257380.65,
+      "containsBudget": false
+    },
+    {
+      "month": "2025-07",
+      "modelUnits": 411,
+      "modelSales": 49217523.68,
+      "accountingSales": 49803702.43,
+      "containsBudget": false
+    },
+    {
+      "month": "2025-08",
+      "modelUnits": 394,
+      "modelSales": 45957847.28,
+      "accountingSales": 46468133.28,
+      "containsBudget": false
+    },
+    {
+      "month": "2026-01",
+      "modelUnits": 367,
+      "modelSales": 41007628.04,
+      "accountingSales": 41007628.04,
+      "containsBudget": false
+    },
+    {
+      "month": "2026-02",
+      "modelUnits": 227,
+      "modelSales": 26442762.7,
+      "accountingSales": 26442762.7,
+      "containsBudget": false
+    },
+    {
+      "month": "2026-03",
+      "modelUnits": 304,
+      "modelSales": 34419319.31,
+      "accountingSales": 34419319.31,
+      "containsBudget": false
+    },
+    {
+      "month": "2026-04",
+      "modelUnits": 291,
+      "modelSales": 35264475.08,
+      "accountingSales": 35264475.08,
+      "containsBudget": false
+    },
+    {
+      "month": "2026-05",
+      "modelUnits": 318.8,
+      "modelSales": 41771661.51,
+      "accountingSales": 41771661.51,
+      "containsBudget": true
+    },
+    {
+      "month": "2026-06",
+      "modelUnits": 349,
+      "modelSales": 37836722.32,
+      "accountingSales": 37836722.32,
+      "containsBudget": false
+    },
+    {
+      "month": "2026-07",
+      "modelUnits": 248,
+      "modelSales": 32148907.67,
+      "accountingSales": 32148907.67,
+      "containsBudget": false
+    },
+    {
+      "month": "2026-08",
+      "modelUnits": 327,
+      "modelSales": 35932940.93,
+      "accountingSales": 37888588.23,
+      "containsBudget": false
+    }
+  ],
+  "detailPeriod": {
+    "start": "2026-08-01",
+    "end": "2026-08-31"
+  },
+  "detail": [
+    {
+      "row": 12,
+      "document": "FV-2-4506",
+      "date": "2026-08-26",
+      "channel": "Ferias",
+      "units": 1.0,
+      "sales": 113277.31
+    },
+    {
+      "row": 13,
+      "document": "FV-2-4505",
+      "date": "2026-08-26",
+      "channel": "Ferias",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 14,
+      "document": "FV-2-4504",
+      "date": "2026-08-26",
+      "channel": "Ferias",
+      "units": 1.0,
+      "sales": 113277.31
+    },
+    {
+      "row": 15,
+      "document": "FV-2-4503",
+      "date": "2026-08-26",
+      "channel": "Ferias",
+      "units": 1.0,
+      "sales": 113277.31
+    },
+    {
+      "row": 21,
+      "document": "FV-2-4525",
+      "date": "2026-08-30",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 22,
+      "document": "FV-2-4524",
+      "date": "2026-08-30",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 23,
+      "document": "FV-2-4523",
+      "date": "2026-08-30",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 24,
+      "document": "FV-2-4522",
+      "date": "2026-08-30",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 25,
+      "document": "FV-2-4521",
+      "date": "2026-08-29",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 26,
+      "document": "FV-2-4520",
+      "date": "2026-08-28",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 27,
+      "document": "FV-2-4519",
+      "date": "2026-08-28",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 28,
+      "document": "FV-2-4518",
+      "date": "2026-08-28",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 29,
+      "document": "FV-2-4518",
+      "date": "2026-08-28",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 30,
+      "document": "FV-2-4517",
+      "date": "2026-08-28",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 31,
+      "document": "FV-2-4516",
+      "date": "2026-08-28",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 32,
+      "document": "FV-2-4516",
+      "date": "2026-08-28",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 33,
+      "document": "FV-2-4515",
+      "date": "2026-08-28",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 34,
+      "document": "FV-2-4514",
+      "date": "2026-08-27",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 35,
+      "document": "FV-2-4514",
+      "date": "2026-08-27",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 36,
+      "document": "FV-2-4513",
+      "date": "2026-08-27",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 37,
+      "document": "FV-2-4512",
+      "date": "2026-08-27",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 38,
+      "document": "FV-2-4512",
+      "date": "2026-08-27",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 39,
+      "document": "FV-2-4511",
+      "date": "2026-08-27",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 40,
+      "document": "FV-2-4509",
+      "date": "2026-08-26",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 41,
+      "document": "FV-2-4502",
+      "date": "2026-08-25",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 42,
+      "document": "FV-2-4501",
+      "date": "2026-08-25",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 43,
+      "document": "FV-2-4499",
+      "date": "2026-08-25",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 44,
+      "document": "FV-2-4498",
+      "date": "2026-08-24",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 45,
+      "document": "FV-2-4497",
+      "date": "2026-08-24",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 46,
+      "document": "FV-2-4496",
+      "date": "2026-08-24",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 47,
+      "document": "FV-2-4495",
+      "date": "2026-08-24",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 48,
+      "document": "FV-2-4494",
+      "date": "2026-08-24",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 49,
+      "document": "FV-2-4493",
+      "date": "2026-08-24",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 50,
+      "document": "FV-2-4492",
+      "date": "2026-08-23",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 51,
+      "document": "FV-2-4491",
+      "date": "2026-08-23",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 52,
+      "document": "FV-2-4490",
+      "date": "2026-08-22",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 53,
+      "document": "FV-2-4490",
+      "date": "2026-08-22",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 54,
+      "document": "FV-2-4490",
+      "date": "2026-08-22",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 55,
+      "document": "FV-2-4489",
+      "date": "2026-08-22",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 56,
+      "document": "FV-2-4489",
+      "date": "2026-08-22",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 57,
+      "document": "FV-2-4488",
+      "date": "2026-08-21",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 58,
+      "document": "FV-2-4481",
+      "date": "2026-08-20",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 59,
+      "document": "FV-2-4480",
+      "date": "2026-08-20",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 60,
+      "document": "FV-2-4479",
+      "date": "2026-08-20",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 61,
+      "document": "FV-2-4478",
+      "date": "2026-08-20",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 62,
+      "document": "FV-2-4477",
+      "date": "2026-08-20",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 63,
+      "document": "FV-2-4476",
+      "date": "2026-08-20",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 64,
+      "document": "FV-2-4475",
+      "date": "2026-08-19",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 65,
+      "document": "FV-2-4474",
+      "date": "2026-08-19",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 66,
+      "document": "FV-2-4472",
+      "date": "2026-08-19",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 67,
+      "document": "FV-2-4470",
+      "date": "2026-08-18",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 68,
+      "document": "FV-2-4469",
+      "date": "2026-08-18",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 69,
+      "document": "FV-2-4468",
+      "date": "2026-08-18",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 70,
+      "document": "FV-2-4467",
+      "date": "2026-08-18",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 71,
+      "document": "FV-2-4466",
+      "date": "2026-08-17",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 72,
+      "document": "FV-2-4465",
+      "date": "2026-08-17",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 73,
+      "document": "FV-2-4464",
+      "date": "2026-08-17",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 74,
+      "document": "FV-2-4463",
+      "date": "2026-08-17",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 75,
+      "document": "FV-2-4461",
+      "date": "2026-08-17",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 76,
+      "document": "FV-2-4460",
+      "date": "2026-08-16",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 77,
+      "document": "FV-2-4459",
+      "date": "2026-08-16",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 78,
+      "document": "FV-2-4458",
+      "date": "2026-08-16",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 79,
+      "document": "FV-2-4457",
+      "date": "2026-08-16",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 80,
+      "document": "FV-2-4456",
+      "date": "2026-08-16",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 81,
+      "document": "FV-2-4456",
+      "date": "2026-08-16",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 82,
+      "document": "FV-2-4455",
+      "date": "2026-08-16",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 83,
+      "document": "FV-2-4453",
+      "date": "2026-08-15",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 84,
+      "document": "FV-2-4452",
+      "date": "2026-08-15",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 85,
+      "document": "FV-2-4452",
+      "date": "2026-08-15",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 86,
+      "document": "FV-2-4451",
+      "date": "2026-08-15",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 87,
+      "document": "FV-2-4450",
+      "date": "2026-08-14",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 88,
+      "document": "FV-2-4449",
+      "date": "2026-08-14",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 89,
+      "document": "FV-2-4448",
+      "date": "2026-08-14",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 90,
+      "document": "FV-2-4448",
+      "date": "2026-08-14",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 91,
+      "document": "FV-2-4447",
+      "date": "2026-08-13",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 92,
+      "document": "FV-2-4446",
+      "date": "2026-08-13",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 93,
+      "document": "FV-2-4445",
+      "date": "2026-08-12",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 94,
+      "document": "FV-2-4444",
+      "date": "2026-08-11",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 95,
+      "document": "FV-2-4444",
+      "date": "2026-08-11",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 96,
+      "document": "FV-2-4444",
+      "date": "2026-08-11",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 97,
+      "document": "FV-2-4442",
+      "date": "2026-08-11",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 98,
+      "document": "FV-2-4441",
+      "date": "2026-08-11",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 99,
+      "document": "FV-2-4441",
+      "date": "2026-08-11",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 100,
+      "document": "FV-2-4440",
+      "date": "2026-08-10",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 101,
+      "document": "FV-2-4433",
+      "date": "2026-08-10",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 102,
+      "document": "FV-2-4432",
+      "date": "2026-08-09",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 103,
+      "document": "FV-2-4431",
+      "date": "2026-08-09",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 104,
+      "document": "FV-2-4431",
+      "date": "2026-08-09",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 105,
+      "document": "FV-2-4430",
+      "date": "2026-08-09",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 106,
+      "document": "FV-2-4429",
+      "date": "2026-08-09",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 107,
+      "document": "FV-2-4428",
+      "date": "2026-08-09",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 108,
+      "document": "FV-2-4427",
+      "date": "2026-08-09",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 109,
+      "document": "FV-2-4426",
+      "date": "2026-08-08",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 110,
+      "document": "FV-2-4426",
+      "date": "2026-08-08",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 111,
+      "document": "FV-2-4425",
+      "date": "2026-08-08",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 112,
+      "document": "FV-2-4424",
+      "date": "2026-08-07",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 113,
+      "document": "FV-2-4424",
+      "date": "2026-08-07",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 114,
+      "document": "FV-2-4423",
+      "date": "2026-08-07",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 115,
+      "document": "FV-2-4422",
+      "date": "2026-08-07",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 116,
+      "document": "FV-2-4421",
+      "date": "2026-08-06",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 117,
+      "document": "FV-2-4419",
+      "date": "2026-08-06",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 118,
+      "document": "FV-2-4419",
+      "date": "2026-08-06",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 119,
+      "document": "FV-2-4419",
+      "date": "2026-08-06",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 120,
+      "document": "FV-2-4418",
+      "date": "2026-08-05",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 121,
+      "document": "FV-2-4417",
+      "date": "2026-08-05",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 122,
+      "document": "FV-2-4416",
+      "date": "2026-08-05",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 123,
+      "document": "FV-2-4415",
+      "date": "2026-08-05",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 124,
+      "document": "FV-2-4415",
+      "date": "2026-08-05",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 125,
+      "document": "FV-2-4414",
+      "date": "2026-08-05",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 126,
+      "document": "FV-2-4413",
+      "date": "2026-08-05",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 127,
+      "document": "FV-2-4412",
+      "date": "2026-08-04",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 128,
+      "document": "FV-2-4411",
+      "date": "2026-08-04",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 129,
+      "document": "FV-2-4408",
+      "date": "2026-08-04",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 130,
+      "document": "FV-2-4407",
+      "date": "2026-08-04",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 131,
+      "document": "FV-2-4406",
+      "date": "2026-08-04",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 132,
+      "document": "FV-2-4403",
+      "date": "2026-08-03",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 133,
+      "document": "FV-2-4403",
+      "date": "2026-08-03",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 134,
+      "document": "FV-2-4402",
+      "date": "2026-08-03",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 135,
+      "document": "FV-2-4401",
+      "date": "2026-08-03",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 136,
+      "document": "FV-2-4400",
+      "date": "2026-08-03",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 137,
+      "document": "FV-2-4399",
+      "date": "2026-08-02",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 138,
+      "document": "FV-2-4398",
+      "date": "2026-08-02",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 139,
+      "document": "FV-2-4397",
+      "date": "2026-08-02",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 140,
+      "document": "FV-2-4396",
+      "date": "2026-08-02",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 141,
+      "document": "FV-2-4395",
+      "date": "2026-08-01",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 142,
+      "document": "FV-2-4394",
+      "date": "2026-08-01",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 143,
+      "document": "FV-2-4393",
+      "date": "2026-08-01",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 144,
+      "document": "FV-2-4392",
+      "date": "2026-08-01",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 145,
+      "document": "FV-2-4391",
+      "date": "2026-08-01",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 146,
+      "document": "FV-2-4390",
+      "date": "2026-08-01",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 147,
+      "document": "FV-2-4390",
+      "date": "2026-08-01",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 148,
+      "document": "FV-2-4389",
+      "date": "2026-08-01",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 149,
+      "document": "FV-2-4388",
+      "date": "2026-08-01",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 150,
+      "document": "FV-2-4387",
+      "date": "2026-08-01",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 151,
+      "document": "FV-2-4386",
+      "date": "2026-08-01",
+      "channel": "Pagina Web-Online",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 153,
+      "document": "NC-2-116",
+      "date": "2026-08-18",
+      "channel": "Pagina Web-Online",
+      "units": -1.0,
+      "sales": -163697.48
+    },
+    {
+      "row": 155,
+      "document": "FV-2-4524",
+      "date": "2026-08-30",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -7344.54
+    },
+    {
+      "row": 156,
+      "document": "FV-2-4523",
+      "date": "2026-08-30",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 157,
+      "document": "FV-2-4522",
+      "date": "2026-08-30",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -16369.75
+    },
+    {
+      "row": 158,
+      "document": "FV-2-4520",
+      "date": "2026-08-28",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -16369.75
+    },
+    {
+      "row": 159,
+      "document": "FV-2-4518",
+      "date": "2026-08-28",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -29378.16
+    },
+    {
+      "row": 160,
+      "document": "FV-2-4516",
+      "date": "2026-08-28",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -32739.5
+    },
+    {
+      "row": 161,
+      "document": "FV-2-4513",
+      "date": "2026-08-27",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 162,
+      "document": "FV-2-4512",
+      "date": "2026-08-27",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -32739.5
+    },
+    {
+      "row": 163,
+      "document": "FV-2-4511",
+      "date": "2026-08-27",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -16369.75
+    },
+    {
+      "row": 164,
+      "document": "FV-2-4509",
+      "date": "2026-08-26",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -16369.75
+    },
+    {
+      "row": 165,
+      "document": "FV-2-4501",
+      "date": "2026-08-25",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 166,
+      "document": "FV-2-4496",
+      "date": "2026-08-24",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 167,
+      "document": "FV-2-4494",
+      "date": "2026-08-24",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 168,
+      "document": "FV-2-4490",
+      "date": "2026-08-22",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -45747.91
+    },
+    {
+      "row": 169,
+      "document": "FV-2-4479",
+      "date": "2026-08-20",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 170,
+      "document": "FV-2-4478",
+      "date": "2026-08-20",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 171,
+      "document": "FV-2-4476",
+      "date": "2026-08-20",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -16369.75
+    },
+    {
+      "row": 172,
+      "document": "FV-2-4474",
+      "date": "2026-08-19",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 173,
+      "document": "FV-2-4469",
+      "date": "2026-08-18",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 174,
+      "document": "FV-2-4466",
+      "date": "2026-08-17",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -16369.75
+    },
+    {
+      "row": 175,
+      "document": "FV-2-4463",
+      "date": "2026-08-17",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -16369.75
+    },
+    {
+      "row": 176,
+      "document": "FV-2-4457",
+      "date": "2026-08-16",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -16369.75
+    },
+    {
+      "row": 177,
+      "document": "FV-2-4456",
+      "date": "2026-08-16",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -32739.5
+    },
+    {
+      "row": 178,
+      "document": "FV-2-4455",
+      "date": "2026-08-16",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 179,
+      "document": "FV-2-4452",
+      "date": "2026-08-15",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -31058.83
+    },
+    {
+      "row": 180,
+      "document": "FV-2-4451",
+      "date": "2026-08-15",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 181,
+      "document": "FV-2-4450",
+      "date": "2026-08-14",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 182,
+      "document": "FV-2-4449",
+      "date": "2026-08-14",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -16369.75
+    },
+    {
+      "row": 183,
+      "document": "FV-2-4448",
+      "date": "2026-08-14",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -32739.5
+    },
+    {
+      "row": 184,
+      "document": "FV-2-4446",
+      "date": "2026-08-13",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -16369.75
+    },
+    {
+      "row": 185,
+      "document": "FV-2-4444",
+      "date": "2026-08-11",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -44067.24
+    },
+    {
+      "row": 186,
+      "document": "FV-2-4442",
+      "date": "2026-08-11",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 187,
+      "document": "FV-2-4440",
+      "date": "2026-08-10",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 188,
+      "document": "FV-2-4432",
+      "date": "2026-08-09",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -16369.75
+    },
+    {
+      "row": 189,
+      "document": "FV-2-4429",
+      "date": "2026-08-09",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 190,
+      "document": "FV-2-4426",
+      "date": "2026-08-08",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -32739.5
+    },
+    {
+      "row": 191,
+      "document": "FV-2-4424",
+      "date": "2026-08-07",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -29378.16
+    },
+    {
+      "row": 192,
+      "document": "FV-2-4422",
+      "date": "2026-08-07",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -16369.75
+    },
+    {
+      "row": 193,
+      "document": "FV-2-4421",
+      "date": "2026-08-06",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -16369.75
+    },
+    {
+      "row": 194,
+      "document": "FV-2-4419",
+      "date": "2026-08-06",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -47428.58
+    },
+    {
+      "row": 195,
+      "document": "FV-2-4418",
+      "date": "2026-08-05",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 196,
+      "document": "FV-2-4416",
+      "date": "2026-08-05",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 197,
+      "document": "FV-2-4415",
+      "date": "2026-08-05",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -29378.16
+    },
+    {
+      "row": 198,
+      "document": "FV-2-4414",
+      "date": "2026-08-05",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 199,
+      "document": "FV-2-4412",
+      "date": "2026-08-04",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 200,
+      "document": "FV-2-4408",
+      "date": "2026-08-04",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 201,
+      "document": "FV-2-4406",
+      "date": "2026-08-04",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 202,
+      "document": "FV-2-4398",
+      "date": "2026-08-02",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -16369.75
+    },
+    {
+      "row": 203,
+      "document": "FV-2-4395",
+      "date": "2026-08-01",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 204,
+      "document": "FV-2-4394",
+      "date": "2026-08-01",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 205,
+      "document": "FV-2-4393",
+      "date": "2026-08-01",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 206,
+      "document": "FV-2-4389",
+      "date": "2026-08-01",
+      "channel": "Pagina Web-Online",
+      "units": 0,
+      "sales": -14689.08
+    },
+    {
+      "row": 210,
+      "document": "FV-2-4510",
+      "date": "2026-08-26",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 211,
+      "document": "FV-2-4510",
+      "date": "2026-08-26",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 212,
+      "document": "FV-2-4510",
+      "date": "2026-08-26",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 213,
+      "document": "FV-2-4510",
+      "date": "2026-08-26",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 214,
+      "document": "FV-2-4510",
+      "date": "2026-08-26",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 215,
+      "document": "FV-2-4510",
+      "date": "2026-08-26",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 216,
+      "document": "FV-2-4510",
+      "date": "2026-08-26",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 217,
+      "document": "FV-2-4510",
+      "date": "2026-08-26",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 218,
+      "document": "FV-2-4508",
+      "date": "2026-08-26",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 219,
+      "document": "FV-2-4508",
+      "date": "2026-08-26",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 220,
+      "document": "FV-2-4508",
+      "date": "2026-08-26",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 221,
+      "document": "FV-2-4500",
+      "date": "2026-08-25",
+      "channel": "Tiendas",
+      "units": 3.0,
+      "sales": 294655.46
+    },
+    {
+      "row": 222,
+      "document": "FV-2-4500",
+      "date": "2026-08-25",
+      "channel": "Tiendas",
+      "units": 3.0,
+      "sales": 294655.46
+    },
+    {
+      "row": 223,
+      "document": "FV-2-4500",
+      "date": "2026-08-25",
+      "channel": "Tiendas",
+      "units": 3.0,
+      "sales": 294655.46
+    },
+    {
+      "row": 224,
+      "document": "FV-2-4500",
+      "date": "2026-08-25",
+      "channel": "Tiendas",
+      "units": 3.0,
+      "sales": 294655.46
+    },
+    {
+      "row": 225,
+      "document": "FV-2-4500",
+      "date": "2026-08-25",
+      "channel": "Tiendas",
+      "units": 3.0,
+      "sales": 294655.46
+    },
+    {
+      "row": 226,
+      "document": "FV-2-4500",
+      "date": "2026-08-25",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 196436.97
+    },
+    {
+      "row": 227,
+      "document": "FV-2-4500",
+      "date": "2026-08-25",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 196436.97
+    },
+    {
+      "row": 228,
+      "document": "FV-2-4500",
+      "date": "2026-08-25",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 196436.97
+    },
+    {
+      "row": 229,
+      "document": "FV-2-4500",
+      "date": "2026-08-25",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 98218.49
+    },
+    {
+      "row": 230,
+      "document": "FV-2-4500",
+      "date": "2026-08-25",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 98218.49
+    },
+    {
+      "row": 231,
+      "document": "FV-2-4500",
+      "date": "2026-08-25",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 98218.49
+    },
+    {
+      "row": 232,
+      "document": "FV-2-4500",
+      "date": "2026-08-25",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 98218.49
+    },
+    {
+      "row": 233,
+      "document": "FV-2-4500",
+      "date": "2026-08-25",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 98218.49
+    },
+    {
+      "row": 234,
+      "document": "FV-2-4500",
+      "date": "2026-08-25",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 98218.49
+    },
+    {
+      "row": 235,
+      "document": "FV-2-4500",
+      "date": "2026-08-25",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 98218.49
+    },
+    {
+      "row": 236,
+      "document": "FV-2-4500",
+      "date": "2026-08-25",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 98218.49
+    },
+    {
+      "row": 237,
+      "document": "FV-2-4483",
+      "date": "2026-08-21",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 113277.31
+    },
+    {
+      "row": 238,
+      "document": "FV-2-4483",
+      "date": "2026-08-21",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 113277.31
+    },
+    {
+      "row": 239,
+      "document": "FV-2-4473",
+      "date": "2026-08-19",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 240,
+      "document": "FV-2-4473",
+      "date": "2026-08-19",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 241,
+      "document": "FV-2-4473",
+      "date": "2026-08-19",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 242,
+      "document": "FV-2-4471",
+      "date": "2026-08-19",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 212806.72
+    },
+    {
+      "row": 243,
+      "document": "FV-2-4471",
+      "date": "2026-08-19",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 106403.36
+    },
+    {
+      "row": 244,
+      "document": "FV-2-4471",
+      "date": "2026-08-19",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 106403.36
+    },
+    {
+      "row": 245,
+      "document": "FV-2-4462",
+      "date": "2026-08-17",
+      "channel": "Tiendas",
+      "units": 3.0,
+      "sales": 264403.36
+    },
+    {
+      "row": 246,
+      "document": "FV-2-4462",
+      "date": "2026-08-17",
+      "channel": "Tiendas",
+      "units": 3.0,
+      "sales": 264403.36
+    },
+    {
+      "row": 247,
+      "document": "FV-2-4462",
+      "date": "2026-08-17",
+      "channel": "Tiendas",
+      "units": 3.0,
+      "sales": 264403.36
+    },
+    {
+      "row": 248,
+      "document": "FV-2-4462",
+      "date": "2026-08-17",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 176268.91
+    },
+    {
+      "row": 249,
+      "document": "FV-2-4462",
+      "date": "2026-08-17",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 176268.91
+    },
+    {
+      "row": 250,
+      "document": "FV-2-4462",
+      "date": "2026-08-17",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 176268.91
+    },
+    {
+      "row": 251,
+      "document": "FV-2-4462",
+      "date": "2026-08-17",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 176268.91
+    },
+    {
+      "row": 252,
+      "document": "FV-2-4462",
+      "date": "2026-08-17",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 176268.91
+    },
+    {
+      "row": 253,
+      "document": "FV-2-4462",
+      "date": "2026-08-17",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 176268.91
+    },
+    {
+      "row": 254,
+      "document": "FV-2-4462",
+      "date": "2026-08-17",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 176268.91
+    },
+    {
+      "row": 255,
+      "document": "FV-2-4443",
+      "date": "2026-08-11",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 106403.36
+    },
+    {
+      "row": 256,
+      "document": "FV-2-4439",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 257,
+      "document": "FV-2-4439",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 258,
+      "document": "FV-2-4439",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 259,
+      "document": "FV-2-4439",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 260,
+      "document": "FV-2-4438",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 106403.36
+    },
+    {
+      "row": 261,
+      "document": "FV-2-4438",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 262,
+      "document": "FV-2-4437",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 263,
+      "document": "FV-2-4436",
+      "date": "2026-08-20",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 264,
+      "document": "FV-2-4436",
+      "date": "2026-08-20",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 190957.98
+    },
+    {
+      "row": 265,
+      "document": "FV-2-4436",
+      "date": "2026-08-20",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 266,
+      "document": "FV-2-4436",
+      "date": "2026-08-20",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 267,
+      "document": "FV-2-4436",
+      "date": "2026-08-20",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 268,
+      "document": "FV-2-4436",
+      "date": "2026-08-20",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 269,
+      "document": "FV-2-4436",
+      "date": "2026-08-20",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 270,
+      "document": "FV-2-4436",
+      "date": "2026-08-20",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 106403.36
+    },
+    {
+      "row": 271,
+      "document": "FV-2-4436",
+      "date": "2026-08-20",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 106403.36
+    },
+    {
+      "row": 272,
+      "document": "FV-2-4435",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 273,
+      "document": "FV-2-4435",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 106403.36
+    },
+    {
+      "row": 274,
+      "document": "FV-2-4435",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 275,
+      "document": "FV-2-4434",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 276,
+      "document": "FV-2-4434",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 277,
+      "document": "FV-2-4434",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 278,
+      "document": "FV-2-4434",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 279,
+      "document": "FV-2-4434",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 280,
+      "document": "FV-2-4434",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 281,
+      "document": "FV-2-4434",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 282,
+      "document": "FV-2-4434",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 106403.36
+    },
+    {
+      "row": 283,
+      "document": "FV-2-4434",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 106403.36
+    },
+    {
+      "row": 284,
+      "document": "FV-2-4434",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 106403.36
+    },
+    {
+      "row": 285,
+      "document": "FV-2-4434",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 106403.36
+    },
+    {
+      "row": 286,
+      "document": "FV-2-4434",
+      "date": "2026-08-10",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 106403.36
+    },
+    {
+      "row": 287,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 190957.98
+    },
+    {
+      "row": 288,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 3.0,
+      "sales": 286436.97
+    },
+    {
+      "row": 289,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 3.0,
+      "sales": 286436.97
+    },
+    {
+      "row": 290,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 291,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 3.0,
+      "sales": 286436.97
+    },
+    {
+      "row": 292,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 293,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 190957.98
+    },
+    {
+      "row": 294,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 295,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 190957.98
+    },
+    {
+      "row": 296,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 5.0,
+      "sales": 477394.96
+    },
+    {
+      "row": 297,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 4.0,
+      "sales": 381915.97
+    },
+    {
+      "row": 298,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 299,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 3.0,
+      "sales": 286436.97
+    },
+    {
+      "row": 300,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 3.0,
+      "sales": 286436.97
+    },
+    {
+      "row": 301,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 3.0,
+      "sales": 286436.97
+    },
+    {
+      "row": 302,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 190957.98
+    },
+    {
+      "row": 303,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 190957.98
+    },
+    {
+      "row": 304,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 3.0,
+      "sales": 286436.97
+    },
+    {
+      "row": 305,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 306,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 307,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 190957.98
+    },
+    {
+      "row": 308,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 3.0,
+      "sales": 286436.97
+    },
+    {
+      "row": 309,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 310,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 190957.98
+    },
+    {
+      "row": 311,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 2.0,
+      "sales": 190957.98
+    },
+    {
+      "row": 312,
+      "document": "FV-2-4420",
+      "date": "2026-08-06",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 313,
+      "document": "FV-2-4410",
+      "date": "2026-08-05",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 314,
+      "document": "FV-2-4410",
+      "date": "2026-08-05",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 315,
+      "document": "FV-2-4410",
+      "date": "2026-08-05",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 316,
+      "document": "FV-2-4410",
+      "date": "2026-08-05",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 317,
+      "document": "FV-2-4410",
+      "date": "2026-08-05",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 318,
+      "document": "FV-2-4409",
+      "date": "2026-08-04",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 319,
+      "document": "FV-2-4409",
+      "date": "2026-08-04",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 320,
+      "document": "FV-2-4409",
+      "date": "2026-08-04",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 321,
+      "document": "FV-2-4409",
+      "date": "2026-08-04",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 322,
+      "document": "FV-2-4409",
+      "date": "2026-08-04",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 323,
+      "document": "FV-2-4405",
+      "date": "2026-08-04",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 102823.53
+    },
+    {
+      "row": 324,
+      "document": "FV-2-4405",
+      "date": "2026-08-04",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 102823.53
+    },
+    {
+      "row": 325,
+      "document": "FV-2-4405",
+      "date": "2026-08-04",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 102823.53
+    },
+    {
+      "row": 326,
+      "document": "FV-2-4405",
+      "date": "2026-08-04",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 102823.53
+    },
+    {
+      "row": 327,
+      "document": "FV-2-4404",
+      "date": "2026-08-04",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 106403.36
+    },
+    {
+      "row": 328,
+      "document": "FV-2-4404",
+      "date": "2026-08-04",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 329,
+      "document": "FV-2-4404",
+      "date": "2026-08-04",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 95478.99
+    },
+    {
+      "row": 330,
+      "document": "FV-2-4404",
+      "date": "2026-08-04",
+      "channel": "Tiendas",
+      "units": 1.0,
+      "sales": 106403.36
+    },
+    {
+      "row": 332,
+      "document": "NC-2-114",
+      "date": "2026-08-04",
+      "channel": "Tiendas",
+      "units": -1.0,
+      "sales": -163697.48
+    },
+    {
+      "row": 333,
+      "document": "NC-2-114",
+      "date": "2026-08-04",
+      "channel": "Tiendas",
+      "units": -1.0,
+      "sales": -163697.48
+    },
+    {
+      "row": 334,
+      "document": "NC-2-114",
+      "date": "2026-08-04",
+      "channel": "Tiendas",
+      "units": -1.0,
+      "sales": -146890.76
+    },
+    {
+      "row": 335,
+      "document": "NC-2-114",
+      "date": "2026-08-04",
+      "channel": "Tiendas",
+      "units": -1.0,
+      "sales": -146890.76
+    },
+    {
+      "row": 336,
+      "document": "NC-2-114",
+      "date": "2026-08-04",
+      "channel": "Tiendas",
+      "units": -1.0,
+      "sales": -146890.76
+    },
+    {
+      "row": 341,
+      "document": "FV-2-4507",
+      "date": "2026-08-26",
+      "channel": "Venta Directa",
+      "units": 1.0,
+      "sales": 132201.68
+    },
+    {
+      "row": 342,
+      "document": "FV-2-4487",
+      "date": "2026-08-21",
+      "channel": "Venta Directa",
+      "units": 1.0,
+      "sales": 147327.73
+    },
+    {
+      "row": 343,
+      "document": "FV-2-4487",
+      "date": "2026-08-21",
+      "channel": "Venta Directa",
+      "units": 1.0,
+      "sales": 147327.73
+    },
+    {
+      "row": 344,
+      "document": "FV-2-4486",
+      "date": "2026-08-21",
+      "channel": "Venta Directa",
+      "units": 1.0,
+      "sales": 146890.76
+    },
+    {
+      "row": 345,
+      "document": "FV-2-4485",
+      "date": "2026-08-21",
+      "channel": "Venta Directa",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 346,
+      "document": "FV-2-4484",
+      "date": "2026-08-21",
+      "channel": "Venta Directa",
+      "units": 1.0,
+      "sales": 163697.48
+    },
+    {
+      "row": 347,
+      "document": "FV-2-4482",
+      "date": "2026-08-21",
+      "channel": "Venta Directa",
+      "units": 1.0,
+      "sales": 132201.68
+    }
+  ]
+}
