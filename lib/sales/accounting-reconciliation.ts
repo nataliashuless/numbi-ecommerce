@@ -1,3 +1,4 @@
+import type { AccountingSiigoDocument } from '@/lib/siigo-client'
 import { reportingInvoices, type SalesSource } from './source'
 import { classifyMarketingInvoice } from '@/lib/marketing/channel-reconciliation'
 import { marketingProductItems } from '@/lib/marketing/siigo-sales'
@@ -8,7 +9,7 @@ export interface AccountingReview { months: AccountingMonth[]; detailPeriod: { s
 const unitsOf = (row: { items?: Array<{ quantity?: number | null }> }) => (row.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
 
 /** Compare safe document identifiers and commercial figures; never export customer data or notes. */
-export function reconcileAccounting(source: SalesSource, book: AccountingReview) {
+export function reconcileAccounting(source: SalesSource, book: AccountingReview, live?: { invoices: AccountingSiigoDocument[]; credits: AccountingSiigoDocument[] }) {
   const published = reportingInvoices(source)
   const inRange = (date: string, start: string, end: string) => date >= start && date <= end
   const monthly = book.months.map(month => {
@@ -27,7 +28,8 @@ export function reconcileAccounting(source: SalesSource, book: AccountingReview)
   }
   const matchedPublishedIds = new Set<string>()
   const documents = Array.from(groups.values()).map(group => {
-    if (group.document.startsWith('NC-')) return { ...group, status: 'Nota crédito del informe: resta unidades e importe; vínculo con factura pendiente', publishedDocuments: '', publishedDate: '', publishedChannel: '', publishedUnits: 0, publishedSales: 0, cachedUnits: 0, creditedAmount: 0 }
+    const credit = live?.credits.find(row => row.name === group.document)
+    if (group.document.startsWith('NC-')) return { ...group, linkedInvoice: credit?.invoice?.name || '', status: credit?.invoice?.name ? `Nota crédito verificada en Siigo; afecta ${credit.invoice.name}` : 'Nota crédito del informe: resta unidades e importe; vínculo con factura pendiente', publishedDocuments: '', publishedDate: '', publishedChannel: '', publishedUnits: 0, publishedSales: 0, cachedUnits: 0, creditedAmount: 0 }
     const raw = byName.get(group.document)
     const linkedNumbers = [...(raw?.observations || '').matchAll(/#\s*(\d+)/g)].map(match => Number(match[1]))
     const reviewedNumber = source.context.reconciledShopifyInvoiceNumbers.get(group.document)
@@ -45,7 +47,7 @@ export function reconcileAccounting(source: SalesSource, book: AccountingReview)
     else if (raw && classifyMarketingInvoice(raw, source.context).channel === 'pending') status = 'Canal sin confirmar; excluida de ventas confirmadas'
     else if (raw && classifyMarketingInvoice(raw, source.context).channel === 'shopify') status = 'Referencia Shopify sin pedido válido coincidente en ventas confirmadas'
     else if (raw) status = 'Factura localizada; sin unidades de producto elegibles en el total confirmado'
-    return { ...group, status, publishedDocuments: matches.map(row => row.name || row.id).join(' / '), publishedDate: matches.map(row => row.date).join(' / '), publishedChannel: matches.map(row => row.salesChannel).join(' / '), publishedUnits, publishedSales, cachedUnits: raw ? marketingProductItems(raw, source.nonRetail).reduce((sum, item) => sum + Number(item.quantity || 0), 0) : 0, creditedAmount: Number(raw?.credited_amount || 0) }
+    return { ...group, linkedInvoice: '', status, publishedDocuments: matches.map(row => row.name || row.id).join(' / '), publishedDate: matches.map(row => row.date).join(' / '), publishedChannel: matches.map(row => row.salesChannel).join(' / '), publishedUnits, publishedSales, cachedUnits: raw ? marketingProductItems(raw, source.nonRetail).reduce((sum, item) => sum + Number(item.quantity || 0), 0) : 0, creditedAmount: Number(raw?.credited_amount || 0) }
   })
   const selected = published.filter(row => inRange(row.date, book.detailPeriod.start, book.detailPeriod.end))
   const additional = selected.filter(row => !matchedPublishedIds.has(row.id)).map(row => ({ document: row.name || row.id, date: row.date, channel: row.salesChannel, units: unitsOf(row), sales: row.total }))
@@ -57,5 +59,19 @@ export function reconcileAccounting(source: SalesSource, book: AccountingReview)
     additionalSales: additional.reduce((sum, row) => sum + row.sales, 0), matchedSales: matched.reduce((sum, row) => sum + row.total, 0),
   }
   // A canonical record can match several invoices; totals above deduplicate it.
-  return { monthly, documents, additional, totals }
+  const accounting = live ? book.months.map(month => {
+    const invoices = live.invoices.filter(row => row.date.startsWith(month.month))
+    const credits = live.credits.filter(row => row.date.startsWith(month.month))
+    const productTotals = (rows: AccountingSiigoDocument[]) => rows.reduce((sum, row) => {
+      const items = marketingProductItems({ ...row, credited_amount: 0, customer_identification: null, assigned_feria_id: null, observations: null, raw: null }, source.nonRetail)
+      const grossOf = (item: NonNullable<AccountingSiigoDocument['items']>[number]) => Math.max(0, Number(item.total) || Number(item.quantity) * Number(item.price) || 0)
+      const allGross = (row.items || []).reduce((n, item) => n + grossOf(item), 0)
+      const productGross = items.reduce((n, item) => n + grossOf(item), 0)
+      return { units: sum.units + items.reduce((n, item) => n + Number(item.quantity || 0), 0), sales: sum.sales + Number(row.total || 0) / 1.19 * (allGross > 0 ? productGross / allGross : 0) }
+    }, { units: 0, sales: 0 })
+    const positive = productTotals(invoices), negative = productTotals(credits)
+    return { month: month.month, invoices: invoices.length, credits: credits.length, invoiceUnits: positive.units, creditUnits: negative.units, netUnits: positive.units - negative.units, netSales: positive.sales - negative.sales, accountingSales: month.accountingSales, difference: positive.sales - negative.sales - month.accountingSales }
+  }) : []
+  const creditLinks = (live?.credits || []).map(row => ({ document: row.name, date: row.date, invoice: row.invoice?.name || '', invoiceIdPresent: Boolean(row.invoice?.id), grossAmount: row.total, units: (row.items || []).filter(item => !source.nonRetail.has(item.code || '') && item.code !== 'ENVIO').reduce((sum, item) => sum + Number(item.quantity || 0), 0) }))
+  return { monthly, documents, additional, totals, accounting, creditLinks, liveReadError: null as string | null }
 }

@@ -1,7 +1,11 @@
+import { reconcileAccounting } from '@/lib/sales/accounting-reconciliation'
+import accountingReview from '@/data/accounting/sales-review-2025-2026.json'
+import { listAccountingDocuments } from '@/lib/siigo-client'
+import { isoDateInTimeZone } from '@/lib/marketing/metrics'
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth-helpers'
 import { loadSalesSource, reportingInvoices } from '@/lib/sales/source'
-export const maxDuration = 60
+export const maxDuration = 300
 export async function GET(request: Request) {
   const { error } = await requireAuth()
   if (error) return error
@@ -10,6 +14,18 @@ export async function GET(request: Request) {
   if (!start || !end || !/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || start > end) return NextResponse.json({ error: 'Fechas inválidas' }, { status: 400 })
   try {
     const source = await loadSalesSource()
+    if (params.get('accounting_audit') === '1') {
+      try {
+      const [invoices2025, invoices2026, credits] = await Promise.all([
+        listAccountingDocuments('invoices', '2025-01-01', '2025-08-31'),
+        listAccountingDocuments('invoices', '2026-01-01', '2026-08-31'),
+        listAccountingDocuments('credit-notes', '2025-01-01', isoDateInTimeZone(new Date())),
+      ])
+      return NextResponse.json(reconcileAccounting(source, accountingReview, { invoices: [...invoices2025, ...invoices2026], credits }))
+      } catch {
+        return NextResponse.json({ ...reconcileAccounting(source, accountingReview), liveReadError: 'La lectura directa de Siigo no terminó. El auxiliar de Siigo no está conciliado; se conserva únicamente el cruce con los datos cargados en Vercel.' })
+      }
+    }
     const amountsComplete = !reportingInvoices(source, start, end).some(invoice => invoice.marketingSource?.missingValue)
     const empty = () => ({ ventas: 0, ordenes: 0, unidades: 0 })
     const channels = { shopify: empty(), woocommerce: empty(), whatsapp: empty(), tiendas: empty(), ferias: empty() }

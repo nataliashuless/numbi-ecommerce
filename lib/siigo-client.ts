@@ -498,3 +498,34 @@ export const COLOMBIAN_CITIES: Array<{ name: string; stateCode: string; cityCode
   { name: 'Sincelejo', stateCode: '70', cityCode: '70001' },
   { name: 'Tunja', stateCode: '15', cityCode: '15001' },
 ]
+
+export interface AccountingSiigoDocument {
+  id: string
+  name: string
+  date: string
+  total: number
+  invoice?: { id?: string; name?: string }
+  items?: Array<{ code?: string | null; description?: string | null; quantity?: number | null; price?: number | null; total?: number | null }>
+}
+
+/** Read-only accounting-date queries; created-date filters are not a substitute. */
+export async function listAccountingDocuments(kind: 'invoices' | 'credit-notes', startDate: string, endDate: string): Promise<AccountingSiigoDocument[]> {
+  const records = new Map<string, AccountingSiigoDocument>()
+  let received = 0
+  for (let page = 1; page <= 100; page++) {
+    const params = new URLSearchParams({ date_start: startDate, date_end: endDate, page_size: '100', page: String(page) })
+    const response = await siigoFetch(`/${kind}?${params}`)
+    if (!response.ok) throw new Error(`No se pudo leer ${kind} en Siigo (HTTP ${response.status}); no se emite un total parcial`)
+    const payload = await response.json()
+    if (!Array.isArray(payload.results)) throw new Error(`Siigo devolvió un formato inesperado para ${kind}`)
+    const results = payload.results as AccountingSiigoDocument[]
+    for (const document of results) {
+      if (!document.id || !document.date) throw new Error('Documento de Siigo sin identificador o fecha; requiere revisión')
+      if (document.date.slice(0, 10) >= startDate && document.date.slice(0, 10) <= endDate) records.set(document.id, document)
+    }
+    received += results.length
+    const total = Number(payload.pagination?.total_results)
+    if (Number.isFinite(total) && received >= total || results.length < 100) return Array.from(records.values())
+  }
+  throw new Error(`Lectura de ${kind} incompleta: se alcanzó el límite de paginación`)
+}

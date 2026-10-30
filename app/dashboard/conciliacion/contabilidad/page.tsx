@@ -1,20 +1,28 @@
-import { redirect } from 'next/navigation'
-import { requireAuth } from '@/lib/auth-helpers'
-import { loadSalesSource } from '@/lib/sales/source'
-import { reconcileAccounting } from '@/lib/sales/accounting-reconciliation'
-import accountingReview from '@/data/accounting/sales-review-2025-2026.json'
-export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+'use client'
+import { useEffect, useState } from 'react'
+import type { reconcileAccounting } from '@/lib/sales/accounting-reconciliation'
 const money = (n: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 2 }).format(n)
 const number = (n: number) => new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(n)
-export default async function AccountingReconciliation() {
-  const { error } = await requireAuth()
-  if (error) redirect('/login')
-  const audit = reconcileAccounting(await loadSalesSource(), accountingReview)
+export default function AccountingReconciliation() {
+  const [audit, setAudit] = useState<ReturnType<typeof reconcileAccounting> | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    fetch('/api/sales/summary?start_date=2025-01-01&end_date=2026-08-31&accounting_audit=1').then(async response => {
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'No se pudo leer el cruce')
+      setAudit(data)
+    }).catch(error => setError(error instanceof Error ? error.message : 'Error de lectura'))
+  }, [])
+  if (error) return <main className="p-8"><h1>Cruce contable</h1><p role="alert">{error}</p><p>No se muestran totales parciales.</p></main>
+  if (!audit) return <main className="p-8"><h1>Cruce contable</h1><p>Leyendo facturas y notas crédito de Siigo. El cruce puede tardar unos minutos.</p></main>
   return <main className="mx-auto max-w-7xl space-y-6 p-6 text-slate-900">
     <h1 className="text-2xl font-bold">Cruce contable de ventas 2025 y 2026</h1>
+    {audit.liveReadError && <p role="alert" className="rounded border border-amber-300 bg-amber-50 p-4">{audit.liveReadError}</p>}
     <p>Enero a agosto de ambos años. Importes de producto antes de IVA. Las diferencias son hallazgos para revisar; no modifican facturas ni certifican una conciliación cerrada.</p>
     <p>Los archivos solo contienen auxiliar por documento de agosto de 2026. Para los demás meses hay comparación agregada; falta el auxiliar contable correspondiente. Las notas crédito sin vínculo demostrado se mantienen separadas.</p>
+    <h2 className="text-xl font-bold">Auxiliar leído de Siigo por fecha contable</h2>
+    <p>Lectura de facturas y notas crédito por su fecha de documento, sin reasignar las notas al mes de la factura original. Importes de producto antes de IVA con la misma base del tablero. No incluye asientos manuales ni certifica el cierre del estado de resultados.</p>
+    <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr>{['Mes','Facturas','Notas crédito','Unidades facturadas','Unidades NC','Unidades netas Siigo','Ventas netas Siigo','Estado resultados','Diferencia'].map(label => <th className="border p-2" key={label}>{label}</th>)}</tr></thead><tbody>{audit.accounting.map(row => <tr key={row.month}>{[row.month,row.invoices,row.credits,number(row.invoiceUnits),number(row.creditUnits),number(row.netUnits),money(row.netSales),money(row.accountingSales),money(row.difference)].map((value,i) => <td className="border p-2" key={i}>{value}</td>)}</tr>)}</tbody></table></div>
     <h2 className="text-xl font-bold">Comparación mensual</h2>
     <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr>{['Mes','Unidades modelo','Presupuesto incluido','Unidades Vercel','Diferencia unidades','Ventas contables','Ventas Vercel','Diferencia pesos'].map(label => <th className="border p-2 text-left" key={label}>{label}</th>)}</tr></thead><tbody>{audit.monthly.map(row => <tr key={row.month}>{[row.month,number(row.modelUnits),row.containsBudget ? 'Sí: no equivale a ventas reales' : 'No',number(row.publishedUnits),number(row.unitDifference),money(row.accountingSales),money(row.publishedSales),money(row.salesDifference)].map((value,i) => <td className="border p-2" key={i}>{value}</td>)}</tr>)}</tbody></table></div>
     <h2 className="text-xl font-bold">Puente de agosto de 2026</h2>
@@ -22,8 +30,9 @@ export default async function AccountingReconciliation() {
     <p>Registros de Vercel vinculados a documentos del informe, contados una sola vez: {number(audit.totals.matchedUnits)} unidades y {money(audit.totals.matchedSales)}. Registros sin vínculo identificado en ese auxiliar: {number(audit.totals.additionalUnits)} unidades y {money(audit.totals.additionalSales)}.</p>
     <h2 className="text-xl font-bold">Cruce por documento del informe</h2>
     <p>La columna de crédito Siigo es el importe acumulado actual, incluido IVA; no demuestra por sí sola la fecha de la nota ni cuántas unidades se devolvieron.</p>
-    <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr>{['Documento','Fecha contable','Canal contable','Unidades contables netas','Ventas contables','Documento Vercel','Fecha venta','Canal Vercel','Unidades Vercel','Ventas Vercel','Crédito Siigo IVA incluido','Hallazgo'].map(label => <th className="border p-2 text-left" key={label}>{label}</th>)}</tr></thead><tbody>{audit.documents.map(row => <tr key={row.document}>{[row.document,row.date,row.channel,number(row.units),money(row.sales),row.publishedDocuments,row.publishedDate,row.publishedChannel,number(row.publishedUnits),money(row.publishedSales),money(row.creditedAmount),row.status].map((value,i) => <td className="border p-2" key={i}>{value}</td>)}</tr>)}</tbody></table></div>
+    <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr>{['Documento','Factura afectada por NC','Fecha contable','Canal contable','Unidades contables netas','Ventas contables','Documento Vercel','Fecha venta','Canal Vercel','Unidades Vercel','Ventas Vercel','Crédito Siigo IVA incluido','Hallazgo'].map(label => <th className="border p-2 text-left" key={label}>{label}</th>)}</tr></thead><tbody>{audit.documents.map(row => <tr key={row.document}>{[row.document,row.linkedInvoice,row.date,row.channel,number(row.units),money(row.sales),row.publishedDocuments,row.publishedDate,row.publishedChannel,number(row.publishedUnits),money(row.publishedSales),money(row.creditedAmount),row.status].map((value,i) => <td className="border p-2" key={i}>{value}</td>)}</tr>)}</tbody></table></div>
     <h2 className="text-xl font-bold">Registros Vercel sin vínculo identificado en el auxiliar de agosto</h2>
     <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr>{['Documento','Fecha venta','Canal','Unidades','Ventas'].map(label => <th className="border p-2 text-left" key={label}>{label}</th>)}</tr></thead><tbody>{audit.additional.map(row => <tr key={row.document}>{[row.document,row.date,row.channel,number(row.units),money(row.sales)].map((value,i) => <td className="border p-2" key={i}>{value}</td>)}</tr>)}</tbody></table></div>
+    <h2 className="text-xl font-bold">Notas crédito leídas de Siigo</h2><table className="w-full text-xs"><thead><tr>{['Nota','Fecha','Factura vinculada','Unidades documento','Importe IVA incluido'].map(label => <th className="border p-2" key={label}>{label}</th>)}</tr></thead><tbody>{audit.creditLinks.map(row => <tr key={row.document}>{[row.document,row.date,row.invoice,number(row.units),money(row.grossAmount)].map((value,i) => <td className="border p-2" key={i}>{value}</td>)}</tr>)}</tbody></table>
   </main>
 }

@@ -294,7 +294,11 @@ function reportingRoute(path) {
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports, URL, Date, console, require(name) {
     if (name === 'next/server') return { NextResponse: { json: (value, options) => ({ ...value, status: options?.status || 200 }) } }
     if (name === '@/lib/auth-helpers') return { requireAuth: async () => ({}), getAdminClient: () => db, getShopifyCredentials: async () => null }
+    if (name.startsWith('@/lib/marketing/')) return load(name.split('/').at(-1))
     if (name === '@/lib/sales/source') return sharedSource
+    if (name === '@/lib/sales/accounting-reconciliation') return { reconcileAccounting: () => ({}) }
+    if (name === '@/lib/siigo-client') return { listAccountingDocuments: async () => [] }
+    if (name === '@/data/accounting/sales-review-2025-2026.json') return { default: {} }
     return load(name)
   } })
   return exports
