@@ -45,3 +45,13 @@ test('trial balance remains a report request and never downloads from an unverif
   assert.equal(reportBody.account_start, '41350101')
   await assert.rejects(api.readSalesTrialBalance2025(8,1), /inválido/)
 })
+
+test('Siigo range includes the entire final day while discarding documents from the overlap day', async () => {
+  calls = []
+  responder = async url => ({ ok: true, json: async () => ({ pagination: { total_results: 3 }, results: [{ id: 'before', date: '2025-08-30' }, { id: 'end', date: '2025-08-31' }, { id: 'overlap', date: '2025-09-01' }] }) })
+  const documents = await api.listAccountingDocuments('invoices','2025-08-01','2025-08-31')
+  assert.equal(documents.length, 2)
+  assert.equal(documents[1].id, 'end')
+  assert.equal(calls[0].searchParams.get('date_end'), '2025-09-01T23:59:59Z')
+  assert.equal(calls[0].searchParams.get('created_end'), null)
+})

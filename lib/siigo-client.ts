@@ -565,9 +565,16 @@ export async function readSalesTrialBalance2025(monthStart: number, monthEnd: nu
 
 async function listAccountingPages<T extends { id: string; date: string }>(kind: string, startDate: string, endDate: string): Promise<T[]> {
   const records = new Map<string, T>()
+  // A date-only Siigo upper bound is midnight, so it omits the last day.
+  // Read through the following UTC day, then enforce the requested document
+  // dates below. The overlap also covers documents authored in Colombia.
+  const upperBound = new Date(`${endDate}T00:00:00Z`)
+  if (!Number.isFinite(upperBound.getTime())) throw new Error('Fecha contable inválida')
+  upperBound.setUTCDate(upperBound.getUTCDate() + 1)
+  const inclusiveQueryEnd = `${upperBound.toISOString().slice(0, 10)}T23:59:59Z`
   let received = 0
   for (let page = 1; page <= 100; page++) {
-    const params = new URLSearchParams({ date_start: startDate, date_end: endDate, page_size: '100', page: String(page) })
+    const params = new URLSearchParams({ date_start: startDate, date_end: inclusiveQueryEnd, page_size: '100', page: String(page) })
     const response = await siigoFetch(`/${kind}?${params}`)
     if (!response.ok) throw new Error(`No se pudo leer ${kind} en Siigo (HTTP ${response.status}); no se emite un total parcial`)
     const payload = await response.json()
