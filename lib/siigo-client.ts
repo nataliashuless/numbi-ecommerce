@@ -510,7 +510,7 @@ export interface AccountingSiigoDocument {
   global_discounts?: Array<{ value?: number }>
   metadata?: { created?: string; last_updated?: string; stock_updated?: string | null }
   stamp?: { status?: string }
-  items?: Array<{ code?: string | null; description?: string | null; quantity?: number | null; price?: number | null; total?: number | null; taxes?: Array<{ type?: string; percentage?: number; value?: number }> }>
+  items?: Array<{ code?: string | null; description?: string | null; quantity?: number | null; price?: number | null; total?: number | null; discount?: { percentage?: number; value?: number }; taxes?: Array<{ type?: string; percentage?: number; value?: number; base_value?: number }> }>
 }
 
 export interface AccountingSiigoJournal {
@@ -528,6 +528,34 @@ export async function listAccountingDocuments(kind: 'invoices' | 'credit-notes',
 /** Journals remain server-side; the audit only returns account codes and commercial amounts. */
 export async function listAccountingJournals(startDate: string, endDate: string): Promise<AccountingSiigoJournal[]> {
   return listAccountingPages<AccountingSiigoJournal>('journals', startDate, endDate)
+}
+
+/** Generate a read-only trial balance; return only the three sales account balances. */
+export async function readSalesTrialBalance2025(monthStart: number, monthEnd: number) {
+  if (!Number.isInteger(monthStart) || !Number.isInteger(monthEnd) || monthStart < 1 || monthEnd > 8 || monthStart > monthEnd) throw new Error('Período contable inválido')
+  const response = await siigoFetch('/test-balance-report', { method: 'POST', body: JSON.stringify({ account_start: '41350101', account_end: '41750502', year: 2025, month_start: monthStart, month_end: monthEnd, includes_tax_difference: false }) })
+  if (!response.ok) throw new Error(`Balance de prueba no disponible en Siigo (HTTP ${response.status})`)
+  const payload = await response.json()
+  const url = new URL(payload.file_url)
+  if (url.protocol !== 'https:' || url.hostname !== 'reportsexcelprod.blob.core.windows.net') throw new Error('El balance requiere verificar el proveedor del archivo')
+  const download = await fetch(url, { redirect: 'error' })
+  if (!download.ok) throw new Error('No se pudo leer el balance generado por Siigo')
+  const XLSX = await import('xlsx')
+  const workbook = XLSX.read(await download.arrayBuffer(), { type: 'array' })
+  const allowed = new Set(['41350101', '41750501', '41750502'])
+  const results: Array<{ account: string; amounts: Array<{ column: number; label: string; value: number }> }> = []
+  for (const sheet of Object.values(workbook.Sheets)) {
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null })
+    let headers: unknown[] = []
+    for (const row of rows) {
+      if (row.some(cell => /saldo|d[eé]bito|cr[eé]dito/i.test(String(cell || '')))) headers = row
+      const accountIndex = row.findIndex(cell => allowed.has(String(cell).trim()))
+      if (accountIndex < 0) continue
+      results.push({ account: String(row[accountIndex]).trim(), amounts: row.flatMap((cell, index) => index > accountIndex && typeof cell === 'number' ? [{ column: index + 1, label: /saldo|d[eé]bito|cr[eé]dito/i.test(String(headers[index] || '')) ? String(headers[index]) : `Columna ${index + 1}`, value: cell }] : []) })
+    }
+  }
+  if (!results.length) throw new Error('No se identificaron las cuentas de ventas en el balance de prueba')
+  return { year: 2025, monthStart, monthEnd, accounts: results }
 }
 
 async function listAccountingPages<T extends { id: string; date: string }>(kind: string, startDate: string, endDate: string): Promise<T[]> {

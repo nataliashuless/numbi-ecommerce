@@ -1,7 +1,7 @@
 import { SALES_RECONCILIATION_PENDING } from '@/lib/sales/reconciliation-status'
 import { reconcileAccounting } from '@/lib/sales/accounting-reconciliation'
 import accountingReview from '@/data/accounting/sales-review-2025-2026.json'
-import { listAccountingDocuments, listAccountingJournals } from '@/lib/siigo-client'
+import { listAccountingDocuments, listAccountingJournals, readSalesTrialBalance2025 } from '@/lib/siigo-client'
 import { isoDateInTimeZone } from '@/lib/marketing/metrics'
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth-helpers'
@@ -23,7 +23,14 @@ export async function GET(request: Request) {
         listAccountingDocuments('credit-notes', '2025-01-01', isoDateInTimeZone(new Date())),
         listAccountingJournals('2025-01-01', '2025-08-31'),
       ])
-      return NextResponse.json(reconcileAccounting(source, accountingReview, { invoices: [...invoices2025, ...invoices2026], credits, journals }))
+      const audit = reconcileAccounting(source, accountingReview, { invoices: [...invoices2025, ...invoices2026], credits, journals })
+      const trialBalances = []
+      let trialBalanceError: string | null = null
+      try {
+        trialBalances.push(await readSalesTrialBalance2025(1, 8))
+        trialBalances.push(await readSalesTrialBalance2025(8, 8))
+      } catch (error) { trialBalanceError = error instanceof Error ? error.message : 'Balance de prueba pendiente' }
+      return NextResponse.json({ ...audit, trialBalances, trialBalanceError })
       } catch {
         return NextResponse.json({ ...reconcileAccounting(source, accountingReview), liveReadError: 'La lectura directa de Siigo no terminó. El auxiliar de Siigo no está conciliado; se conserva únicamente el cruce con los datos cargados en Vercel.' })
       }
