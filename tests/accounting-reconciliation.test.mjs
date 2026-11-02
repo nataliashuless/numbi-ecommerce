@@ -46,3 +46,13 @@ test('2025 income bridge uses actual VAT and signed income journals without expo
   assert.equal(report.journalEntries[0].documentUnits, 0)
   assert.doesNotMatch(JSON.stringify(report), /PRIVATE/)
 })
+
+test('a zero-total document with retained tax metadata cannot manufacture negative sales in the 2025 bridge', () => {
+  const source = { invoices: [], orders: [], published: [], context: { reconciledShopifyInvoiceNumbers: new Map() }, nonRetail: new Set() }
+  const book = { months: [{ month: '2025-03', modelUnits: 0, modelSales: 0, accountingSales: 0, containsBudget: false }], detailPeriod: { start: '2026-08-01', end: '2026-08-31' }, detail: [] }
+  const report = moduleExports.reconcileAccounting(source, book, { invoices: [{ id: 'zero', name: 'FV-ZERO', date: '2025-03-01', total: 0, items: [{ code: 'SKU', quantity: 1, total: 0, taxes: [{ type: 'IVA', value: 19 }] }] }], credits: [], journals: [] })
+  assert.equal(report.amountChecks[0].tax, 19)
+  assert.equal(report.amountChecks[0].netAllItems, 0)
+  assert.equal(report.amountChecks[0].netProduct, 0)
+  assert.equal(report.incomeBridge[0].difference, 0)
+})

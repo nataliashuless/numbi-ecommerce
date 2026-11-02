@@ -1,7 +1,7 @@
 import { SALES_RECONCILIATION_PENDING } from '@/lib/sales/reconciliation-status'
 import { reconcileAccounting } from '@/lib/sales/accounting-reconciliation'
 import accountingReview from '@/data/accounting/sales-review-2025-2026.json'
-import { listAccountingDocuments, listAccountingJournals, readSalesTrialBalance2025 } from '@/lib/siigo-client'
+import { listAccountingDocuments, listAccountingJournals, listAccountingVouchers, readSalesTrialBalance2025 } from '@/lib/siigo-client'
 import { isoDateInTimeZone } from '@/lib/marketing/metrics'
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth-helpers'
@@ -17,13 +17,14 @@ export async function GET(request: Request) {
     const source = await loadSalesSource()
     if (params.get('accounting_audit') === '1') {
       try {
-      const [invoices2025, invoices2026, credits, journals] = await Promise.all([
+      const [invoices2025, invoices2026, credits, journals, vouchers] = await Promise.all([
         listAccountingDocuments('invoices', '2025-01-01', '2025-08-31'),
         listAccountingDocuments('invoices', '2026-01-01', '2026-08-31'),
         listAccountingDocuments('credit-notes', '2025-01-01', isoDateInTimeZone(new Date())),
         listAccountingJournals('2025-01-01', '2025-08-31'),
+        listAccountingVouchers('2025-01-01', '2025-08-31'),
       ])
-      const audit = reconcileAccounting(source, accountingReview, { invoices: [...invoices2025, ...invoices2026], credits, journals })
+      const audit = reconcileAccounting(source, accountingReview, { invoices: [...invoices2025, ...invoices2026], credits, journals, vouchers })
       const trialBalances = []
       let trialBalanceError: string | null = null
       try {

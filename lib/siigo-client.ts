@@ -500,6 +500,7 @@ export const COLOMBIAN_CITIES: Array<{ name: string; stateCode: string; cityCode
 ]
 
 export interface AccountingSiigoDocument {
+  currency?: { code?: string; exchange_rate?: number }
   id: string
   name: string
   date: string
@@ -528,6 +529,10 @@ export async function listAccountingDocuments(kind: 'invoices' | 'credit-notes',
 /** Journals remain server-side; the audit only returns account codes and commercial amounts. */
 export async function listAccountingJournals(startDate: string, endDate: string): Promise<AccountingSiigoJournal[]> {
   return listAccountingPages<AccountingSiigoJournal>('journals', startDate, endDate)
+}
+
+export async function listAccountingVouchers(startDate: string, endDate: string): Promise<AccountingSiigoJournal[]> {
+  return listAccountingPages<AccountingSiigoJournal>('vouchers', startDate, endDate)
 }
 
 /** Generate a read-only trial balance; return only the three sales account balances. */

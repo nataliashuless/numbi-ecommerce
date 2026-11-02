@@ -9,7 +9,7 @@ export interface AccountingReview { months: AccountingMonth[]; detailPeriod: { s
 const unitsOf = (row: { items?: Array<{ quantity?: number | null }> }) => (row.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
 
 /** Compare safe document identifiers and commercial figures; never export customer data or notes. */
-export function reconcileAccounting(source: SalesSource, book: AccountingReview, live?: { invoices: AccountingSiigoDocument[]; credits: AccountingSiigoDocument[]; journals?: AccountingSiigoJournal[] }) {
+export function reconcileAccounting(source: SalesSource, book: AccountingReview, live?: { invoices: AccountingSiigoDocument[]; credits: AccountingSiigoDocument[]; journals?: AccountingSiigoJournal[]; vouchers?: AccountingSiigoJournal[] }) {
   const published = reportingInvoices(source)
   const inRange = (date: string, start: string, end: string) => date >= start && date <= end
   const monthly = book.months.map(month => {
@@ -91,12 +91,14 @@ export function reconcileAccounting(source: SalesSource, book: AccountingReview,
     const cached = source.invoices.find(row => row.id === invoice.id || row.name === invoice.name)
     return { document: invoice.name, date: invoice.date, liveUnits: productUnitsOf(invoice), cachedUnits: cached ? productUnitsOf(cached) : 0, liveGross: invoice.total, cachedGross: cached?.total ?? null, created: invoice.metadata?.created || '', updated: invoice.metadata?.last_updated || '', stamp: invoice.stamp?.status || '', differs: !cached || Math.abs(Number(cached.total) - Number(invoice.total)) > 1 || productUnitsOf(cached) !== productUnitsOf(invoice) || cached.date !== invoice.date }
   })
-  const journalEntries = (live?.journals || []).flatMap(journal => (journal.items || []).flatMap((item, index) => {
+  const journalEntries = [...(live?.journals || []), ...(live?.vouchers || [])].flatMap(journal => (journal.items || []).flatMap((item, index) => {
     const account = item.account?.code || ''
     if (!account.startsWith('41')) return []
     if (item.account?.movement !== 'Credit' && item.account?.movement !== 'Debit') throw new Error('Movimiento contable de ingresos sin signo conocido')
     return [{ document: journal.name, date: journal.date, line: index + 1, account, movement: item.account.movement, amount: Number(item.value || 0), netSales: Number(item.value || 0) * (item.account.movement === 'Credit' ? 1 : -1), invoice: item.due?.prefix && item.due?.consecutive ? `${item.due.prefix}-${item.due.consecutive}` : '', documentUnits: Number(item.product?.quantity || 0) }]
   }))
+  const liveNames = new Set((live?.invoices || []).map(row => row.name))
+  const unlistedCachedInvoices = source.invoices.filter(row => row.date >= '2025-01-01' && row.date <= '2025-08-31' && !liveNames.has(row.name || '')).map(row => ({ document: row.name || '', date: row.date, units: productUnitsOf(row), gross: row.total, cachedCredit: Number(row.credited_amount || 0) }))
   const amountChecks = [...(live?.invoices || []), ...(live?.credits || [])].filter(row => row.date >= '2025-01-01' && row.date <= '2025-08-31').map(row => {
     const items = row.items || []
     const tax = items.reduce((sum, item) => sum + (item.taxes || []).filter(tax => tax.type === 'IVA').reduce((n, tax) => n + Number(tax.value || 0), 0), 0)
@@ -104,8 +106,9 @@ export function reconcileAccounting(source: SalesSource, book: AccountingReview,
     const eligible = marketingProductItems({ ...row, credited_amount: 0, customer_identification: null, assigned_feria_id: null, observations: null, raw: null }, source.nonRetail)
     const productGross = eligible.reduce((sum, item) => sum + Number(item.total || 0), 0)
     const productTax = eligible.reduce((sum, item) => sum + ((item as NonNullable<AccountingSiigoDocument['items']>[number]).taxes || []).filter(tax => tax.type === 'IVA').reduce((n, tax) => n + Number(tax.value || 0), 0), 0)
-    return { document: row.name, date: row.date, credit: row.name.startsWith('NC-'), gross: row.total, itemGross, tax, netAllItems: itemGross > 0 ? itemGross - tax : 0, netProduct: productGross > 0 ? productGross - productTax : 0, excludedNet: itemGross > 0 ? itemGross - tax - (productGross > 0 ? productGross - productTax : 0) : 0, priceQuantity: eligible.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.price || 0), 0), lineDiscounts: eligible.reduce((sum, item) => sum + Number((item as NonNullable<AccountingSiigoDocument['items']>[number]).discount?.value || 0), 0), charges: (row.global_charges || []).reduce((sum, item) => sum + Number(item.value || 0), 0), discounts: (row.global_discounts || []).reduce((sum, item) => sum + Number(item.value || 0), 0), annulled: row.annulled === true }
+    return { currency: row.currency?.code || 'COP', exchangeRate: row.currency?.exchange_rate || 1, document: row.name, date: row.date, credit: row.name.startsWith('NC-'), gross: row.total, itemGross, tax, netAllItems: itemGross > 0 ? itemGross - tax : 0, netProduct: productGross > 0 ? productGross - productTax : 0, excludedNet: itemGross > 0 ? itemGross - tax - (productGross > 0 ? productGross - productTax : 0) : 0, priceQuantity: eligible.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.price || 0), 0), lineDiscounts: eligible.reduce((sum, item) => sum + Number((item as NonNullable<AccountingSiigoDocument['items']>[number]).discount?.value || 0), 0), charges: (row.global_charges || []).reduce((sum, item) => sum + Number(item.value || 0), 0), discounts: (row.global_discounts || []).reduce((sum, item) => sum + Number(item.value || 0), 0), annulled: row.annulled === true }
   })
+  const unusualLines = [...(live?.invoices || []), ...(live?.credits || [])].filter(row => row.date >= '2025-01-01' && row.date <= '2025-08-31').flatMap(row => (row.items || []).flatMap((item, line) => Number(row.total) === 0 || Math.abs(Number(item.total || 0) - Number(item.quantity || 0) * Number(item.price || 0) * 1.19) > 1 ? [{ document: row.name, date: row.date, line: line + 1, code: item.code || '', quantity: Number(item.quantity || 0), price: Number(item.price || 0), total: Number(item.total || 0), discount: typeof item.discount === 'number' ? item.discount : Number(item.discount?.value || 0), taxes: (item.taxes || []).map(tax => ({ type: tax.type || '', value: Number(tax.value || 0), base: Number(tax.base_value || 0) })) }] : []))
   const incomeBridge = book.months.filter(row => row.month.startsWith('2025')).map(month => {
     const rows = amountChecks.filter(row => row.date.startsWith(month.month))
     const invoiceNet = rows.filter(row => !row.credit).reduce((sum, row) => sum + row.netAllItems, 0)
@@ -113,5 +116,5 @@ export function reconcileAccounting(source: SalesSource, book: AccountingReview,
     const journals = journalEntries.filter(row => row.date.startsWith(month.month)).reduce((sum, row) => sum + row.netSales, 0)
     return { month: month.month, invoiceNet, creditNet, journals, accountingSales: month.accountingSales, difference: invoiceNet - creditNet + journals - month.accountingSales }
   })
-  return { monthly, documents, additional, totals, accounting, creditLinks, creditCacheIssues, invoiceChecks, journalEntries, amountChecks, incomeBridge, liveReadError: null as string | null }
+  return { monthly, documents, additional, totals, accounting, creditLinks, creditCacheIssues, invoiceChecks, journalEntries, amountChecks, incomeBridge, unlistedCachedInvoices, unusualLines, liveReadError: null as string | null }
 }
