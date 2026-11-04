@@ -354,6 +354,7 @@ export default function MarketingPage() {
 
       {loading ? <div className="flex items-center justify-center py-24 text-slate-500"><Loader2 className="mr-3 h-7 w-7 animate-spin" />Construyendo reporte…</div> : error ? <Card className="border-rose-200 bg-rose-50"><CardContent className="p-6 text-rose-800">{error}</CardContent></Card> : report && <>
         {metaError && <Card className="border-rose-200 bg-rose-50"><CardContent className="flex flex-col gap-3 p-5 text-rose-900 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">Meta Ads necesita reconexión</p><p className="mt-1 text-sm">{metaError.includes('Session has expired') ? 'El token de acceso venció. Gasto, campañas y anuncios no se pueden consultar hasta renovarlo.' : metaError}</p></div><Link href="/dashboard/configuracion"><Button variant="outline" className="border-rose-300 bg-white text-rose-900">Ir a configuración</Button></Link></CardContent></Card>}
+        {report.filters.comparisonMode === 'year' && <AnnualProgressCard report={report} />}
         {comparisonMode !== 'none' && <YtdComparison report={report} spend={spend} previousSpend={previousSpend} mer={mer} previousMer={previousMer} comparisonReliable={comparisonReliable} />}
         <CategoryChannelUnitsChart report={report} />
         <div className="grid items-stretch gap-6 lg:grid-cols-2">
@@ -494,6 +495,35 @@ function SizeSalesChart({ report }: { report: MarketingExecutiveReport }) {
 
 function ChartGrandTotal({ units }: { units: number }) {
   return <div className="shrink-0 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center"><p className="text-xs font-semibold uppercase text-slate-500">Gran total · unidades</p><p className="mt-1 text-3xl font-bold text-[#183675]">{number(units)}</p></div>
+}
+
+function AnnualProgressCard({ report }: { report: MarketingExecutiveReport }) {
+  const currentYear = report.periods.current.start.slice(0, 4)
+  const previousYear = report.periods.previous.start.slice(0, 4)
+  const metrics = [
+    { label: 'Unidades online', current: report.current.units, previous: report.previous.units, format: number, comparable: report.comparability.units, change: report.comparisons.units.change },
+    { label: 'Ventas online antes de IVA', current: report.current.netSales, previous: report.previous.netSales, format: currency, comparable: report.comparability.netSales, change: report.comparisons.netSales.change },
+  ]
+  return <Card className="overflow-hidden border border-sky-200 bg-white shadow-sm" aria-label="Cómo vamos frente al año pasado">
+    <CardHeader className="border-b border-sky-100 bg-sky-50/70">
+      <div className="flex flex-wrap items-center justify-between gap-2"><CardTitle className="text-xl text-[#172239]">Cómo vamos frente al año pasado</CardTitle>{SALES_RECONCILIATION_PENDING && <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-900">Cifras provisionales</Badge>}</div>
+      <p className="text-sm text-slate-600">{currentYear} frente a {previousYear} · mismas fechas y filtros de Mercadeo.</p>
+    </CardHeader>
+    <CardContent className="divide-y divide-slate-100 px-5 py-0">
+      {metrics.map(metric => {
+        const comparable = !SALES_RECONCILIATION_PENDING && metric.comparable
+        return <section key={metric.label} className="py-5" aria-label={metric.label}>
+          <h3 className="mb-3 text-sm font-semibold text-[#172239]">{metric.label}</h3>
+          <dl className="grid gap-4 sm:grid-cols-3">
+            <div><dt className="text-xs font-semibold text-slate-500">{currentYear}</dt><dd className="mt-1 text-2xl font-bold text-[#17356f]">{metric.format(metric.current)}</dd><dd className="mt-1 text-xs text-slate-500">{readableRange(report.periods.current.start, report.periods.current.end)}</dd></div>
+            <div><dt className="text-xs font-semibold text-slate-500">{previousYear}</dt><dd className="mt-1 text-2xl font-bold text-slate-700">{metric.format(metric.previous)}</dd><dd className="mt-1 text-xs text-slate-500">{readableRange(report.periods.previous.start, report.periods.previous.end)}</dd></div>
+            <div><dt className="text-xs font-semibold text-slate-500">Variación</dt><dd className="mt-2">{comparable && metric.change !== null ? <ChangeBadge value={metric.change} /> : <span className="text-sm font-medium text-amber-800">{comparable ? 'Sin base de comparación' : 'Pendiente de conciliación'}</span>}</dd></div>
+          </dl>
+        </section>
+      })}
+      {SALES_RECONCILIATION_PENDING && <p className="py-4 text-xs text-amber-900">Los totales están en revisión. El crecimiento o la caída se mostrará al cerrar la conciliación de ventas.</p>}
+    </CardContent>
+  </Card>
 }
 
 function DesignSalesChart({ report }: { report: MarketingExecutiveReport }) {
