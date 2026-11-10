@@ -357,7 +357,7 @@ export default function MarketingPage() {
         {report.filters.comparisonMode === 'year' && <AnnualProgressCard report={report} />}
         {comparisonMode !== 'none' && <YtdComparison report={report} spend={spend} previousSpend={previousSpend} mer={mer} previousMer={previousMer} comparisonReliable={comparisonReliable} />}
         <CategoryChannelUnitsChart report={report} />
-        <div className="grid items-stretch gap-6 lg:grid-cols-2">
+        <div className="grid items-stretch gap-6 xl:grid-cols-3">
           <DesignSalesChart report={report} />
           <SizeSalesChart report={report} />
         </div>
@@ -527,9 +527,21 @@ function AnnualProgressCard({ report }: { report: MarketingExecutiveReport }) {
 }
 
 function DesignSalesChart({ report }: { report: MarketingExecutiveReport }) {
-  const filtered = report.designSales
+  const appliedCategory = report.filters.applied.category
+  const categories = appliedCategory ? [appliedCategory] : ['Infantil / Exploradores', 'Bebé / Pequeños Caminantes']
+
+  return <section className="flex min-w-0 flex-col gap-4 xl:col-span-2">
+    <SectionTitle eyebrow="Concentración de ventas" title="Ventas por diseño" badge="Antes de IVA · Shopify + Excel / Siigo" />
+    <div className={`grid flex-1 gap-4 ${categories.length > 1 ? 'md:grid-cols-2' : ''}`}>
+      {categories.map(category => <CategoryDesignChart key={category} category={category} report={report} />)}
+    </div>
+  </section>
+}
+
+function CategoryDesignChart({ report, category }: { report: MarketingExecutiveReport; category: string }) {
   const designs = new Map<string, { name: string; value: number }>()
-  for (const row of filtered) {
+  for (const row of report.designSales) {
+    if (row.category !== category) continue
     const key = row.design.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
     const design = designs.get(key) || { name: row.design, value: 0 }
     design.value += row.sales
@@ -538,11 +550,10 @@ function DesignSalesChart({ report }: { report: MarketingExecutiveReport }) {
   const data = Array.from(designs.values()).filter(row => row.value > 0).sort((a, b) => b.value - a.value)
   const designColor = (index: number) => DESIGN_COLORS[index] || `hsl(${(index * 137.508) % 360} 55% 48%)`
   const total = data.reduce((sum, row) => sum + row.value, 0)
+  const units = report.categoryChannelUnits.reduce((sum, row) => row.category === category ? sum + row.web + row.whatsapp : sum, 0)
 
-  return <section className="flex min-w-0 flex-col gap-4">
-    <SectionTitle eyebrow="Concentración de ventas" title="Ventas por diseño" badge="Antes de IVA · Shopify + Excel / Siigo" />
-    <Card className="flex-1 border-0 shadow-sm">
-      <CardHeader className="flex flex-wrap flex-row items-start justify-between gap-3"><div><CardTitle className="text-lg text-[#172239]">Participación de cada diseño</CardTitle><p className="mt-1 text-xs text-slate-500">{readableRange(report.periods.current.start, report.periods.current.end)} · filtros globales.</p></div><ChartGrandTotal units={report.current.units} /></CardHeader>
+  return <Card className="min-w-0 border-0 shadow-sm">
+      <CardHeader className="flex flex-wrap flex-row items-start justify-between gap-3"><div><CardTitle className="text-lg text-[#172239]">{category}</CardTitle><p className="mt-1 text-xs text-slate-500">Participación de cada diseño · {readableRange(report.periods.current.start, report.periods.current.end)}</p></div><ChartGrandTotal units={units} /></CardHeader>
       <CardContent>
         {data.length === 0 || total <= 0 ? <p className="py-16 text-center text-sm text-slate-500">Dato no disponible para el periodo seleccionado.</p> : <div className="grid min-w-0 gap-6">
           <div className="h-[320px] min-w-0 sm:h-[360px]">
@@ -555,12 +566,11 @@ function DesignSalesChart({ report }: { report: MarketingExecutiveReport }) {
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="grid max-h-[360px] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">{data.map((row, index) => <div key={row.name} className="flex items-center justify-between gap-4 rounded-lg border px-3 py-2 text-sm"><span className="flex min-w-0 items-center gap-2"><span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: designColor(index) }} /><span className="break-words font-medium text-[#172239]">{row.name}</span></span><span className="shrink-0 text-xs font-semibold text-slate-500">{percent(row.value / total)}</span></div>)}</div>
+          <div className="grid max-h-[360px] gap-2 overflow-y-auto pr-1">{data.map((row, index) => <div key={row.name} className="flex items-center justify-between gap-4 rounded-lg border px-3 py-2 text-sm"><span className="flex min-w-0 items-center gap-2"><span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: designColor(index) }} /><span className="break-words font-medium text-[#172239]">{row.name}</span></span><span className="shrink-0 text-xs font-semibold text-slate-500">{percent(row.value / total)}</span></div>)}</div>
         </div>}
-        <p className="mt-3 text-xs text-slate-500">Cada diseño aparece con su nombre y porcentaje, ordenado de mayor a menor venta. Desplázate por la leyenda para verlos todos. Ventas antes de IVA por fecha de cada fuente, con notas crédito descontadas.</p>
+        <p className="mt-3 text-xs text-slate-500">Porcentaje sobre el valor de venta de esta categoría antes de IVA. Los diseños se ordenan de mayor a menor venta.</p>
       </CardContent>
     </Card>
-  </section>
 }
 
 function CategoryChannelUnitsChart({ report }: { report: MarketingExecutiveReport }) {
