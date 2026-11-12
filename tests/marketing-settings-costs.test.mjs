@@ -29,6 +29,7 @@ const route = {}
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../app/api/marketing/settings/route.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: route, Date, structuredClone, require(name) {
   if (name === 'next/server') return { NextResponse: { json: (body, options) => ({ ...body, status: options?.status ?? 200 }) } }
   if (name === '@/lib/marketing/cloud-state') return { cloudMonthlyCosts: () => ({}) }
+  if (name === '@/lib/marketing/reviewed-billing') return { reviewedBillingCosts: costs => costs }
   if (name === '@/lib/auth-helpers') return { requireAuth: async () => ({}), getAdminClient: () => db }
   if (name === '@/data/marketing-monthly-costs.json') return { default: { costs: {}, sourceUrl: 'fixture' } }
   if (name === '@/lib/marketing/contribution') return { COST_FIELDS: ['agencyFee','agencyVariable','natiFee','servers','unitCost'] }

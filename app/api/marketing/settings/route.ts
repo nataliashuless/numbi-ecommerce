@@ -1,4 +1,5 @@
 import { cloudMonthlyCosts } from '@/lib/marketing/cloud-state'
+import { reviewedBillingCosts } from '@/lib/marketing/reviewed-billing'
 import { NextResponse } from 'next/server'
 import { getAdminClient, requireAuth } from '@/lib/auth-helpers'
 import importedCosts from '@/data/marketing-monthly-costs.json'
@@ -30,7 +31,7 @@ function monthlyCosts(values: Record<string, unknown>): MonthlyCosts {
     const field = match[2] as typeof COST_FIELDS[number]
     costs[match[1]] = { ...costs[match[1]], [field]: value }
   }
-  return costs
+  return reviewedBillingCosts(costs)
 }
 
 function sanitizeObjectives(value: unknown): Record<string, number> {
@@ -54,7 +55,7 @@ export async function GET() {
     .eq('id', 1)
     .maybeSingle()
 
-  if (result.error) return NextResponse.json({ available: false, objectives: {}, costs: importedCosts.costs, error: result.error.message })
+  if (result.error) return NextResponse.json({ available: false, objectives: {}, costs: reviewedBillingCosts(importedCosts.costs), error: result.error.message })
   const values = result.data?.objectives || {}
   return NextResponse.json({ available: true, objectives: sanitizeObjectives(values), costs: monthlyCosts(values), costSource: importedCosts.sourceUrl, updatedAt: result.data?.updated_at || null })
 }

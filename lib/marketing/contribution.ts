@@ -4,7 +4,10 @@ import type { CachedSiigoInvoice } from './siigo-sales'
 
 export const COST_FIELDS = ['agencyFee', 'agencyVariable', 'natiFee', 'servers', 'unitCost', 'contentFee', 'platformFee'] as const
 export type CostField = typeof COST_FIELDS[number]
-export type MonthlyCosts = Record<string, Partial<Record<CostField, number>>>
+export type MonthlyCosts = Record<string, Partial<Record<CostField, number>> & {
+  hostingService?: { start: string; end: string; amount: number }
+  platformReview?: { confirmedCop: number; charges: Array<{ date: string; invoice: string; usd: number; cop: number | null }>; note: string }
+}>
 export type MonthlyCostUpdates = Record<string, Partial<Record<CostField, number | null>>>
 
 export function periodMonths(period: Pick<DatePeriod, 'start' | 'end'>): string[] {
@@ -20,7 +23,7 @@ export function periodMonths(period: Pick<DatePeriod, 'start' | 'end'>): string[
 /** Fixed monthly fees accrue over selected days. Shoe cost follows sold units. */
 export function contributionCosts(period: DatePeriod, metrics: PeriodMetrics, costs: MonthlyCosts, estimate?: DesignCostEstimate) {
   const missing: string[] = []
-  const result = { agencyFee: 0, agencyVariable: 0, natiFee: 0, servers: 0, shoes: 0, agencyTotal: 0, platformFee: 0 }
+  const result = { agencyFee: 0, agencyVariable: 0, natiFee: 0, servers: 0, shoes: 0, agencyTotal: 0, platformFee: 0, platformDocumented: 0 }
   for (const month of periodMonths(period)) {
     const days = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate()
     const first = period.start.startsWith(month) ? Number(period.start.slice(8, 10)) : 1
@@ -31,9 +34,25 @@ export function contributionCosts(period: DatePeriod, metrics: PeriodMetrics, co
     if (content !== undefined) result.agencyTotal += content * fraction
     else if (feeParts.every(field => costs[month]?.[field] !== undefined)) result.agencyTotal += feeParts.reduce((sum, field) => sum + costs[month]![field]!, 0) * fraction
     else missing.push(`${month}:agencyTotal`)
-    result.platformFee += (costs[month]?.platformFee ?? 0) * fraction
+    const review = costs[month]?.platformReview
+    if (review) {
+      missing.push(`${month}:platformFee`)
+      result.platformDocumented += review.charges.filter(charge => charge.date >= period.start && charge.date <= period.end).reduce((sum, charge) => sum + (charge.cop ?? 0), 0)
+    } else {
+      const value = (costs[month]?.platformFee ?? 0) * fraction
+      result.platformFee += value
+      result.platformDocumented += value
+    }
     for (const field of ['agencyFee', 'agencyVariable', 'natiFee', 'servers'] as const) {
       const value = costs[month]?.[field]
+      const service = costs[month]?.hostingService
+      if (field === 'servers' && service) {
+        const start = [period.start, `${month}-01`, service.start].sort().at(-1)!
+        const end = [period.end, `${month}-${String(days).padStart(2, '0')}`, service.end].sort()[0]
+        const day = (date: string) => Date.parse(`${date}T00:00:00Z`) / 86400000
+        result.servers += service.amount * Math.max(0, day(end) - day(start) + 1) / (day(service.end) - day(service.start) + 1)
+        continue
+      }
       if (value === undefined && !(content !== undefined && field !== 'servers')) missing.push(`${month}:${field}`)
       else if (value !== undefined) result[field] += value * fraction
     }
@@ -49,7 +68,8 @@ export function contributionCosts(period: DatePeriod, metrics: PeriodMetrics, co
   const known = (field: string) => !missing.some(key => key.endsWith(`:${field}`))
   return {
     agencyTotal: known('agencyTotal') ? result.agencyTotal : null,
-    platformFee: result.platformFee,
+    platformFee: known('platformFee') ? result.platformFee : null,
+    platformDocumented: result.platformDocumented,
     agencyFee: known('agencyFee') ? result.agencyFee : null,
     agencyVariable: known('agencyVariable') ? result.agencyVariable : null,
     natiFee: known('natiFee') ? result.natiFee : null,
