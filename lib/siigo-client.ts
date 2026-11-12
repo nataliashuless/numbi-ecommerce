@@ -535,6 +535,11 @@ export async function listAccountingVouchers(startDate: string, endDate: string)
   return listAccountingPages<AccountingSiigoJournal>('vouchers', startDate, endDate)
 }
 
+/** Read-only supplier accounting documents, paginated by document date. */
+export async function listExpenseDocuments(kind: 'purchases' | 'purchase-support-documents', startDate: string, endDate: string): Promise<Array<Record<string, unknown> & { id: string; date: string }>> {
+  return listAccountingPages(kind, startDate, endDate)
+}
+
 /** Generate a read-only trial balance; return only the three sales account balances. */
 export async function readSalesTrialBalance2025(monthStart: number, monthEnd: number) {
   if (!Number.isInteger(monthStart) || !Number.isInteger(monthEnd) || monthStart < 1 || monthEnd > 8 || monthStart > monthEnd) throw new Error('Período contable inválido')
