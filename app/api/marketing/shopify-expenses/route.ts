@@ -6,9 +6,13 @@ export const maxDuration = 300
 
 /** No writes to Siigo. Only Shopify expense lines leave the server. Payment
  * vouchers are excluded: paying a recognized expense is not a second expense. */
-export async function GET() {
+export async function GET(request?: Request) {
   const { error } = await requireAuth()
   if (error) return error
+  const category = request ? new URL(request.url).searchParams.get('category') : null
+  if (category && category !== 'content') return NextResponse.json({ error: 'Categoría inválida' }, { status: 400 })
+  const targetAccount = category === 'content' ? '52356004' : '52356005'
+  const pattern = category === 'content' ? /agencia|contenid|community\s*manager|manejo.*redes|nati.*agenc/i : /shopify/i
   const reads = await Promise.allSettled([
     listExpenseDocuments('purchases', '2026-09-01', '2026-11-12'),
     listExpenseDocuments('purchase-support-documents', '2026-09-01', '2026-11-12'),
@@ -22,9 +26,10 @@ export async function GET() {
       const items = (data.items || []) as Array<Record<string, unknown>>
       const lines = items.filter(item => {
         const account = item.account as { code?: string } | undefined
-        return String(account?.code || item.code) === '52356005' || kinds[index] !== 'journals' && /shopify/i.test(String(item.description || ''))
+        const code = String(account?.code || item.code || '')
+        return code === targetAccount || (kinds[index] !== 'journals' || code.startsWith('5')) && pattern.test(String(item.description || ''))
       })
-      if (!lines.length && !/shopify/i.test(String(data.observations || ''))) return []
+      if (!lines.length && !pattern.test(String(data.observations || ''))) return []
       return [{ kind: kinds[index], id: document.id, name: data.name, date: document.date,
         total: data.total, currency: data.currency, annulled: data.annulled, stamp: { status: (data.stamp as { status?: string } | undefined)?.status },
         items: lines.map(item => ({ account: item.account, code: item.code, type: item.type, quantity: item.quantity, price: item.price, total: item.total, value: item.value, taxes: item.taxes, description: item.description })),
@@ -32,5 +37,5 @@ export async function GET() {
       }]
     })
   })
-  return NextResponse.json({ through: '2026-11-12', complete: reads.every(result => result.status === 'fulfilled'), sources: reads.map((result, index) => ({ kind: kinds[index], count: result.status === 'fulfilled' ? result.value.length : null, error: result.status === 'rejected' ? String(result.reason instanceof Error ? result.reason.message : 'Lectura incompleta') : null })), documents }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json({ account: targetAccount, through: '2026-11-12', complete: reads.every(result => result.status === 'fulfilled'), sources: reads.map((result, index) => ({ kind: kinds[index], count: result.status === 'fulfilled' ? result.value.length : null, error: result.status === 'rejected' ? String(result.reason instanceof Error ? result.reason.message : 'Lectura incompleta') : null })), documents }, { headers: { 'Cache-Control': 'no-store' } })
 }
