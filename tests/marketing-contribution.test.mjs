@@ -49,3 +49,14 @@ test('a filtered product with a reused Shopify SKU does not inherit another line
   const orders = [{ id: 1, raw: { taxes_included: false, line_items: [{ sku: 'REUSED', quantity: 1, price: '100' }, { sku: 'REUSED', quantity: 1, price: '300' }] } }]
   assert.equal(api.documentedGrossSales(records, orders, period), null)
 })
+
+test('accounting content total replaces separate agency and Nati fees without duplicating them', () => {
+  const result = api.contributionCosts(period, { daily: [{ date: '2026-08-10', units: 2 }] }, { '2026-08': { ...costs['2026-08'], contentFee: 2535292.9, platformFee: 1026268.12, unitCost: 49780.0322 } })
+  assert.equal(result.agencyTotal, 2535292.9)
+  assert.equal(result.platformFee, 1026268.12)
+  assert.equal(result.shoes, 99560.0644)
+  assert.equal(Math.round(api.sumKnown([1799016, result.agencyTotal, result.servers, result.platformFee]) * 100), 539567702)
+  const historic = api.contributionCosts(period, { daily: [] }, { '2026-08': { contentFee: 0, servers: 35100 } })
+  assert.equal(historic.agencyTotal, 0)
+  assert.equal(historic.missing.length, 0)
+})

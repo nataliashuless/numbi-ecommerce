@@ -19,7 +19,7 @@ const allowedObjectiveKeys = new Set([
   'warningTolerancePct',
 ])
 
-const costKey = /^monthlyCost:(\d{4}-(?:0[1-9]|1[0-2])):(agencyFee|agencyVariable|natiFee|servers|unitCost)$/
+const costKey = /^monthlyCost:(\d{4}-(?:0[1-9]|1[0-2])):(agencyFee|agencyVariable|natiFee|servers|unitCost|contentFee|platformFee)$/
 
 function monthlyCosts(values: Record<string, unknown>): MonthlyCosts {
   const costs: MonthlyCosts = structuredClone(importedCosts.costs)
