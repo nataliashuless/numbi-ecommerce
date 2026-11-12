@@ -1,3 +1,5 @@
+import designCostSource from '@/data/marketing-design-costs-oc32.json'
+import { estimateDesignCosts } from '@/lib/marketing/design-costs'
 import { SALES_RECONCILIATION_PENDING, SALES_RECONCILIATION_MESSAGE } from '@/lib/sales/reconciliation-status'
 import { documentedGrossSales } from '@/lib/marketing/contribution'
 import { canonicalInvoices } from '@/lib/marketing/canonical-source'
@@ -292,6 +294,7 @@ export async function GET(request: Request) {
       .limit(1)
       .maybeSingle()
 
+    const costInputs = ledger.records.flatMap(({ invoice }) => marketingProductItems(invoice, nonRetailProductCodes).map(item => ({ date: invoice.date.slice(0, 10), ...marketingItem(item.description || ''), units: Math.max(0, Number(item.quantity) || 0) })))
     const report: MarketingExecutiveReport = {
       source: 'Shopify directo + Excel no Shopify 2025 + WhatsApp Siigo 2026',
       historyAudit,
@@ -338,6 +341,7 @@ export async function GET(request: Request) {
         previous: comparisonMode === 'none' ? [] : ledger.reconciliation.filter(row => inPeriod(row.date, periods.previous)),
       },
       saleDateCoverage,
+      designCostEstimate: { current: estimateDesignCosts(costInputs, periods.current, designCostSource), previous: estimateDesignCosts(costInputs, periods.previous, designCostSource) },
       commercialGrossSales: { current: documentedGrossSales(ledger.records, orders, periods.current, siigoInvoices), previous: comparisonMode === 'none' ? null : documentedGrossSales(ledger.records, orders, periods.previous, siigoInvoices) },
       designSales: Array.from(designSalesBuckets.values()).sort((a, b) =>
         b.year.localeCompare(a.year) || b.sales - a.sales,

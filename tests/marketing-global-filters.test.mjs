@@ -6,6 +6,7 @@ import ts from 'typescript'
 import { createHash } from 'node:crypto'
 const cache = new Map()
 function load(name) {
+  if (name === '@/data/marketing-design-costs-oc32.json') return { default: JSON.parse(fs.readFileSync(new URL('../data/marketing-design-costs-oc32.json', import.meta.url), 'utf8')) }
   if (name === '@/data/marketing-2025-audit-inputs.json') return { default: auditInputsFixture }
   if (name === '@/data/marketing-online-excel-2025.json') return { default: excelHistoryFixture }
   if (name === 'node:crypto') return { createHash }
@@ -89,6 +90,7 @@ const excelHistoryFixture = { from: '2025-01-01', to: '2025-12-31', rows: [] }
 const auditPublicationStatus = { SALES_RECONCILIATION_PENDING: false, SALES_RECONCILIATION_MESSAGE: 'Conciliación contable pendiente' }
 const route = {}
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../app/api/marketing/executive/route.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: route, URL, Date, console, require(name) {
+  if (name === '@/data/marketing-design-costs-oc32.json') return { default: JSON.parse(fs.readFileSync(new URL('../data/marketing-design-costs-oc32.json', import.meta.url), 'utf8')) }
   if (name === '@/data/marketing-2025-audit-inputs.json') return { default: auditInputsFixture }
   if (name === '@/data/marketing-online-excel-2025.json') return { default: excelHistoryFixture }
   if (name === '@/lib/sales/reconciliation-status') return auditPublicationStatus
@@ -103,6 +105,9 @@ test('endpoint reconciles summary, design, size, weekday, city, monthly units an
   const report = await route.GET({ url: 'https://example.test/api/marketing/executive?view=ytd&start_date=2026-10-01&end_date=2026-10-28&channel=web&category=Beb%C3%A9%20%2F%20Peque%C3%B1os%20Caminantes&size=20&city=Bogot%C3%A1' })
   assert.equal(report.status, 200)
   assert.equal(report.current.units, 1)
+  assert.equal(report.designCostEstimate.current.units, 1)
+  assert.equal(report.designCostEstimate.current.coveredUnits, 1)
+  assert.equal(report.designCostEstimate.current.knownCost, 52328.16)
   assert.equal(report.current.netSales, 100)
   assert.equal(report.current.sizes.reduce((s, x) => s + x.units, 0), 1)
   assert.equal(report.categoryChannelUnits.reduce((s, x) => s + x.web + x.whatsapp, 0), 1)

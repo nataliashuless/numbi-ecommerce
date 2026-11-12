@@ -1,3 +1,4 @@
+import type { DesignCostEstimate } from './design-costs'
 import type { CachedShopifyOrder, DatePeriod, PeriodMetrics } from './metrics'
 import type { CachedSiigoInvoice } from './siigo-sales'
 
@@ -17,7 +18,7 @@ export function periodMonths(period: Pick<DatePeriod, 'start' | 'end'>): string[
 }
 
 /** Fixed monthly fees accrue over selected days. Shoe cost follows sold units. */
-export function contributionCosts(period: DatePeriod, metrics: PeriodMetrics, costs: MonthlyCosts) {
+export function contributionCosts(period: DatePeriod, metrics: PeriodMetrics, costs: MonthlyCosts, estimate?: DesignCostEstimate) {
   const missing: string[] = []
   const result = { agencyFee: 0, agencyVariable: 0, natiFee: 0, servers: 0, shoes: 0, agencyTotal: 0, platformFee: 0 }
   for (const month of periodMonths(period)) {
@@ -37,7 +38,12 @@ export function contributionCosts(period: DatePeriod, metrics: PeriodMetrics, co
       else if (value !== undefined) result[field] += value * fraction
     }
     const units = metrics.daily.filter(day => day.date.startsWith(month)).reduce((sum, day) => sum + day.units, 0)
-    if (units > 0 && costs[month]?.unitCost === undefined) missing.push(`${month}:unitCost`)
+    if (estimate && month >= estimate.effectiveFrom.slice(0, 7)) {
+      const estimatedMonth = estimate.months.find(row => row.month === month)
+      if (units > 0 && (!estimatedMonth || estimatedMonth.units !== units || estimatedMonth.coveredUnits !== units)) missing.push(`${month}:unitCost`)
+      else result.shoes += estimatedMonth?.knownCost ?? 0
+    }
+    else if (units > 0 && costs[month]?.unitCost === undefined) missing.push(`${month}:unitCost`)
     else result.shoes += units * (costs[month]?.unitCost ?? 0)
   }
   const known = (field: string) => !missing.some(key => key.endsWith(`:${field}`))

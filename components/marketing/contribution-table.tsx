@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { contributionCosts, divide, periodMonths, sumKnown, type CostField, type MonthlyCostUpdates, type MonthlyCosts } from '@/lib/marketing/contribution'
 import type { MarketingExecutiveReport, PeriodMetrics } from '@/lib/marketing/metrics'
+import type { DesignCostEstimate } from '@/lib/marketing/design-costs'
 import { SALES_RECONCILIATION_PENDING } from '@/lib/sales/reconciliation-status'
 
 type Traffic = { available: boolean; source?: string; totals?: { totalUsers?: number; conversionRate?: number | null } | null } | null
@@ -32,17 +33,17 @@ export function ContributionTable({ report, currentAds, previousAds, currentTraf
   const comparison = report.filters.comparisonMode !== 'none'
   const months = Array.from(new Set([...periodMonths(report.periods.current), ...(comparison ? periodMonths(report.periods.previous) : [])])).sort().reverse()
   const selectedMonth = months.includes(month) ? month : report.periods.current.end.slice(0, 7)
-  const periodValues = (metrics: PeriodMetrics, period: typeof report.periods.current, ads: Ads, traffic: Traffic, gross: number | null) => {
+  const periodValues = (metrics: PeriodMetrics, period: typeof report.periods.current, ads: Ads, traffic: Traffic, gross: number | null, estimate?: DesignCostEstimate) => {
     const spend = ads?.error ? null : ads?.totals?.spend ?? null
     const impressions = ads?.error ? null : ads?.totals?.impressions ?? null
     const users = traffic?.available ? traffic.totals?.totalUsers ?? null : null
-    const fees = contributionCosts(period, metrics, costs)
+    const fees = contributionCosts(period, metrics, costs, estimate)
     const marketing = sumKnown([spend, fees.agencyTotal, fees.servers, fees.platformFee])
     const webOrders = metrics.channels.filter(channel => channel.key === 'web').reduce((sum, channel) => sum + channel.orders, 0)
     return { spend, impressions, users, ...fees, marketing, cvr: traffic?.source === 'shopify' ? traffic.totals?.conversionRate ?? null : divide(webOrders, users), cpa: divide(spend, metrics.onlineOrders), marketingShare: divide(spend, gross), ticket: divide(gross, metrics.onlineOrders), costPerView: divide(spend, impressions), unitCost: divide(fees.shoes, metrics.units), contribution: marketing !== null && fees.shoes !== null ? metrics.netSales - marketing - fees.shoes : null }
   }
-  const current = periodValues(report.current, report.periods.current, currentAds, currentTraffic, report.commercialGrossSales?.current ?? null)
-  const previous = periodValues(report.previous, report.periods.previous, previousAds, previousTraffic, report.commercialGrossSales?.previous ?? null)
+  const current = periodValues(report.current, report.periods.current, currentAds, currentTraffic, report.commercialGrossSales?.current ?? null, report.designCostEstimate?.current)
+  const previous = periodValues(report.previous, report.periods.previous, previousAds, previousTraffic, report.commercialGrossSales?.previous ?? null, report.designCostEstimate?.previous)
   const salesComparable = comparison && !SALES_RECONCILIATION_PENDING && report.comparability.netSales
   const grossCurrent = report.commercialGrossSales?.current ?? null
   const grossPrevious = report.commercialGrossSales?.previous ?? null
@@ -74,7 +75,7 @@ export function ContributionTable({ report, currentAds, previousAds, currentTraf
     { label: 'Pares vendidos', current: report.current.units, previous: report.previous.units, format: number, formula: 'Unidades del histórico compartido', highlight: true },
     { label: 'Costo promedio por par', current: current.unitCost, previous: previous.unitCost, format: money, formula: 'Costo total de pares ÷ unidades del período' },
     { label: 'Total gastos de marketing', current: current.marketing, previous: previous.marketing, format: money, formula: 'Publicidad Meta + agencia/Nati total + servidores + plataforma registrada', highlight: true },
-    { label: 'Costo total de los pares', current: current.shoes, previous: previous.shoes, format: money, formula: 'Σ unidades de cada mes × costo por par de ese mes' },
+    { label: 'Costo total de los pares', current: current.shoes, previous: previous.shoes, format: money, formula: 'Hasta agosto: costo mensual. Desde septiembre 2026: Σ unidades × costo estimado de su diseño OC 32; requiere cobertura completa' },
     { label: 'CPA', current: current.cpa, previous: previous.cpa, format: money, formula: 'Publicidad Meta ÷ pedidos online' },
     { label: 'Contribución estimada', current: current.contribution, previous: previous.contribution, format: money, formula: 'Ventas netas − gastos de marketing − costo de pares', highlight: true },
   ]
@@ -98,13 +99,17 @@ export function ContributionTable({ report, currentAds, previousAds, currentTraf
       <p className="text-xs text-slate-500">Visitantes y conversión provienen de Shopify y solo cubren su tienda, incluido 2025 desde la migración; no el tráfico antiguo de WooCommerce. Publicidad e impresiones provienen de Meta.</p>
       <p className="text-xs text-slate-500">Ventas y pares usan las fuentes del tablero. Costos importados de la hoja <a href={sourceUrl} target="_blank" rel="noreferrer" className="underline">Monthly</a> hasta agosto de 2026. Los campos vacíos requieren un importe. Los costos fijos se prorratean por días.</p>
       <p className="text-xs text-slate-500">El <a href="https://docs.google.com/spreadsheets/d/1AOLNHHLWNzdz8LW-zC62sqqLnw5U2QC_/edit" target="_blank" rel="noreferrer" className="underline">modelo contable</a> completa contenido digital (agencia + Nati juntos), plataforma Shopify, hosting Hostgator y costo promedio por par hasta agosto de 2026. El total contable de contenido reemplaza los honorarios separados, sin sumarlos dos veces. El costo por par es una estimación general del modelo; mayo de 2026 conserva Monthly porque el modelo usa unidades presupuestadas. Las proyecciones posteriores no se toman como gastos reales.</p>
+      {report.designCostEstimate && report.designCostEstimate.current.units > 0 && <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-slate-700">
+        <p><a href={report.designCostEstimate.current.sourceUrl} target="_blank" rel="noreferrer" className="font-semibold underline">Costos por diseño OC 32 · estimados desde septiembre de 2026</a>. Tienen costo válido {number(report.designCostEstimate.current.coveredUnits)} de {number(report.designCostEstimate.current.units)} unidades del período. Subtotal de unidades con costo: {money(report.designCostEstimate.current.knownCost)}. Este subtotal no representa el costo total si quedan diseños pendientes.</p>
+        <details className="mt-2"><summary className="cursor-pointer font-medium">Ver costo y cobertura por diseño</summary><Table><TableHeader><TableRow><TableHead>Diseño / categoría</TableHead><TableHead>Unidades</TableHead><TableHead>Costo estimado por par</TableHead></TableRow></TableHeader><TableBody>{report.designCostEstimate.current.designs.map(row => <TableRow key={`${row.category}:${row.design}`}><TableCell>{row.design} · {row.category}</TableCell><TableCell>{number(row.units)}</TableCell><TableCell>{row.unitCost === null ? 'Pendiente: sin costo válido' : money(row.unitCost)}</TableCell></TableRow>)}</TableBody></Table></details>
+      </div>}
       {(grossCurrent === null || comparison && grossPrevious === null) && <p className="text-xs text-slate-500">El importe bruto y sus ratios requieren precios anteriores a descuentos en todas las ventas del período. El histórico con solo importe neto queda pendiente en esas filas.</p>}
       {SALES_RECONCILIATION_PENDING && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Ventas, unidades y contribución son provisionales mientras se cierra la conciliación. Las variaciones de ventas y el retorno marginal quedan pendientes.</p>}
       {missingMonths.length > 0 && <p className="text-sm text-amber-800">Completa los costos de {missingMonths.join(', ')} para calcular toda la contribución.</p>}
       {editing && <div className="rounded-xl border bg-slate-50 p-4">
         <label className="text-sm font-medium">Mes<select value={selectedMonth} onChange={event => { setMonth(event.target.value); setDraft({}); setMessage('') }} className="ml-3 rounded border bg-white p-2">{months.map(month => <option key={month}>{month}</option>)}</select></label>
-        <div className="my-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{(Object.entries(labels) as Array<[CostField, string]>).map(([field, label]) => <label key={field} className="text-sm">{label}<Input aria-label={`${label} ${selectedMonth}`} type="number" min="0" step="0.01" value={draft[field] ?? costs[selectedMonth]?.[field] ?? ''} placeholder="Pendiente" onChange={event => setDraft({ ...draft, [field]: event.target.value })} /></label>)}</div>
-        <p className="mb-3 text-xs text-slate-500">Al vaciar un campo se restaura el importe del archivo, si existe.</p>
+        <div className="my-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{(Object.entries(labels) as Array<[CostField, string]>).map(([field, label]) => <label key={field} className="text-sm">{label}<Input aria-label={`${label} ${selectedMonth}`} type="number" min="0" step="0.01" disabled={field === 'unitCost' && selectedMonth >= '2026-09'} value={draft[field] ?? costs[selectedMonth]?.[field] ?? ''} placeholder="Pendiente" onChange={event => setDraft({ ...draft, [field]: event.target.value })} /></label>)}</div>
+        <p className="mb-3 text-xs text-slate-500">Al vaciar un campo se restaura el importe del archivo, si existe. Desde septiembre de 2026 el costo por par se calcula por diseño con OC 32, sin usar un promedio mensual.</p>
         <Button disabled={!settingsAvailable || saving || Object.keys(draft).length === 0} onClick={saveCosts}>{saving ? 'Guardando…' : 'Guardar costos del mes'}</Button>
         {!settingsAvailable && <p className="mt-2 text-sm text-amber-800">La configuración de costos aún no está disponible para guardar.</p>}
         {message && <p className="mt-2 text-sm" role="status">{message}</p>}

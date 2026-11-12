@@ -137,6 +137,7 @@ export interface MetricComparison {
 }
 
 export interface MarketingExecutiveReport {
+  designCostEstimate?: { current: import('./design-costs').DesignCostEstimate; previous: import('./design-costs').DesignCostEstimate }
   commercialGrossSales?: { current: number | null; previous: number | null }
   confirmedSalesComparison?: { excludedCurrentUnits: number; excludedPreviousUnits: number; note: string }
   historyAudit?: { decisions: Array<{ row: number; decision: string; reason: string; invoice?: string; order?: number; credited?: boolean; replacement?: string; documentUnits?: number; variantMatch?: boolean }>; fair: Array<{ invoice: string; units: number; online: boolean; reason: string }> }

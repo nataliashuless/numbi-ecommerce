@@ -1,0 +1,260 @@
+{
+  "sourceUrl": "https://docs.google.com/spreadsheets/d/198Op2VTqh8tjTxBlQ0Q39SR6VYeEyRhF/edit",
+  "sheet": "Costos por Diseño",
+  "effectiveFrom": "2026-09-01",
+  "basis": "Estimado OC 32 autorizado para ventas desde septiembre de 2026; no acredita lote físico vendido",
+  "entries": [
+    {
+      "design": "Blue (Proyecto FELIPE)",
+      "category": "Infantil / Exploradores",
+      "unitCost": 60398.18561,
+      "cell": "L22"
+    },
+    {
+      "design": "White (Proyecto Felipe)",
+      "category": "Infantil / Exploradores",
+      "unitCost": 59735.43511,
+      "cell": "L23"
+    },
+    {
+      "design": "Racer (Proyecto Felipe)",
+      "category": "Infantil / Exploradores",
+      "unitCost": 62099.02231,
+      "cell": "L24"
+    },
+    {
+      "design": "Arcoiris (Proyecto Felipe)",
+      "category": "Infantil / Exploradores",
+      "unitCost": 61477.08377,
+      "cell": "L25"
+    },
+    {
+      "design": "Ama (Proyecto Felipe)",
+      "category": "Infantil / Exploradores",
+      "unitCost": 61655.03963,
+      "cell": "L26"
+    },
+    {
+      "design": "Silver (Proyecto Felipe)",
+      "category": "Infantil / Exploradores",
+      "unitCost": null,
+      "cell": "L27"
+    },
+    {
+      "design": "Boy (Proyecto FELIPE)",
+      "category": "Infantil / Exploradores",
+      "unitCost": 61520.4894,
+      "cell": "L28"
+    },
+    {
+      "design": "EVAFeli1-Lia",
+      "category": "Infantil / Exploradores",
+      "unitCost": 62164.5871,
+      "cell": "L29"
+    },
+    {
+      "design": "EVAFeli2-Kiti",
+      "category": "Infantil / Exploradores",
+      "unitCost": 59901.95434,
+      "cell": "L30"
+    },
+    {
+      "design": "EVAFeli3-Galaxy",
+      "category": "Infantil / Exploradores",
+      "unitCost": 62446.10658,
+      "cell": "L31"
+    },
+    {
+      "design": "EVAFeli4-Oso",
+      "category": "Infantil / Exploradores",
+      "unitCost": 61950.63137,
+      "cell": "L32"
+    },
+    {
+      "design": "BRUNO",
+      "category": "Infantil / Exploradores",
+      "unitCost": 61747.73892,
+      "cell": "L33"
+    },
+    {
+      "design": "SAVANNA",
+      "category": "Infantil / Exploradores",
+      "unitCost": 60872.426,
+      "cell": "L34"
+    },
+    {
+      "design": "Black Colegial OC 25 Mayo 2026",
+      "category": "Infantil / Exploradores",
+      "unitCost": 60492.08567,
+      "cell": "L35"
+    },
+    {
+      "design": "Ivy",
+      "category": "Infantil / Exploradores",
+      "unitCost": 58854.29341,
+      "cell": "L36"
+    },
+    {
+      "design": "Joy",
+      "category": "Infantil / Exploradores",
+      "unitCost": 58710.22748,
+      "cell": "L37"
+    },
+    {
+      "design": "Blanco",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 51341.65261,
+      "cell": "L51"
+    },
+    {
+      "design": "Básico Niña ",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 52328.16,
+      "cell": "L52"
+    },
+    {
+      "design": "Básico Niño ",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 52328.16,
+      "cell": "L53"
+    },
+    {
+      "design": "Leo",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 52328.16,
+      "cell": "L54"
+    },
+    {
+      "design": "Vuela",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 51497.73812,
+      "cell": "L55"
+    },
+    {
+      "design": "Plateado",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": null,
+      "cell": "L56"
+    },
+    {
+      "design": "Chocolate",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 53331.31792,
+      "cell": "L57"
+    },
+    {
+      "design": "Globo",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 51763.28884,
+      "cell": "L58"
+    },
+    {
+      "design": "Rosa",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 51349.16155,
+      "cell": "L59"
+    },
+    {
+      "design": "Elefante",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 53473,
+      "cell": "L60"
+    },
+    {
+      "design": "Espacio",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 53473,
+      "cell": "L61"
+    },
+    {
+      "design": "EVASebas1-Sharky",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 51494.74819,
+      "cell": "L62"
+    },
+    {
+      "design": "EVASebas2-Octy",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 50904.11393,
+      "cell": "L63"
+    },
+    {
+      "design": "EVASebas3-Fada",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 51108.11786,
+      "cell": "L64"
+    },
+    {
+      "design": "EVASebas4-Miau",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 51281.97948,
+      "cell": "L65"
+    },
+    {
+      "design": "Milo",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 49141.19917,
+      "cell": "L66"
+    },
+    {
+      "design": "Nala",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 49366.74546,
+      "cell": "L67"
+    },
+    {
+      "design": "Sandalia Alicia Cafe",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 42517.33795,
+      "cell": "F634"
+    },
+    {
+      "design": "Sandalia Alicia Plateado",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 42090.70858,
+      "cell": "F657"
+    },
+    {
+      "design": "Sandalia Alicia Lila Brillante",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 42327.41907,
+      "cell": "F679"
+    },
+    {
+      "design": "Sandalia GENERAL",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 43405.02591,
+      "cell": "F704"
+    },
+    {
+      "design": "Sandalia Pescador Coral Suave",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 40933.65463,
+      "cell": "F908"
+    },
+    {
+      "design": "Sandalia Alma Dorada",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 42734.8854,
+      "cell": "F923"
+    },
+    {
+      "design": "Sandalia Alma Lila Corazon",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 40734.8854,
+      "cell": "F937"
+    },
+    {
+      "design": "Sandalia Pescador Canela",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 41059.80848,
+      "cell": "F952"
+    },
+    {
+      "design": "Sandalia Pescador Azul Oscuro",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 40734.8854,
+      "cell": "F967"
+    }
+  ]
+}
