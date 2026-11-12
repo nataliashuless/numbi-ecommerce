@@ -9,7 +9,7 @@ import { contributionCosts, divide, periodMonths, sumKnown, type CostField, type
 import type { MarketingExecutiveReport, PeriodMetrics } from '@/lib/marketing/metrics'
 import { SALES_RECONCILIATION_PENDING } from '@/lib/sales/reconciliation-status'
 
-type Traffic = { available: boolean; totals?: { totalUsers?: number } | null } | null
+type Traffic = { available: boolean; source?: string; totals?: { totalUsers?: number; conversionRate?: number | null } | null } | null
 type Ads = { error?: string; totals?: { spend?: number; impressions?: number } } | null
 const money = (value: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(value)
 const number = (value: number) => new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(value)
@@ -39,7 +39,7 @@ export function ContributionTable({ report, currentAds, previousAds, currentTraf
     const fees = contributionCosts(period, metrics, costs)
     const marketing = sumKnown([spend, fees.agencyFee, fees.agencyVariable, fees.natiFee, fees.servers])
     const webOrders = metrics.channels.filter(channel => channel.key === 'web').reduce((sum, channel) => sum + channel.orders, 0)
-    return { spend, impressions, users, ...fees, marketing, cvr: divide(webOrders, users), cpa: divide(spend, metrics.onlineOrders), marketingShare: divide(spend, gross), ticket: divide(gross, metrics.onlineOrders), costPerView: divide(spend, impressions), unitCost: divide(fees.shoes, metrics.units), contribution: marketing !== null && fees.shoes !== null ? metrics.netSales - marketing - fees.shoes : null }
+    return { spend, impressions, users, ...fees, marketing, cvr: traffic?.source === 'shopify' ? traffic.totals?.conversionRate ?? null : divide(webOrders, users), cpa: divide(spend, metrics.onlineOrders), marketingShare: divide(spend, gross), ticket: divide(gross, metrics.onlineOrders), costPerView: divide(spend, impressions), unitCost: divide(fees.shoes, metrics.units), contribution: marketing !== null && fees.shoes !== null ? metrics.netSales - marketing - fees.shoes : null }
   }
   const current = periodValues(report.current, report.periods.current, currentAds, currentTraffic, report.commercialGrossSales?.current ?? null)
   const previous = periodValues(report.previous, report.periods.previous, previousAds, previousTraffic, report.commercialGrossSales?.previous ?? null)
@@ -50,11 +50,11 @@ export function ContributionTable({ report, currentAds, previousAds, currentTraf
   const spendDelta = comparison && current.spend !== null && previous.spend !== null ? current.spend - previous.spend : null
   const marginal = salesDelta !== null && spendDelta !== null && spendDelta !== 0 ? salesDelta / spendDelta : null
   const rows: Array<{ label: string; current: number | null; previous: number | null; format: (n: number) => string; formula: string; highlight?: boolean }> = [
-    { label: 'Usuarios', current: current.users, previous: previous.users, format: number, formula: 'Usuarios únicos GA4 del período' },
+    { label: 'Usuarios', current: current.users, previous: previous.users, format: number, formula: 'Visitantes únicos Shopify del período; GA4 si Shopify no está disponible' },
     { label: 'Pedidos online', current: report.current.onlineOrders, previous: report.previous.onlineOrders, format: number, formula: 'Pedidos del histórico compartido, contados una vez' },
     { label: 'Ventas brutas', current: report.commercialGrossSales?.current ?? null, previous: report.commercialGrossSales?.previous ?? null, format: money, formula: 'Valor de producto antes de descuentos e IVA, cuando todas las fuentes lo documentan' },
     { label: 'Crecimiento ventas brutas', current: salesComparable ? divide(salesDelta, grossPrevious) : null, previous: null, format: percentage, formula: 'Ventas brutas actuales ÷ comparadas − 1' },
-    { label: 'CVR web', current: current.cvr, previous: previous.cvr, format: percentage, formula: 'Pedidos web (WooCommerce + Shopify) ÷ usuarios GA4' },
+    { label: 'CVR web', current: current.cvr, previous: previous.cvr, format: percentage, formula: 'Shopify: sesiones con compra ÷ sesiones. En GA4: pedidos web ÷ usuarios' },
     { label: 'Impresiones', current: current.impressions, previous: previous.impressions, format: number, formula: 'Impresiones registradas por Meta' },
     { label: 'Importe gastado', current: current.spend, previous: previous.spend, format: money, formula: 'Publicidad Meta en las fechas seleccionadas' },
     { label: 'Costo por pedido', current: current.cpa, previous: previous.cpa, format: money, formula: 'Publicidad Meta ÷ pedidos online' },
@@ -93,6 +93,7 @@ export function ContributionTable({ report, currentAds, previousAds, currentTraf
       <Button variant="outline" onClick={() => { setEditing(!editing); setMessage('') }}>Costos mensuales</Button>
     </CardHeader>
     <CardContent className="space-y-4">
+      <p className="text-xs text-slate-500">Visitantes y conversión provienen de Shopify y solo cubren su tienda, incluido 2025 desde la migración; no el tráfico antiguo de WooCommerce. Publicidad e impresiones provienen de Meta.</p>
       <p className="text-xs text-slate-500">Ventas y pares usan las fuentes del tablero. Costos importados de la hoja <a href={sourceUrl} target="_blank" rel="noreferrer" className="underline">Monthly</a> hasta agosto de 2026. Los campos vacíos requieren un importe. Los costos fijos se prorratean por días.</p>
       {(grossCurrent === null || comparison && grossPrevious === null) && <p className="text-xs text-slate-500">El importe bruto y sus ratios requieren precios anteriores a descuentos en todas las ventas del período. El histórico con solo importe neto queda pendiente en esas filas.</p>}
       {SALES_RECONCILIATION_PENDING && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Ventas, unidades y contribución son provisionales mientras se cierra la conciliación. Las variaciones de ventas y el retorno marginal quedan pendientes.</p>}
