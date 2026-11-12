@@ -30,7 +30,7 @@ test('partial-month fees use calendar days, unit costs follow each month, and mi
   assert.equal(api.divide(0, 10), 0)
 })
 test('gross revenue is available only with pre-discount and VAT evidence across every selected source', () => {
-  const records = [{ invoice: { id: 'shopify:1', date: '2026-08-10', items: [{ code: 'SKU' }] } }]
+  const records = [{ invoice: { id: 'shopify:1', date: '2026-08-10', items: [{ code: 'SKU', quantity: 1 }] } }]
   const orders = [{ id: 1, raw: { taxes_included: true, line_items: [{ sku: 'SKU', quantity: 2, current_quantity: 1, price: '119', tax_lines: [{ rate: 0.19 }] }] } }]
   assert.equal(api.documentedGrossSales(records, orders, period), 200)
   assert.equal(api.documentedGrossSales([...records, { invoice: { id: 'excel:2', date: '2026-08-10' } }], orders, period), null)
@@ -42,4 +42,10 @@ test('gross Siigo and linked Excel history require matching original prices and 
   assert.equal(api.documentedGrossSales(records, [], period, original), 120)
   assert.equal(api.documentedGrossSales(records, [], period, [{ ...original[0], items: [{ code: 'SKU', quantity: 1, price: 50 }] }]), null)
   assert.equal(api.documentedGrossSales([{ invoice: { ...records[0].invoice, items: [{ code: 'SKU', quantity: 2 }] } }], [], period, original), null)
+})
+
+test('a filtered product with a reused Shopify SKU does not inherit another line gross amount', () => {
+  const records = [{ invoice: { id: 'shopify:1', date: '2026-08-10', items: [{ code: 'REUSED', quantity: 1 }] } }]
+  const orders = [{ id: 1, raw: { taxes_included: false, line_items: [{ sku: 'REUSED', quantity: 1, price: '100' }, { sku: 'REUSED', quantity: 1, price: '300' }] } }]
+  assert.equal(api.documentedGrossSales(records, orders, period), null)
 })

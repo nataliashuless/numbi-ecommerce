@@ -82,6 +82,11 @@ export function documentedGrossSales(records: Array<{ invoice: CachedSiigoInvoic
     if (!order?.raw || typeof order.raw.taxes_included !== 'boolean') return null
     const eligibleCodes = new Set((invoice.items || []).map(item => item.code))
     const currentItems = (order.raw.line_items || []).filter(item => Number(item.current_quantity ?? item.quantity) > 0)
+    for (const code of eligibleCodes) {
+      const selectedUnits = (invoice.items || []).filter(item => item.code === code).reduce((sum, item) => sum + Number(item.quantity || 0), 0)
+      const matchingUnits = currentItems.reduce((sum, item, index) => (item.sku || `SHOPIFY-${order.id}-${index}`) === code ? sum + Number(item.current_quantity ?? item.quantity ?? 0) : sum, 0)
+      if (selectedUnits !== matchingUnits) return null
+    }
     for (const [index, item] of currentItems.entries()) {
       if (!eligibleCodes.has(item.sku || `SHOPIFY-${order.id}-${index}`)) continue
       const taxes = item.tax_lines || []
