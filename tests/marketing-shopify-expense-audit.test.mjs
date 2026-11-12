@@ -5,7 +5,7 @@ import vm from 'node:vm'
 import ts from 'typescript'
 let authError, failed, calls
 const route = {}
-vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../app/api/marketing/shopify-expenses/route.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: route, require(name) {
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../app/api/marketing/shopify-expenses/route.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: route, URL, require(name) {
   if (name === 'next/server') return { NextResponse: { json: body => body } }
   if (name === '@/lib/auth-helpers') return { requireAuth: async () => ({ error: authError }) }
   if (name === '@/lib/siigo-client') return {
@@ -26,4 +26,15 @@ test('expense audit requires authentication, minimizes unrelated lines, preserve
   assert.equal(result.documents[2].items[0].account.movement, 'Credit')
   failed = true
   assert.equal((await route.GET()).complete, false)
+})
+
+test('content audit selects its own account and rejects arbitrary categories', async () => {
+  authError = undefined; failed = false; calls = 0
+  const result = await route.GET({ url: 'https://example.test/api/marketing/shopify-expenses?category=content' })
+  assert.equal(result.account, '52356004')
+  assert.equal(result.complete, true)
+  assert.equal(result.documents.length, 0)
+  calls = 0
+  assert.equal((await route.GET({ url: 'https://example.test/api/marketing/shopify-expenses?category=other' })).error, 'Categoría inválida')
+  assert.equal(calls, 0)
 })

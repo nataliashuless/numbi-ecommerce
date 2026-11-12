@@ -1,0 +1,12 @@
+{
+  "account": "52356004",
+  "through": "2026-11-12",
+  "basis": "Base de las líneas de gasto Siigo antes de IVA y retenciones, por fecha contable. Compras, documentos soporte y comprobantes consultados íntegramente. Sin sumar pagos ni honorarios separados.",
+  "documents": [
+    { "id": "93307ff5-5c26-4b73-b63e-905ec9bac0fa", "name": "FC-1-586", "date": "2026-09-07", "amount": 1000000, "description": "Asesoría creativa y gestión de pauta · fee septiembre" },
+    { "id": "857d18a9-df1d-4af6-8976-13a6872d24dc", "name": "DS-1-309", "date": "2026-09-30", "amount": 1061189.90, "description": "Creación de contenido digital" },
+    { "id": "febf8711-7c59-4361-8b66-f133dbd9b085", "name": "FC-1-623", "date": "2026-10-05", "amount": 1000000, "description": "Asesoría creativa y gestión de pauta · fee octubre" },
+    { "id": "5937fe41-8153-4030-8000-786c211d4885", "name": "FC-1-618", "date": "2026-10-07", "amount": 429333, "description": "Comisiones en ventas de agosto · contabilizadas en octubre" },
+    { "id": "4aa3159f-28db-4afd-9c3a-a84dd7ce70e7", "name": "FC-1-642", "date": "2026-11-05", "amount": 1000000, "description": "Asesoría creativa y gestión de pauta · fee noviembre" }
+  ]
+}

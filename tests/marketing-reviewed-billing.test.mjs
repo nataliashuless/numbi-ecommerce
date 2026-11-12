@@ -7,6 +7,7 @@ function load(file) {
   const api = {}
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL(`../lib/marketing/${file}.ts`, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText, { exports: api, Date, structuredClone, require(name) {
     if (name === '@/data/marketing-shopify-siigo-expenses.json') return JSON.parse(fs.readFileSync(new URL('../data/marketing-shopify-siigo-expenses.json', import.meta.url), 'utf8'))
+    if (name === '@/data/marketing-content-siigo-expenses.json') return JSON.parse(fs.readFileSync(new URL('../data/marketing-content-siigo-expenses.json', import.meta.url), 'utf8'))
     throw new Error(name)
   } })
   return api
@@ -49,4 +50,21 @@ test('unposted November remains unavailable rather than zero or an estimated USD
   const all = Object.values(costs).flatMap(month => month.platformReview?.charges || [])
   assert.equal(new Set(all.map(charge => charge.invoice)).size, all.length)
   assert.equal(all.filter(charge => charge.cop !== null).length, 0)
+})
+
+test('agency content uses net accounting bases and document dates, replacing separate fees without duplicate payments', () => {
+  const costs = reviewedBillingCosts({ '2026-09': { agencyFee: 1206375, agencyVariable: 429333, natiFee: 1000000, contentFee: 999 } })
+  assert.equal(costs['2026-09'].contentFee, 2061189.90)
+  assert.equal(costs['2026-10'].contentFee, 1429333)
+  assert.equal(costs['2026-11'].contentFee, 1000000)
+  for (const field of ['agencyFee', 'agencyVariable', 'natiFee']) assert.equal(costs['2026-09'][field], undefined)
+  const fee = (start, end) => contributionCosts({ start, end }, metric, costs)
+  assert.equal(fee('2026-09-01', '2026-09-30').agencyTotal, 2061189.90)
+  assert.equal(fee('2026-09-07', '2026-09-07').agencyTotal, 1000000)
+  assert.equal(fee('2026-10-01', '2026-10-06').agencyTotal, 1000000)
+  assert.equal(fee('2026-10-07', '2026-10-07').agencyTotal, 429333)
+  assert.equal(fee('2026-11-01', '2026-11-12').agencyTotal, 1000000)
+  assert.equal(fee('2026-11-01', '2026-11-13').agencyTotal, null)
+  assert.equal(fee('2026-11-01', '2026-11-30').agencyDocumented, 1000000)
+  assert.equal(fee('2026-09-01', '2026-11-12').agencyTotal, 4490522.90)
 })

@@ -1,5 +1,6 @@
 import type { MonthlyCosts } from './contribution'
 import siigoExpenses from '@/data/marketing-shopify-siigo-expenses.json'
+import contentExpenses from '@/data/marketing-content-siigo-expenses.json'
 
 /** Reviewed supplier documents replace their accounting cash entry, never add to it.
  * HostGator 6685364: paid COP 305,400 on 2026-08-04; annual service through 2027-08-03.
@@ -43,6 +44,12 @@ export function reviewedBillingCosts(input: MonthlyCosts): MonthlyCosts {
     costs[month].platformAccounting = { through: siigoExpenses.through, account: siigoExpenses.account, documents }
     costs[month].platformFee = Math.round(documents.reduce((sum, document) => sum + document.amount, 0) * 100) / 100
     delete costs[month].platformReview
+  }
+  for (const month of ['2026-09', '2026-10', '2026-11']) {
+    const documents = contentExpenses.documents.filter(document => document.date.startsWith(month))
+    costs[month] = { ...costs[month], contentFee: Math.round(documents.reduce((sum, document) => sum + document.amount, 0) * 100) / 100,
+      contentAccounting: { through: contentExpenses.through, account: contentExpenses.account, documents } }
+    for (const field of ['agencyFee', 'agencyVariable', 'natiFee'] as const) delete costs[month][field]
   }
   return costs
 }

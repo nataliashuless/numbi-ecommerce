@@ -4,7 +4,7 @@ import { listExpenseDocuments, listAccountingJournals } from '@/lib/siigo-client
 
 export const maxDuration = 300
 
-/** No writes to Siigo. Only Shopify expense lines leave the server. Payment
+/** No writes to Siigo. Only the selected marketing expense lines leave the server. Payment
  * vouchers are excluded: paying a recognized expense is not a second expense. */
 export async function GET(request?: Request) {
   const { error } = await requireAuth()

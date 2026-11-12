@@ -6,6 +6,7 @@ export const COST_FIELDS = ['agencyFee', 'agencyVariable', 'natiFee', 'servers',
 export type CostField = typeof COST_FIELDS[number]
 export type MonthlyCosts = Record<string, Partial<Record<CostField, number>> & {
   hostingService?: { start: string; end: string; amount: number }
+  contentAccounting?: { through: string; account: string; documents: Array<{ id: string; name: string; date: string; amount: number; description: string }> }
   platformAccounting?: { through: string; account: string; documents: Array<{ id: string; name: string; date: string; amount: number }> }
   platformReview?: { confirmedCop: number; charges: Array<{ date: string; invoice: string; usd: number; cop: number | null }>; note: string }
 }>
@@ -31,8 +32,13 @@ export function contributionCosts(period: DatePeriod, metrics: PeriodMetrics, co
     const last = period.end.startsWith(month) ? Number(period.end.slice(8, 10)) : days
     const fraction = (last - first + 1) / days
     const content = costs[month]?.contentFee
+    const contentAccounting = costs[month]?.contentAccounting
     const feeParts = ['agencyFee', 'agencyVariable', 'natiFee'] as const
-    if (content !== undefined) result.agencyTotal += content * fraction
+    if (contentAccounting) {
+      result.agencyTotal += contentAccounting.documents.filter(document => document.date >= period.start && document.date <= period.end).reduce((sum, document) => sum + document.amount, 0)
+      if (`${month}-${String(last).padStart(2, '0')}` > contentAccounting.through) missing.push(`${month}:agencyTotal`)
+    }
+    else if (content !== undefined) result.agencyTotal += content * fraction
     else if (feeParts.every(field => costs[month]?.[field] !== undefined)) result.agencyTotal += feeParts.reduce((sum, field) => sum + costs[month]![field]!, 0) * fraction
     else missing.push(`${month}:agencyTotal`)
     const review = costs[month]?.platformReview
@@ -74,6 +80,7 @@ export function contributionCosts(period: DatePeriod, metrics: PeriodMetrics, co
   const known = (field: string) => !missing.some(key => key.endsWith(`:${field}`))
   return {
     agencyTotal: known('agencyTotal') ? result.agencyTotal : null,
+    agencyDocumented: result.agencyTotal,
     platformFee: known('platformFee') ? result.platformFee : null,
     platformDocumented: result.platformDocumented,
     agencyFee: known('agencyFee') ? result.agencyFee : null,
