@@ -18,6 +18,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { KpiCard } from '@/components/marketing/kpi-card'
+import { ContributionTable } from '@/components/marketing/contribution-table'
+import type { MonthlyCosts, MonthlyCostUpdates } from '@/lib/marketing/contribution'
 import type { MarketingExecutiveReport, MarketingView, SizeMetric } from '@/lib/marketing/metrics'
 
 type ObjectiveKey =
@@ -61,6 +63,7 @@ interface GA4Response {
   available: boolean
   error?: string
   totals?: {
+    totalUsers?: number
     sessions?: number
     addToCarts?: number
     checkouts?: number
@@ -208,6 +211,7 @@ export default function MarketingPage() {
   const [tableSearch, setTableSearch] = useState('')
   const [objectives, setObjectives] = useState<Objectives>({})
   const [settingsAvailable, setSettingsAvailable] = useState(false)
+  const [monthlyCosts, setMonthlyCosts] = useState<MonthlyCosts>({})
   const [showSettings, setShowSettings] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
@@ -216,10 +220,11 @@ export default function MarketingPage() {
   const [showAnnotation, setShowAnnotation] = useState(false)
   const [annotationForm, setAnnotationForm] = useState({ annotation_date: '', type: 'promocion', title: '', detail: '' })
 
-  async function fetchSupportingData(nextReport: MarketingExecutiveReport) {
+  async function fetchSupportingData(nextReport: MarketingExecutiveReport, version = requestVersion.current) {
     const { current, previous } = nextReport.periods
     const annotationResponse = await fetch(`/api/marketing/annotations?start_date=${nextReport.trend[0]?.month || current.start}&end_date=${current.end}`)
       .then(response => response.json()).catch(() => ({ available: false, items: [] }))
+    if (version !== requestVersion.current) return
     setAnnotationsAvailable(Boolean(annotationResponse.available))
     setAnnotations(annotationResponse.items || [])
 
@@ -233,6 +238,7 @@ export default function MarketingPage() {
         fetch(metaUrl(current, 'adset')).then(response => response.json()),
         fetch(metaUrl(current, 'account', true)).then(response => response.json()),
       ])
+      if (version !== requestVersion.current) return
       const responseError = responses.find(response => response?.error)?.error || null
       setMetaError(responseError)
       setMetaCurrent({ ...responses[0], daily: responses[5]?.daily || [] }); setMetaPrevious(nextReport.filters.comparisonMode === 'none' ? null : responses[1]); setMetaAds(responses[2]); setMetaAdsPrevious(responses[3]); setMetaAdsets(responses[4])
@@ -246,6 +252,7 @@ export default function MarketingPage() {
         fetch(`/api/ga4/insights?start_date=${current.start}&end_date=${current.end}`).then(response => response.json()),
         nextReport.filters.comparisonMode === 'none' ? Promise.resolve(null) : fetch(`/api/ga4/insights?start_date=${previous.start}&end_date=${previous.end}`).then(response => response.json()),
       ])
+      if (version !== requestVersion.current) return
       setGa4Current(currentGa); setGa4Previous(previousGa)
     } else { setGa4Current(null); setGa4Previous(null) }
   }
@@ -253,6 +260,7 @@ export default function MarketingPage() {
   async function fetchReport() {
     const version = ++requestVersion.current
     setLoading(true); setError(null)
+    setMetaCurrent(null); setMetaPrevious(null); setGa4Current(null); setGa4Previous(null)
     const params = new URLSearchParams({ view, comparison: comparisonMode })
     if (startDate && endDate) { params.set('start_date', startDate); params.set('end_date', endDate) }
     if (category) params.set('category', category)
@@ -269,7 +277,8 @@ export default function MarketingPage() {
       if (!response.ok) throw new Error(payload.error || 'No fue posible cargar Marketing')
       if (version !== requestVersion.current) return
       setReport(payload)
-      await fetchSupportingData(payload).catch(() => {
+      await fetchSupportingData(payload, version).catch(() => {
+        if (version !== requestVersion.current) return
         setMetaError('No fue posible actualizar Meta en este momento. El reporte de ventas continúa disponible.')
       })
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Error desconocido') }
@@ -278,7 +287,7 @@ export default function MarketingPage() {
 
   useEffect(() => {
     fetch('/api/marketing/settings').then(response => response.json()).then(payload => {
-      setSettingsAvailable(Boolean(payload.available)); setObjectives(payload.objectives || {})
+      setSettingsAvailable(Boolean(payload.available)); setObjectives(payload.objectives || {}); setMonthlyCosts(payload.costs || {})
     }).catch(() => {})
   }, [])
 
@@ -291,6 +300,13 @@ export default function MarketingPage() {
   async function saveObjectives() {
     const response = await fetch('/api/marketing/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ objectives }) })
     if (response.ok) setShowSettings(false)
+  }
+
+  async function saveMonthlyCosts(costs: MonthlyCostUpdates) {
+    const response = await fetch('/api/marketing/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ costs }) })
+    const payload = await response.json()
+    if (!response.ok) throw new Error(payload.error || 'No se pudieron guardar los costos')
+    setMonthlyCosts(payload.costs)
   }
 
   async function createAnnotation() {
@@ -356,6 +372,7 @@ export default function MarketingPage() {
         {metaError && <Card className="border-rose-200 bg-rose-50"><CardContent className="flex flex-col gap-3 p-5 text-rose-900 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">Meta Ads necesita reconexión</p><p className="mt-1 text-sm">{metaError.includes('Session has expired') ? 'El token de acceso venció. Gasto, campañas y anuncios no se pueden consultar hasta renovarlo.' : metaError}</p></div><Link href="/dashboard/configuracion"><Button variant="outline" className="border-rose-300 bg-white text-rose-900">Ir a configuración</Button></Link></CardContent></Card>}
         {report.filters.comparisonMode === 'year' && <AnnualProgressCard report={report} />}
         {comparisonMode !== 'none' && <YtdComparison report={report} spend={spend} previousSpend={previousSpend} mer={mer} previousMer={previousMer} comparisonReliable={comparisonReliable} />}
+        <ContributionTable key={`${report.periods.current.start}:${report.periods.current.end}:${report.filters.comparisonMode}`} report={report} currentAds={metaCurrent} previousAds={metaPrevious} currentTraffic={ga4Current} previousTraffic={ga4Previous} costs={monthlyCosts} settingsAvailable={settingsAvailable} onSave={saveMonthlyCosts} />
         <CategoryChannelUnitsChart report={report} />
         <div className="grid items-stretch gap-6 xl:grid-cols-3">
           <DesignSalesChart report={report} />

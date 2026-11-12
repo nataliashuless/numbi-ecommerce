@@ -27,10 +27,11 @@ export interface ShopifyLineItemRaw {
   quantity?: number
   current_quantity?: number
   price?: string
-  tax_lines?: Array<{ price?: string }>
+  tax_lines?: Array<{ price?: string; rate?: number }>
 }
 
 export interface ShopifyOrderRaw {
+  taxes_included?: boolean
   shipping_address?: { city?: string | null; province?: string | null } | null
   order_number?: number
   created_at?: string
@@ -136,6 +137,7 @@ export interface MetricComparison {
 }
 
 export interface MarketingExecutiveReport {
+  commercialGrossSales?: { current: number | null; previous: number | null }
   confirmedSalesComparison?: { excludedCurrentUnits: number; excludedPreviousUnits: number; note: string }
   historyAudit?: { decisions: Array<{ row: number; decision: string; reason: string; invoice?: string; order?: number; credited?: boolean; replacement?: string; documentUnits?: number; variantMatch?: boolean }>; fair: Array<{ invoice: string; units: number; online: boolean; reason: string }> }
   unitComparisonReview?: { status: string; reportedUnits: number; message: string }

@@ -1,0 +1,143 @@
+{
+  "sourceUrl": "https://docs.google.com/spreadsheets/d/18PIYecGjCDSN4aUYgP8vyrPPg0c877FNeEakqKlH2OU/edit?gid=2090211788",
+  "sheet": "Monthly",
+  "sourceRange": "B2:AG40",
+  "costs": {
+    "2024-02": {},
+    "2024-03": {},
+    "2024-04": {
+      "servers": 35100
+    },
+    "2024-05": {
+      "servers": 35100
+    },
+    "2024-06": {
+      "servers": 35100
+    },
+    "2024-07": {
+      "servers": 35100
+    },
+    "2024-08": {
+      "servers": 35100
+    },
+    "2024-09": {
+      "servers": 35100
+    },
+    "2024-10": {
+      "servers": 35100
+    },
+    "2024-11": {
+      "servers": 35100
+    },
+    "2024-12": {
+      "servers": 35100
+    },
+    "2025-01": {
+      "servers": 35100
+    },
+    "2025-02": {
+      "servers": 35100
+    },
+    "2025-03": {
+      "servers": 35100
+    },
+    "2025-04": {
+      "servers": 35100
+    },
+    "2025-05": {
+      "servers": 35100
+    },
+    "2025-06": {
+      "servers": 35100
+    },
+    "2025-07": {
+      "servers": 35100
+    },
+    "2025-08": {
+      "agencyFee": 1206375,
+      "agencyVariable": 907563,
+      "natiFee": 1000000,
+      "servers": 35100
+    },
+    "2025-09": {
+      "agencyFee": 1206375,
+      "agencyVariable": 907563,
+      "natiFee": 1000000,
+      "servers": 35100
+    },
+    "2025-10": {
+      "agencyFee": 1206375,
+      "agencyVariable": 907563,
+      "natiFee": 1000000,
+      "servers": 35100
+    },
+    "2025-11": {
+      "agencyFee": 1206375,
+      "agencyVariable": 907563,
+      "natiFee": 1000000,
+      "servers": 35100
+    },
+    "2025-12": {
+      "agencyFee": 1206375,
+      "agencyVariable": 907563,
+      "natiFee": 1000000,
+      "servers": 35100
+    },
+    "2026-01": {
+      "agencyFee": 1206375,
+      "agencyVariable": 578831,
+      "natiFee": 1000000,
+      "servers": 35100,
+      "unitCost": 44258
+    },
+    "2026-02": {
+      "agencyFee": 1206375,
+      "agencyVariable": 0,
+      "natiFee": 1000000,
+      "servers": 35100,
+      "unitCost": 44258
+    },
+    "2026-03": {
+      "agencyFee": 1206375,
+      "agencyVariable": 588148,
+      "natiFee": 1000000,
+      "servers": 35100,
+      "unitCost": 44258
+    },
+    "2026-04": {
+      "agencyFee": 1206375,
+      "agencyVariable": 588148,
+      "natiFee": 1000000,
+      "servers": 35100,
+      "unitCost": 44258
+    },
+    "2026-05": {
+      "agencyFee": 1206375,
+      "agencyVariable": 588148,
+      "natiFee": 1000000,
+      "servers": 35100,
+      "unitCost": 44258
+    },
+    "2026-06": {
+      "agencyFee": 1206375,
+      "natiFee": 1000000,
+      "servers": 35100,
+      "unitCost": 44258,
+      "agencyVariable": 0
+    },
+    "2026-07": {
+      "agencyFee": 1206375,
+      "natiFee": 1000000,
+      "servers": 35100,
+      "unitCost": 44258,
+      "agencyVariable": 0
+    },
+    "2026-08": {
+      "agencyFee": 1206375,
+      "natiFee": 1000000,
+      "servers": 35100,
+      "unitCost": 44258,
+      "agencyVariable": 0
+    }
+  }
+}

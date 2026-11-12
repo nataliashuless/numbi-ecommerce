@@ -1,4 +1,5 @@
 import { SALES_RECONCILIATION_PENDING, SALES_RECONCILIATION_MESSAGE } from '@/lib/sales/reconciliation-status'
+import { documentedGrossSales } from '@/lib/marketing/contribution'
 import { canonicalInvoices } from '@/lib/marketing/canonical-source'
 import { NextResponse } from 'next/server'
 import excelHistory from '@/data/marketing-online-excel-2025.json'
@@ -337,6 +338,7 @@ export async function GET(request: Request) {
         previous: comparisonMode === 'none' ? [] : ledger.reconciliation.filter(row => inPeriod(row.date, periods.previous)),
       },
       saleDateCoverage,
+      commercialGrossSales: { current: documentedGrossSales(ledger.records, orders, periods.current), previous: comparisonMode === 'none' ? null : documentedGrossSales(ledger.records, orders, periods.previous) },
       designSales: Array.from(designSalesBuckets.values()).sort((a, b) =>
         b.year.localeCompare(a.year) || b.sales - a.sales,
       ),
