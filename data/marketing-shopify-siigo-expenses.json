@@ -1,0 +1,19 @@
+{
+  "account": "52356005",
+  "through": "2026-11-12",
+  "basis": "Siigo: documentos soporte aceptados, base antes de IVA; comprobantes contables débito menos crédito. No incluye comprobantes de pago.",
+  "documents": [
+    { "id": "01e85169-2c1c-4553-b3ff-8fa8f9d9dfdd", "name": "DS-1-284", "date": "2026-09-01", "amount": 741029.52 },
+    { "id": "57bf3701-921c-4ad7-985b-61d0ebc7c0e4", "name": "DS-1-289", "date": "2026-09-01", "amount": 145275 },
+    { "id": "e64e4a1a-cf90-4455-91e0-e8af5974b7e8", "name": "CC-7-4", "date": "2026-09-07", "amount": -145275 },
+    { "id": "e7724c14-5294-4a3c-b86c-bea73205afb7", "name": "DS-1-296", "date": "2026-09-02", "amount": 107089.48 },
+    { "id": "403d5fac-98f6-474d-af41-3364b76213cc", "name": "DS-1-306", "date": "2026-09-17", "amount": 244935.55 },
+    { "id": "47985d26-1b1f-4ff0-b6df-2dd67dbed766", "name": "DS-1-314", "date": "2026-09-20", "amount": 151439 },
+    { "id": "bf7c490f-c9e0-4a7f-a24f-56ed2fb70cf9", "name": "DS-1-307", "date": "2026-09-28", "amount": 106547.52 },
+    { "id": "409a0f33-e865-447b-973a-7cf29ed91898", "name": "DS-1-310", "date": "2026-10-02", "amount": 104453.85 },
+    { "id": "8e4b4b5a-39eb-4e89-9f10-fc434c693a30", "name": "DS-1-312", "date": "2026-10-08", "amount": 701120.35 },
+    { "id": "4fc57cce-2e4e-407c-937c-092ad3d05972", "name": "DS-1-311", "date": "2026-10-13", "amount": 104453.85 },
+    { "id": "016a880a-500a-4949-882a-03d156230338", "name": "DS-1-320", "date": "2026-10-17", "amount": 250466.34 },
+    { "id": "73955514-a8f1-47ed-a854-e9b999f55030", "name": "DS-1-327", "date": "2026-10-28", "amount": 101054.08 }
+  ]
+}

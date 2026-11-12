@@ -1,4 +1,5 @@
 import type { MonthlyCosts } from './contribution'
+import siigoExpenses from '@/data/marketing-shopify-siigo-expenses.json'
 
 /** Reviewed supplier documents replace their accounting cash entry, never add to it.
  * HostGator 6685364: paid COP 305,400 on 2026-08-04; annual service through 2027-08-03.
@@ -36,6 +37,12 @@ export function reviewedBillingCosts(input: MonthlyCosts): MonthlyCosts {
       note: 'Revisión al 12/11/2026. Falta conciliar el total del mes con los movimientos bancarios. No se convierten USD con una TRM estimada ni se confirman débitos sin referencia Shopify.',
     } }
     delete costs[month].platformFee
+  }
+  for (const month of ['2026-09', '2026-10']) {
+    const documents = siigoExpenses.documents.filter(document => document.date.startsWith(month))
+    costs[month].platformAccounting = { through: siigoExpenses.through, account: siigoExpenses.account, documents }
+    costs[month].platformFee = Math.round(documents.reduce((sum, document) => sum + document.amount, 0) * 100) / 100
+    delete costs[month].platformReview
   }
   return costs
 }

@@ -6,6 +6,7 @@ export const COST_FIELDS = ['agencyFee', 'agencyVariable', 'natiFee', 'servers',
 export type CostField = typeof COST_FIELDS[number]
 export type MonthlyCosts = Record<string, Partial<Record<CostField, number>> & {
   hostingService?: { start: string; end: string; amount: number }
+  platformAccounting?: { through: string; account: string; documents: Array<{ id: string; name: string; date: string; amount: number }> }
   platformReview?: { confirmedCop: number; charges: Array<{ date: string; invoice: string; usd: number; cop: number | null }>; note: string }
 }>
 export type MonthlyCostUpdates = Record<string, Partial<Record<CostField, number | null>>>
@@ -35,7 +36,12 @@ export function contributionCosts(period: DatePeriod, metrics: PeriodMetrics, co
     else if (feeParts.every(field => costs[month]?.[field] !== undefined)) result.agencyTotal += feeParts.reduce((sum, field) => sum + costs[month]![field]!, 0) * fraction
     else missing.push(`${month}:agencyTotal`)
     const review = costs[month]?.platformReview
-    if (review) {
+    const accounting = costs[month]?.platformAccounting
+    if (accounting) {
+      const value = accounting.documents.filter(document => document.date >= period.start && document.date <= period.end).reduce((sum, document) => sum + document.amount, 0)
+      result.platformFee += value
+      result.platformDocumented += value
+    } else if (review) {
       missing.push(`${month}:platformFee`)
       result.platformDocumented += review.charges.filter(charge => charge.date >= period.start && charge.date <= period.end).reduce((sum, charge) => sum + (charge.cop ?? 0), 0)
     } else {

@@ -22,11 +22,11 @@ export async function GET() {
       const items = (data.items || []) as Array<Record<string, unknown>>
       const lines = items.filter(item => {
         const account = item.account as { code?: string } | undefined
-        return String(account?.code || item.code) === '52356005' || /shopify/i.test(String(item.description || ''))
+        return String(account?.code || item.code) === '52356005' || kinds[index] !== 'journals' && /shopify/i.test(String(item.description || ''))
       })
       if (!lines.length && !/shopify/i.test(String(data.observations || ''))) return []
       return [{ kind: kinds[index], id: document.id, name: data.name, date: document.date,
-        total: data.total, currency: data.currency, annulled: data.annulled, stamp: data.stamp,
+        total: data.total, currency: data.currency, annulled: data.annulled, stamp: { status: (data.stamp as { status?: string } | undefined)?.status },
         items: lines.map(item => ({ account: item.account, code: item.code, type: item.type, quantity: item.quantity, price: item.price, total: item.total, value: item.value, taxes: item.taxes, description: item.description })),
         references: String(data.observations || '').match(/(?:shopify\s*\*?\s*|factura\s*)(\d{6,})/gi) || [],
       }]

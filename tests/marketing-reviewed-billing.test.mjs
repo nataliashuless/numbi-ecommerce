@@ -5,7 +5,10 @@ import vm from 'node:vm'
 import ts from 'typescript'
 function load(file) {
   const api = {}
-  vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL(`../lib/marketing/${file}.ts`, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: api, Date, structuredClone })
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL(`../lib/marketing/${file}.ts`, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText, { exports: api, Date, structuredClone, require(name) {
+    if (name === '@/data/marketing-shopify-siigo-expenses.json') return JSON.parse(fs.readFileSync(new URL('../data/marketing-shopify-siigo-expenses.json', import.meta.url), 'utf8'))
+    throw new Error(name)
+  } })
   return api
 }
 const { reviewedBillingCosts } = load('reviewed-billing')
@@ -25,19 +28,25 @@ test('annual hosting replaces the accounting cash expense, conserves total, and 
   assert.equal(period('2026-09-01', '2026-09-30'), 305400 * 30 / 365)
   assert.ok(Math.abs(period('2026-08-01', '2026-09-15') + period('2026-09-16', '2027-08-31') - 305400) < 0.000001)
 })
-test('unreconciled Shopify bills never become zero or a guessed COP total, and bank amounts are not counted twice', () => {
+test('Siigo expense documents replace earlier bank subtotals, apply reversals once, and follow actual document dates', () => {
   const costs = reviewedBillingCosts({ '2026-09': { platformFee: 999999 } })
-  const review = costs['2026-09'].platformReview
-  assert.equal(review.confirmedCop, 151439)
-  assert.equal(review.charges.filter(charge => charge.cop !== null).length, 1)
-  assert.equal(costs['2026-09'].platformFee, undefined)
-  assert.equal(contributionCosts({ start: '2026-09-01', end: '2026-09-30' }, metric, costs).platformFee, null)
-  assert.equal(contributionCosts({ start: '2026-09-01', end: '2026-09-30' }, metric, costs).platformDocumented, 151439)
-  assert.equal(contributionCosts({ start: '2026-09-01', end: '2026-09-19' }, metric, costs).platformDocumented, 0)
+  assert.equal(costs['2026-09'].platformReview, undefined)
+  assert.equal(costs['2026-09'].platformFee, 1351041.07)
+  assert.equal(costs['2026-10'].platformFee, 1261548.47)
+  assert.ok(Math.abs(contributionCosts({ start: '2026-09-01', end: '2026-09-30' }, metric, costs).platformFee - 1351041.07) < 0.000001)
+  assert.equal(contributionCosts({ start: '2026-09-07', end: '2026-09-07' }, metric, costs).platformFee, -145275)
   assert.equal(contributionCosts({ start: '2026-09-20', end: '2026-09-20' }, metric, costs).platformDocumented, 151439)
+  const documents = Object.values(costs).flatMap(month => month.platformAccounting?.documents || [])
+  assert.equal(new Set(documents.map(document => document.id)).size, documents.length)
+  assert.equal(documents.filter(document => document.name === 'DS-1-314').length, 1)
+  // Foreign VAT and both sides of the journal must not inflate expense.
+  assert.equal(costs['2026-09'].platformAccounting.documents.find(document => document.name === 'DS-1-284').amount, 741029.52)
+})
+test('unposted November remains unavailable rather than zero or an estimated USD conversion', () => {
+  const costs = reviewedBillingCosts({})
   assert.equal(contributionCosts({ start: '2026-10-01', end: '2026-11-12' }, metric, costs).platformFee, null)
+  assert.equal(contributionCosts({ start: '2026-11-01', end: '2026-11-12' }, metric, costs).platformFee, null)
   const all = Object.values(costs).flatMap(month => month.platformReview?.charges || [])
   assert.equal(new Set(all.map(charge => charge.invoice)).size, all.length)
-  assert.equal(all.filter(charge => charge.invoice === '614615004').length, 1)
-  assert.equal(all.filter(charge => charge.cop !== null).reduce((sum, charge) => sum + charge.cop, 0), 151439)
+  assert.equal(all.filter(charge => charge.cop !== null).length, 0)
 })
