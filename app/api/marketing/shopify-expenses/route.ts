@@ -12,9 +12,6 @@ export async function GET(request?: Request) {
   const category = request ? new URL(request.url).searchParams.get('category') : null
   if (category && category !== 'content' && category !== 'shoe') return NextResponse.json({ error: 'Categoría inválida' }, { status: 400 })
   const targetAccount = category === 'shoe' ? '6135' : category === 'content' ? '52356004' : '52356005'
-  if (category === 'shoe' && request && new URL(request.url).searchParams.get('view') === '1') {
-    return new NextResponse('<!doctype html><html lang="es"><meta charset="utf-8"><title>Costos de calzado · Siigo</title><body><h1>Consulta de costos de calzado en Siigo</h1><p id="state">Consultando documentos…</p><pre id="result"></pre><script>Promise.all(["/api/marketing/shopify-expenses?category=shoe","/api/marketing/executive?start_date=2026-09-01&end_date=2026-10-31&comparison=none"].map(url=>fetch(url,{cache:"no-store"}).then(async r=>{if(!r.ok)throw Error("No se pudo completar la consulta");return r.json()}))).then(([costs,report])=>{document.getElementById("result").textContent=JSON.stringify({costs,estimate:report.designCostEstimate,products:report.current.products},null,2);document.getElementById("state").textContent=costs.complete?"Consulta completa":"Lectura parcial: revisar fuentes"}).catch(()=>{document.getElementById("state").textContent="No se pudo completar la consulta"})</script></body></html>', { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } })
-  }
   const pattern = category === 'shoe' ? /silver|platead|black|azul.*colegial|b[aá]sico/i : category === 'content' ? /agencia|contenid|community\s*manager|manejo.*redes|nati.*agenc/i : /shopify/i
   const reads = await Promise.allSettled([
     listExpenseDocuments('purchases', '2026-09-01', '2026-11-12'),

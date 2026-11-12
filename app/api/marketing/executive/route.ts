@@ -295,7 +295,7 @@ export async function GET(request: Request) {
       .maybeSingle()
 
     const designCostSource = cloudDesignSource(await readCloudValues())
-    const costInputs = ledger.records.flatMap(({ invoice }) => marketingProductItems(invoice, nonRetailProductCodes).map(item => ({ date: invoice.date.slice(0, 10), ...marketingItem(item.description || ''), units: Math.max(0, Number(item.quantity) || 0) })))
+    const costInputs = ledger.records.flatMap(({ invoice }) => marketingProductItems(invoice, nonRetailProductCodes).map(item => ({ date: invoice.date.slice(0, 10), ...marketingItem(item.description || ''), sku: item.code || undefined, units: Math.max(0, Number(item.quantity) || 0) })))
     const report: MarketingExecutiveReport = {
       source: 'Shopify directo + Excel no Shopify 2025 + WhatsApp Siigo 2026',
       historyAudit,

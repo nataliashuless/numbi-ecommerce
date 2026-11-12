@@ -39,3 +39,21 @@ test('complete estimated design costs combine with pre-September history and nev
   const mismatch = contributionCosts(period, { daily: [{ date: '2026-09-01', units: 4 }] }, {}, result)
   assert.equal(mismatch.shoes, null)
 })
+
+test('reviewed Siigo SKUs resolve titles only within their verified category; unknown Black and missing actual costs stay pending', () => {
+  const rows = [
+    { date: '2026-09-10', sku: 'WC-1112', design: 'Tenis para niñas básico: Calzado respetuoso con suela flexible', category: 'Bebé / Pequeños Caminantes', units: 2 },
+    { date: '2026-09-11', sku: '181', design: 'Black', category, units: 2 },
+    { date: '2026-10-01', sku: '183', design: 'Black', category, units: 1 },
+    { date: '2026-10-01', sku: 'different', design: 'Black', category, units: 1 },
+    { date: '2026-10-01', sku: '181', design: 'Black', category: 'Bebé / Pequeños Caminantes', units: 1 },
+    { date: '2026-10-01', sku: '067', design: 'Silver', category, units: 1 },
+  ]
+  const result = estimateDesignCosts(rows, { start: '2026-09-01', end: '2026-10-31' }, source)
+  assert.equal(result.units, 8)
+  assert.equal(result.coveredUnits, 5)
+  assert.ok(Math.abs(result.knownCost - (2 * 52328.16 + 3 * 60492.08567)) < 0.000001)
+  assert.equal(result.designs.find(row => row.design === 'Silver').unitCost, null)
+  assert.equal(result.months[0].coveredUnits, 4)
+  assert.equal(result.months[1].coveredUnits, 1)
+})
