@@ -10,9 +10,9 @@ export async function GET(request?: Request) {
   const { error } = await requireAuth()
   if (error) return error
   const category = request ? new URL(request.url).searchParams.get('category') : null
-  if (category && category !== 'content') return NextResponse.json({ error: 'Categoría inválida' }, { status: 400 })
-  const targetAccount = category === 'content' ? '52356004' : '52356005'
-  const pattern = category === 'content' ? /agencia|contenid|community\s*manager|manejo.*redes|nati.*agenc/i : /shopify/i
+  if (category && category !== 'content' && category !== 'shoe') return NextResponse.json({ error: 'Categoría inválida' }, { status: 400 })
+  const targetAccount = category === 'shoe' ? '6135' : category === 'content' ? '52356004' : '52356005'
+  const pattern = category === 'shoe' ? /silver|platead|black|azul.*colegial|b[aá]sico/i : category === 'content' ? /agencia|contenid|community\s*manager|manejo.*redes|nati.*agenc/i : /shopify/i
   const reads = await Promise.allSettled([
     listExpenseDocuments('purchases', '2026-09-01', '2026-11-12'),
     listExpenseDocuments('purchase-support-documents', '2026-09-01', '2026-11-12'),
@@ -27,12 +27,13 @@ export async function GET(request?: Request) {
       const lines = items.filter(item => {
         const account = item.account as { code?: string } | undefined
         const code = String(account?.code || item.code || '')
+        if (category === 'shoe') return kinds[index] === 'journals' ? code.startsWith(targetAccount) : pattern.test(String(item.description || ''))
         return code === targetAccount || (kinds[index] !== 'journals' || code.startsWith('5')) && pattern.test(String(item.description || ''))
       })
       if (!lines.length && !pattern.test(String(data.observations || ''))) return []
       return [{ kind: kinds[index], id: document.id, name: data.name, date: document.date,
         total: data.total, currency: data.currency, annulled: data.annulled, stamp: { status: (data.stamp as { status?: string } | undefined)?.status },
-        items: lines.map(item => ({ account: item.account, code: item.code, type: item.type, quantity: item.quantity, price: item.price, total: item.total, value: item.value, taxes: item.taxes, description: item.description })),
+        items: lines.map(item => ({ account: item.account, product: item.product, code: item.code, type: item.type, quantity: item.quantity, price: item.price, discount: item.discount, total: item.total, value: item.value, taxes: item.taxes, description: item.description })),
         references: String(data.observations || '').match(/(?:shopify\s*\*?\s*|factura\s*)(\d{6,})/gi) || [],
       }]
     })
