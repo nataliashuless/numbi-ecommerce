@@ -9,6 +9,7 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../app/api/shopif
   exports: route, Date, URL, AbortSignal,
   fetch: async (url, options) => { calls++; assert.match(url, /2026-10\/graphql.json$/); assert.match(JSON.parse(options.body).variables.q, /SINCE 2026-08-01 UNTIL 2026-08-31$/); return { ok: true, json: async () => payload } },
   require(name) {
+    if (name === '@/lib/cron-auth') return { isCronRequest: () => false }
     if (name === 'next/server') return { NextResponse: { json: (body, options) => ({ ...body, status: options?.status ?? 200 }) } }
     if (name === '@/lib/auth-helpers') return { requireAuth: async () => ({}), getShopifyCredentials: async () => ({ shopify_shop: 'shuless.myshopify.com', shopify_access_token: 'fixture' }) }
     throw Error(name)

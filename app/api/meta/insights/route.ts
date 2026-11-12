@@ -1,3 +1,4 @@
+import { isCronRequest } from '@/lib/cron-auth'
 import { NextResponse } from 'next/server'
 import { requireAuth, getMetaCredentials } from '@/lib/auth-helpers'
 
@@ -48,8 +49,10 @@ function pickAction(actions: MetaAction[] | undefined, types: string[]): number 
 }
 
 export async function GET(request: Request) {
-  const { error } = await requireAuth()
-  if (error) return error
+  if (!isCronRequest(request)) {
+    const { error } = await requireAuth()
+    if (error) return error
+  }
 
   const creds = await getMetaCredentials()
   if (!creds?.meta_access_token || !creds?.meta_ad_account_id) {

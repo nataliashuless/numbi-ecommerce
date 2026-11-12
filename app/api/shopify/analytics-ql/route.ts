@@ -1,10 +1,13 @@
+import { isCronRequest } from '@/lib/cron-auth'
 import { NextResponse } from 'next/server'
 import { requireAuth, getShopifyCredentials } from '@/lib/auth-helpers'
 
 // ShopifyQL 2026-10: native store traffic; never infer visitors from orders.
 export async function GET(request: Request) {
-  const { error } = await requireAuth()
-  if (error) return error
+  if (!isCronRequest(request)) {
+    const { error } = await requireAuth()
+    if (error) return error
+  }
   const credentials = await getShopifyCredentials()
   if (!credentials?.shopify_shop || !credentials.shopify_access_token) return NextResponse.json({ available: false, source: 'shopify', error: 'Shopify no conectado' })
   const params = new URL(request.url).searchParams

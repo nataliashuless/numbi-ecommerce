@@ -1,4 +1,4 @@
-import designCostSource from '@/data/marketing-design-costs-oc32.json'
+import { cloudDesignSource, readCloudValues } from '@/lib/marketing/cloud-state'
 import { estimateDesignCosts } from '@/lib/marketing/design-costs'
 import { SALES_RECONCILIATION_PENDING, SALES_RECONCILIATION_MESSAGE } from '@/lib/sales/reconciliation-status'
 import { documentedGrossSales } from '@/lib/marketing/contribution'
@@ -294,6 +294,7 @@ export async function GET(request: Request) {
       .limit(1)
       .maybeSingle()
 
+    const designCostSource = cloudDesignSource(await readCloudValues())
     const costInputs = ledger.records.flatMap(({ invoice }) => marketingProductItems(invoice, nonRetailProductCodes).map(item => ({ date: invoice.date.slice(0, 10), ...marketingItem(item.description || ''), units: Math.max(0, Number(item.quantity) || 0) })))
     const report: MarketingExecutiveReport = {
       source: 'Shopify directo + Excel no Shopify 2025 + WhatsApp Siigo 2026',

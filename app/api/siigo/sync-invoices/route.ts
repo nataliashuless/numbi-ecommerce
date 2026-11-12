@@ -1,3 +1,4 @@
+import { isCronRequest } from '@/lib/cron-auth'
 import { NextResponse } from 'next/server'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 import { listInvoices } from '@/lib/siigo-client'
@@ -5,8 +6,10 @@ import { listInvoices } from '@/lib/siigo-client'
 export const maxDuration = 300
 
 export async function POST(request: Request) {
-  const { error } = await requireAuth()
-  if (error) return error
+  if (!isCronRequest(request)) {
+    const { error } = await requireAuth()
+    if (error) return error
+  }
 
   const body = await request.json().catch(() => ({}))
 

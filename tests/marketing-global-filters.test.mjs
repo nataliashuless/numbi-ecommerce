@@ -6,6 +6,8 @@ import ts from 'typescript'
 import { createHash } from 'node:crypto'
 const cache = new Map()
 function load(name) {
+  if (name === '@/lib/auth-helpers') return { getAdminClient: () => db }
+  if (name === '@/data/marketing-monthly-costs.json' || name === '@/data/marketing-design-costs-oc32.json') return { default: JSON.parse(fs.readFileSync(new URL('../data/' + name.split('/').at(-1), import.meta.url), 'utf8')) }
   if (name === '@/data/marketing-design-costs-oc32.json') return { default: JSON.parse(fs.readFileSync(new URL('../data/marketing-design-costs-oc32.json', import.meta.url), 'utf8')) }
   if (name === '@/data/marketing-2025-audit-inputs.json') return { default: auditInputsFixture }
   if (name === '@/data/marketing-online-excel-2025.json') return { default: excelHistoryFixture }
@@ -14,7 +16,7 @@ function load(name) {
   const path = new URL(`../lib/marketing/${name.replace('./', '')}.ts`, import.meta.url)
   if (cache.has(path.href)) return cache.get(path.href)
   const exports = {}; cache.set(path.href, exports)
-  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports, require: load, Date, Intl })
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports, require: load, Date, Intl, structuredClone })
   return exports
 }
 const { buildMarketingLedger, marketingItem } = load('sales-ledger')

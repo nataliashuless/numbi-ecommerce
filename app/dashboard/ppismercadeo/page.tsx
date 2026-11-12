@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { KpiCard } from '@/components/marketing/kpi-card'
+import { CloudSyncStatus } from '@/components/marketing/cloud-sync-status'
 import { ContributionTable } from '@/components/marketing/contribution-table'
 import type { MonthlyCosts, MonthlyCostUpdates } from '@/lib/marketing/contribution'
 import type { MarketingExecutiveReport, MarketingView, SizeMetric } from '@/lib/marketing/metrics'
@@ -379,6 +380,7 @@ export default function MarketingPage() {
         {metaError && <Card className="border-rose-200 bg-rose-50"><CardContent className="flex flex-col gap-3 p-5 text-rose-900 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">Meta Ads necesita reconexión</p><p className="mt-1 text-sm">{metaError.includes('Session has expired') ? 'El token de acceso venció. Gasto, campañas y anuncios no se pueden consultar hasta renovarlo.' : metaError}</p></div><Link href="/dashboard/configuracion"><Button variant="outline" className="border-rose-300 bg-white text-rose-900">Ir a configuración</Button></Link></CardContent></Card>}
         {report.filters.comparisonMode === 'year' && <AnnualProgressCard report={report} />}
         {comparisonMode !== 'none' && <YtdComparison report={report} spend={spend} previousSpend={previousSpend} mer={mer} previousMer={previousMer} comparisonReliable={comparisonReliable} />}
+        <CloudSyncStatus />
         <ContributionTable key={`${report.periods.current.start}:${report.periods.current.end}:${report.filters.comparisonMode}`} report={report} currentAds={metaCurrent} previousAds={metaPrevious} currentTraffic={ga4Current} previousTraffic={ga4Previous} costs={monthlyCosts} settingsAvailable={settingsAvailable} onSave={saveMonthlyCosts} />
         <CategoryChannelUnitsChart report={report} />
         <div className="grid items-stretch gap-6 xl:grid-cols-3">

@@ -1,3 +1,4 @@
+import { cloudMonthlyCosts } from '@/lib/marketing/cloud-state'
 import { NextResponse } from 'next/server'
 import { getAdminClient, requireAuth } from '@/lib/auth-helpers'
 import importedCosts from '@/data/marketing-monthly-costs.json'
@@ -22,7 +23,7 @@ const allowedObjectiveKeys = new Set([
 const costKey = /^monthlyCost:(\d{4}-(?:0[1-9]|1[0-2])):(agencyFee|agencyVariable|natiFee|servers|unitCost|contentFee|platformFee)$/
 
 function monthlyCosts(values: Record<string, unknown>): MonthlyCosts {
-  const costs: MonthlyCosts = structuredClone(importedCosts.costs)
+  const costs: MonthlyCosts = cloudMonthlyCosts(values)
   for (const [key, value] of Object.entries(values)) {
     const match = key.match(costKey)
     if (!match || typeof value !== 'number' || value < 0 || !Number.isFinite(value)) continue

@@ -1,3 +1,4 @@
+import { isCronRequest } from '@/lib/cron-auth'
 import { NextResponse } from 'next/server'
 import { requireAuth, getAdminClient, getShopifyCredentials } from '@/lib/auth-helpers'
 
@@ -24,8 +25,10 @@ interface ShopifyOrder {
 }
 
 export async function POST(request: Request) {
-  const { error } = await requireAuth()
-  if (error) return error
+  if (!isCronRequest(request)) {
+    const { error } = await requireAuth()
+    if (error) return error
+  }
 
   const body = await request.json().catch(() => ({}))
   // Auto mode: fire-and-forget freshness refresh (skip if <1h old, else last 45 days)
