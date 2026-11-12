@@ -338,7 +338,7 @@ export async function GET(request: Request) {
         previous: comparisonMode === 'none' ? [] : ledger.reconciliation.filter(row => inPeriod(row.date, periods.previous)),
       },
       saleDateCoverage,
-      commercialGrossSales: { current: documentedGrossSales(ledger.records, orders, periods.current), previous: comparisonMode === 'none' ? null : documentedGrossSales(ledger.records, orders, periods.previous) },
+      commercialGrossSales: { current: documentedGrossSales(ledger.records, orders, periods.current, siigoInvoices), previous: comparisonMode === 'none' ? null : documentedGrossSales(ledger.records, orders, periods.previous, siigoInvoices) },
       designSales: Array.from(designSalesBuckets.values()).sort((a, b) =>
         b.year.localeCompare(a.year) || b.sales - a.sales,
       ),

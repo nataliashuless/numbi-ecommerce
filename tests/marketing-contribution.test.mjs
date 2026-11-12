@@ -10,6 +10,10 @@ const costs = { '2026-08': { agencyFee: 1206375, agencyVariable: 0, natiFee: 100
 test('source August contribution reconciles all five marketing costs and 59 pairs', () => {
   const result = api.contributionCosts(period, { units: 59, daily: [{ date: '2026-08-10', units: 59 }] }, costs)
   const totalMarketing = api.sumKnown([1799016, result.agencyFee, result.agencyVariable, result.natiFee, result.servers])
+  assert.equal(Math.round(api.divide(1799016, 48)), 37480)
+  assert.equal(Math.round(api.divide(9137143, 48)), 190357)
+  assert.equal((api.divide(1799016, 123382)).toFixed(1), '14.6')
+  assert.equal((api.divide(1799016, 9137143) * 100).toFixed(1), '19.7')
   assert.equal(result.shoes, 2611222)
   assert.equal(totalMarketing, 4040491)
   assert.equal(8697714 - totalMarketing - result.shoes, 2046001)
@@ -30,4 +34,12 @@ test('gross revenue is available only with pre-discount and VAT evidence across 
   const orders = [{ id: 1, raw: { taxes_included: true, line_items: [{ sku: 'SKU', quantity: 2, current_quantity: 1, price: '119', tax_lines: [{ rate: 0.19 }] }] } }]
   assert.equal(api.documentedGrossSales(records, orders, period), 200)
   assert.equal(api.documentedGrossSales([...records, { invoice: { id: 'excel:2', date: '2026-08-10' } }], orders, period), null)
+})
+
+test('gross Siigo and linked Excel history require matching original prices and quantities', () => {
+  const records = [{ invoice: { id: 'excel:row', name: 'FV-1', date: '2026-08-10', total: 119, items: [{ code: 'SKU', quantity: 1 }] } }]
+  const original = [{ id: 'siigo:1', name: 'FV-1', items: [{ code: 'SKU', quantity: 1, price: 120 }] }]
+  assert.equal(api.documentedGrossSales(records, [], period, original), 120)
+  assert.equal(api.documentedGrossSales(records, [], period, [{ ...original[0], items: [{ code: 'SKU', quantity: 1, price: 50 }] }]), null)
+  assert.equal(api.documentedGrossSales([{ invoice: { ...records[0].invoice, items: [{ code: 'SKU', quantity: 2 }] } }], [], period, original), null)
 })

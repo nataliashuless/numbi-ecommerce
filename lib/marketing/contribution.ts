@@ -54,12 +54,30 @@ export function sumKnown(values: Array<number | null>): number | null {
 }
 
 /** Net-only Excel/Siigo history cannot establish revenue before discounts. */
-export function documentedGrossSales(records: Array<{ invoice: CachedSiigoInvoice }>, orders: CachedShopifyOrder[], period: DatePeriod): number | null {
+export function documentedGrossSales(records: Array<{ invoice: CachedSiigoInvoice }>, orders: CachedShopifyOrder[], period: DatePeriod, siigoInvoices: CachedSiigoInvoice[] = []): number | null {
   const byId = new Map(orders.map(order => [order.id, order]))
+  const siigoById = new Map(siigoInvoices.map(invoice => [invoice.id, invoice]))
+  const siigoByName = new Map(siigoInvoices.map(invoice => [invoice.name, invoice]))
   let gross = 0
   for (const { invoice } of records) {
     if (invoice.date < period.start || invoice.date > period.end) continue
-    if (!invoice.id.startsWith('shopify:')) return null
+    if (!invoice.id.startsWith('shopify:')) {
+      const original = siigoById.get(invoice.id) || siigoByName.get(invoice.name)
+      if (!original) return null
+      let invoiceGross = 0
+      for (const item of invoice.items || []) {
+        const matches = (original.items || []).filter(line => line.code === item.code && item.code)
+        const prices = new Set(matches.map(line => line.price))
+        const price = matches[0]?.price
+        if (prices.size !== 1 || price == null || !Number.isFinite(price) || price < 0) return null
+        const originalUnits = matches.reduce((sum, line) => sum + Number(line.quantity || 0), 0)
+        if (Number(item.quantity || 0) > originalUnits) return null
+        invoiceGross += Number(item.quantity || 0) * price
+      }
+      if (invoiceGross + 1 < invoice.total / 1.19) return null
+      gross += invoiceGross
+      continue
+    }
     const order = byId.get(Number(invoice.id.slice('shopify:'.length)))
     if (!order?.raw || typeof order.raw.taxes_included !== 'boolean') return null
     const eligibleCodes = new Set((invoice.items || []).map(item => item.code))

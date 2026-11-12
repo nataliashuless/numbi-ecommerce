@@ -32,40 +32,42 @@ export function ContributionTable({ report, currentAds, previousAds, currentTraf
   const comparison = report.filters.comparisonMode !== 'none'
   const months = Array.from(new Set([...periodMonths(report.periods.current), ...(comparison ? periodMonths(report.periods.previous) : [])])).sort().reverse()
   const selectedMonth = months.includes(month) ? month : report.periods.current.end.slice(0, 7)
-  const periodValues = (metrics: PeriodMetrics, period: typeof report.periods.current, ads: Ads, traffic: Traffic) => {
+  const periodValues = (metrics: PeriodMetrics, period: typeof report.periods.current, ads: Ads, traffic: Traffic, gross: number | null) => {
     const spend = ads?.error ? null : ads?.totals?.spend ?? null
     const impressions = ads?.error ? null : ads?.totals?.impressions ?? null
     const users = traffic?.available ? traffic.totals?.totalUsers ?? null : null
     const fees = contributionCosts(period, metrics, costs)
     const marketing = sumKnown([spend, fees.agencyFee, fees.agencyVariable, fees.natiFee, fees.servers])
     const webOrders = metrics.channels.filter(channel => channel.key === 'web').reduce((sum, channel) => sum + channel.orders, 0)
-    return { spend, impressions, users, ...fees, marketing, cvr: divide(webOrders, users), cpa: divide(spend, metrics.onlineOrders), marketingShare: divide(spend, metrics.netSales), ticket: divide(metrics.netSales, metrics.onlineOrders), costPerView: divide(spend, impressions), unitCost: divide(fees.shoes, metrics.units), contribution: marketing !== null && fees.shoes !== null ? metrics.netSales - marketing - fees.shoes : null }
+    return { spend, impressions, users, ...fees, marketing, cvr: divide(webOrders, users), cpa: divide(spend, metrics.onlineOrders), marketingShare: divide(spend, gross), ticket: divide(gross, metrics.onlineOrders), costPerView: divide(spend, impressions), unitCost: divide(fees.shoes, metrics.units), contribution: marketing !== null && fees.shoes !== null ? metrics.netSales - marketing - fees.shoes : null }
   }
-  const current = periodValues(report.current, report.periods.current, currentAds, currentTraffic)
-  const previous = periodValues(report.previous, report.periods.previous, previousAds, previousTraffic)
+  const current = periodValues(report.current, report.periods.current, currentAds, currentTraffic, report.commercialGrossSales?.current ?? null)
+  const previous = periodValues(report.previous, report.periods.previous, previousAds, previousTraffic, report.commercialGrossSales?.previous ?? null)
   const salesComparable = comparison && !SALES_RECONCILIATION_PENDING && report.comparability.netSales
-  const salesDelta = salesComparable ? report.current.netSales - report.previous.netSales : null
+  const grossCurrent = report.commercialGrossSales?.current ?? null
+  const grossPrevious = report.commercialGrossSales?.previous ?? null
+  const salesDelta = salesComparable && grossCurrent !== null && grossPrevious !== null ? grossCurrent - grossPrevious : null
   const spendDelta = comparison && current.spend !== null && previous.spend !== null ? current.spend - previous.spend : null
   const marginal = salesDelta !== null && spendDelta !== null && spendDelta !== 0 ? salesDelta / spendDelta : null
   const rows: Array<{ label: string; current: number | null; previous: number | null; format: (n: number) => string; formula: string; highlight?: boolean }> = [
     { label: 'Usuarios', current: current.users, previous: previous.users, format: number, formula: 'Usuarios únicos GA4 del período' },
     { label: 'Pedidos online', current: report.current.onlineOrders, previous: report.previous.onlineOrders, format: number, formula: 'Pedidos del histórico compartido, contados una vez' },
     { label: 'Ventas brutas', current: report.commercialGrossSales?.current ?? null, previous: report.commercialGrossSales?.previous ?? null, format: money, formula: 'Valor de producto antes de descuentos e IVA, cuando todas las fuentes lo documentan' },
-    { label: 'Crecimiento ventas netas', current: salesComparable ? divide(salesDelta, report.previous.netSales) : null, previous: null, format: percentage, formula: 'Ventas netas actuales ÷ comparadas − 1' },
+    { label: 'Crecimiento ventas brutas', current: salesComparable ? divide(salesDelta, grossPrevious) : null, previous: null, format: percentage, formula: 'Ventas brutas actuales ÷ comparadas − 1' },
     { label: 'CVR web', current: current.cvr, previous: previous.cvr, format: percentage, formula: 'Pedidos web (WooCommerce + Shopify) ÷ usuarios GA4' },
     { label: 'Impresiones', current: current.impressions, previous: previous.impressions, format: number, formula: 'Impresiones registradas por Meta' },
     { label: 'Importe gastado', current: current.spend, previous: previous.spend, format: money, formula: 'Publicidad Meta en las fechas seleccionadas' },
     { label: 'Costo por pedido', current: current.cpa, previous: previous.cpa, format: money, formula: 'Publicidad Meta ÷ pedidos online' },
-    { label: 'Mkt / ventas netas', current: current.marketingShare, previous: previous.marketingShare, format: percentage, formula: 'Publicidad Meta ÷ ventas netas' },
+    { label: 'Mkt / ventas brutas', current: current.marketingShare, previous: previous.marketingShare, format: percentage, formula: 'Publicidad Meta ÷ ventas brutas' },
     { label: 'Fee mensual agencia', current: current.agencyFee, previous: previous.agencyFee, format: money, formula: 'Costo del mes, prorrateado por días seleccionados' },
     { label: 'Variable agencia', current: current.agencyVariable, previous: previous.agencyVariable, format: money, formula: 'Variable mensual registrada, prorrateada por días' },
     { label: 'Nati · agencia', current: current.natiFee, previous: previous.natiFee, format: money, formula: 'Costo mensual registrado, prorrateado por días' },
-    { label: 'Ticket medio neto', current: current.ticket, previous: previous.ticket, format: money, formula: 'Ventas netas ÷ pedidos online' },
+    { label: 'Ticket medio', current: current.ticket, previous: previous.ticket, format: money, formula: 'Ventas brutas ÷ pedidos online' },
     { label: 'Costo servidores', current: current.servers, previous: previous.servers, format: money, formula: 'Costo mensual registrado, prorrateado por días' },
     { label: 'Cost per view · impresión', current: current.costPerView, previous: previous.costPerView, format: value => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 1 }).format(value), formula: 'Publicidad Meta ÷ impresiones, como en el archivo' },
-    { label: 'Variación ventas netas (COP)', current: salesDelta, previous: null, format: money, formula: 'Ventas netas actuales − comparadas' },
+    { label: 'Variación ventas brutas (COP)', current: salesDelta, previous: null, format: money, formula: 'Ventas brutas actuales − comparadas' },
     { label: 'Variación publicidad (COP)', current: spendDelta, previous: null, format: money, formula: 'Publicidad actual − comparada' },
-    { label: 'Retorno marginal', current: marginal, previous: null, format: ratio, formula: 'Variación ventas netas ÷ variación publicidad' },
+    { label: 'Retorno marginal', current: marginal, previous: null, format: ratio, formula: 'Variación ventas brutas ÷ variación publicidad' },
     { label: 'Ventas netas', current: report.current.netSales, previous: report.previous.netSales, format: money, formula: 'Ventas de producto antes de IVA del tablero', highlight: true },
     { label: 'Pares vendidos', current: report.current.units, previous: report.previous.units, format: number, formula: 'Unidades del histórico compartido', highlight: true },
     { label: 'Costo promedio por par', current: current.unitCost, previous: previous.unitCost, format: money, formula: 'Costo total de pares ÷ unidades del período' },
@@ -92,6 +94,7 @@ export function ContributionTable({ report, currentAds, previousAds, currentTraf
     </CardHeader>
     <CardContent className="space-y-4">
       <p className="text-xs text-slate-500">Ventas y pares usan las fuentes del tablero. Costos importados de la hoja <a href={sourceUrl} target="_blank" rel="noreferrer" className="underline">Monthly</a> hasta agosto de 2026. Los campos vacíos requieren un importe. Los costos fijos se prorratean por días.</p>
+      {(grossCurrent === null || comparison && grossPrevious === null) && <p className="text-xs text-slate-500">El importe bruto y sus ratios requieren precios anteriores a descuentos en todas las ventas del período. El histórico con solo importe neto queda pendiente en esas filas.</p>}
       {SALES_RECONCILIATION_PENDING && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Ventas, unidades y contribución son provisionales mientras se cierra la conciliación. Las variaciones de ventas y el retorno marginal quedan pendientes.</p>}
       {missingMonths.length > 0 && <p className="text-sm text-amber-800">Completa los costos de {missingMonths.join(', ')} para calcular toda la contribución.</p>}
       {editing && <div className="rounded-xl border bg-slate-50 p-4">
