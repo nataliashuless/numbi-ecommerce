@@ -1,5 +1,6 @@
 import { cloudDesignSource, readCloudValues } from '@/lib/marketing/cloud-state'
 import { estimateDesignCosts } from '@/lib/marketing/design-costs'
+import monthlySkuCosts from '@/data/marketing-siigo-monthly-sku-costs.json'
 import { SALES_RECONCILIATION_PENDING, SALES_RECONCILIATION_MESSAGE } from '@/lib/sales/reconciliation-status'
 import { documentedGrossSales } from '@/lib/marketing/contribution'
 import { canonicalInvoices } from '@/lib/marketing/canonical-source'
@@ -342,7 +343,7 @@ export async function GET(request: Request) {
         previous: comparisonMode === 'none' ? [] : ledger.reconciliation.filter(row => inPeriod(row.date, periods.previous)),
       },
       saleDateCoverage,
-      designCostEstimate: { current: estimateDesignCosts(costInputs, periods.current, designCostSource), previous: estimateDesignCosts(costInputs, periods.previous, designCostSource) },
+      designCostEstimate: { current: estimateDesignCosts(costInputs, periods.current, designCostSource, monthlySkuCosts), previous: estimateDesignCosts(costInputs, periods.previous, designCostSource, monthlySkuCosts) },
       commercialGrossSales: { current: documentedGrossSales(ledger.records, orders, periods.current, siigoInvoices), previous: comparisonMode === 'none' ? null : documentedGrossSales(ledger.records, orders, periods.previous, siigoInvoices) },
       designSales: Array.from(designSalesBuckets.values()).sort((a, b) =>
         b.year.localeCompare(a.year) || b.sales - a.sales,

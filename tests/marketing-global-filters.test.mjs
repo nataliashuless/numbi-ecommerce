@@ -9,6 +9,7 @@ function load(name) {
   if (name === '@/lib/auth-helpers') return { getAdminClient: () => db }
   if (name === '@/data/marketing-monthly-costs.json' || name === '@/data/marketing-design-costs-oc32.json') return { default: JSON.parse(fs.readFileSync(new URL('../data/' + name.split('/').at(-1), import.meta.url), 'utf8')) }
   if (name === '@/data/marketing-design-costs-oc32.json') return { default: JSON.parse(fs.readFileSync(new URL('../data/marketing-design-costs-oc32.json', import.meta.url), 'utf8')) }
+  if (name === '@/data/marketing-siigo-monthly-sku-costs.json') return { default: JSON.parse(fs.readFileSync(new URL('../data/marketing-siigo-monthly-sku-costs.json', import.meta.url), 'utf8')) }
   if (name === '@/data/marketing-2025-audit-inputs.json') return { default: auditInputsFixture }
   if (name === '@/data/marketing-online-excel-2025.json') return { default: excelHistoryFixture }
   if (name === 'node:crypto') return { createHash }
@@ -93,6 +94,7 @@ const auditPublicationStatus = { SALES_RECONCILIATION_PENDING: false, SALES_RECO
 const route = {}
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../app/api/marketing/executive/route.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: route, URL, Date, console, require(name) {
   if (name === '@/data/marketing-design-costs-oc32.json') return { default: JSON.parse(fs.readFileSync(new URL('../data/marketing-design-costs-oc32.json', import.meta.url), 'utf8')) }
+  if (name === '@/data/marketing-siigo-monthly-sku-costs.json') return { default: JSON.parse(fs.readFileSync(new URL('../data/marketing-siigo-monthly-sku-costs.json', import.meta.url), 'utf8')) }
   if (name === '@/data/marketing-2025-audit-inputs.json') return { default: auditInputsFixture }
   if (name === '@/data/marketing-online-excel-2025.json') return { default: excelHistoryFixture }
   if (name === '@/lib/sales/reconciliation-status') return auditPublicationStatus

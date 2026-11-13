@@ -11,6 +11,7 @@ const compile = path => {
 const { estimateDesignCosts } = compile('../lib/marketing/design-costs.ts')
 const { contributionCosts } = compile('../lib/marketing/contribution.ts')
 const source = JSON.parse(fs.readFileSync(new URL('../data/marketing-design-costs-oc32.json', import.meta.url), 'utf8'))
+const siigoCosts = JSON.parse(fs.readFileSync(new URL('../data/marketing-siigo-monthly-sku-costs.json', import.meta.url), 'utf8'))
 const category = 'Infantil / Exploradores'
 const period = { start: '2026-08-01', end: '2026-09-30' }
 test('OC32 applies only from September, matches exact category and aliases, and leaves invalid or unknown costs pending', () => {
@@ -56,4 +57,42 @@ test('reviewed Siigo SKUs resolve titles only within their verified category; un
   assert.equal(result.designs.find(row => row.design === 'Silver').unitCost, null)
   assert.equal(result.months[0].coveredUnits, 4)
   assert.equal(result.months[1].coveredUnits, 1)
+})
+
+test('monthly Siigo costs complete the fourteen missing pairs by exact SKU, category and month', () => {
+  const make = (month, sku, design, units = 1) => ({ date: `${month}-10`, sku, design, units, category: ['059','062'].includes(sku) ? 'Bebé / Pequeños Caminantes' : category })
+  const rows = [
+    ...['067','068','071','072'].map(sku => make('2026-09', sku, 'Silver')),
+    ...['059','062'].map(sku => make('2026-09', sku, 'Plateado')),
+    ...['160','161','162'].map(sku => make('2026-09', sku, 'Azul Colegial')),
+    make('2026-10','067','Silver'), ...['059','062'].map(sku => make('2026-10',sku,'Plateado')),
+    make('2026-10','161','Azul Colegial',2),
+  ]
+  const result = estimateDesignCosts(rows, { start: '2026-09-01', end: '2026-10-31' }, source, siigoCosts)
+  assert.equal(result.units, 14)
+  assert.equal(result.coveredUnits, 14)
+  assert.equal(result.siigo.units, 14)
+  assert.ok(Math.abs(result.months[0].knownCost - 496630.762441) < 0.00001)
+  assert.ok(Math.abs(result.months[1].knownCost - 269096.799221) < 0.00001)
+  assert.ok(Math.abs(result.siigo.cost - 765727.561662) < 0.00001)
+  assert.ok(result.designs.every(row => row.cost !== null && Math.abs(row.unitCost * row.units - row.cost) < 0.00001))
+  const values = contributionCosts({ start: '2026-09-01', end: '2026-10-31' }, { daily: [{ date: '2026-09-10', units: 9 }, { date: '2026-10-10', units: 5 }] }, {}, result)
+  assert.ok(Math.abs(values.shoes - result.knownCost) < 0.00001)
+})
+
+test('verified monthly fallback never replaces valid OC32, fills other months, treats zero as free, or hides partial coverage', () => {
+  const range = { start: '2026-09-01', end: '2026-11-30' }
+  const row = { date: '2026-09-10', sku: '067', design: 'Silver', category, units: 1 }
+  const result = estimateDesignCosts([row, { ...row, date: '2026-11-10' }], range, source, siigoCosts)
+  assert.equal(result.coveredUnits, 1)
+  assert.equal(result.designs[0].cost, null)
+  assert.equal(result.designs[0].unitCost, null)
+  const costed = { ...source, entries: [...source.entries, { design: 'Silver', category, unitCost: 60000 }] }
+  assert.equal(estimateDesignCosts([row], range, costed, siigoCosts).knownCost, 60000)
+  assert.equal(estimateDesignCosts([row], range, costed, siigoCosts).siigo.units, 0)
+  const zero = { ...siigoCosts, entries: siigoCosts.entries.map(entry => ({ ...entry, unitCost: 0 })) }
+  assert.equal(estimateDesignCosts([row], range, source, zero).coveredUnits, 0)
+  assert.equal(estimateDesignCosts([{ ...row, category: 'Bebé / Pequeños Caminantes' }], range, source, siigoCosts).coveredUnits, 0)
+  const duplicate = { ...siigoCosts, entries: [...siigoCosts.entries, siigoCosts.entries.find(entry => entry.month === '2026-09' && entry.sku === '067')] }
+  assert.equal(estimateDesignCosts([row], range, source, duplicate).coveredUnits, 0)
 })

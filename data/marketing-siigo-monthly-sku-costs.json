@@ -1,0 +1,156 @@
+{
+  "reviewedAt": "2026-11-12",
+  "sourceUrl": "https://siigonube.siigo.com/#/product-management/912",
+  "basis": "Costo promedio mensual Siigo por SKU y talla. Solo complementa diseños sin costo válido en OC 32; no se traslada a otros meses.",
+  "files": [
+    {
+      "month": "2026-09",
+      "name": "Informe costeo mensual-192138_12112026-275f4fcc66cc4b26ae356fa762a776dd.xlsx",
+      "sha256": "5eaabe84fd50d34675b058eb41444b065598865bd05de8bec0af37bedf6b88a1",
+      "period": "De Septiembre 1 2026 a Septiembre 30 2026"
+    },
+    {
+      "month": "2026-10",
+      "name": "Informe costeo mensual-192216_12112026-be796e75b9f04a2d8b6e16e23a589d9e.xlsx",
+      "sha256": "ba6a63daa93e2476b18a6bc1ce883519ff795aac1f454a09168ec627a7e22787",
+      "period": "De Octubre 1 2026 a Octubre 31 2026"
+    }
+  ],
+  "entries": [
+    {
+      "month": "2026-09",
+      "sku": "059",
+      "product": "Plateado 19",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 48439.48,
+      "sheet": "Inf-de-Cos-Men",
+      "cell": "D27"
+    },
+    {
+      "month": "2026-09",
+      "sku": "062",
+      "product": "Plateado 22",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 46166.91805,
+      "sheet": "Inf-de-Cos-Men",
+      "cell": "D29"
+    },
+    {
+      "month": "2026-09",
+      "sku": "067",
+      "product": "Silver 23",
+      "category": "Infantil / Exploradores",
+      "unitCost": 58705.538888,
+      "sheet": "Inf-de-Cos-Men",
+      "cell": "D33"
+    },
+    {
+      "month": "2026-09",
+      "sku": "068",
+      "product": "Silver 24",
+      "category": "Infantil / Exploradores",
+      "unitCost": 57549.578949,
+      "sheet": "Inf-de-Cos-Men",
+      "cell": "D34"
+    },
+    {
+      "month": "2026-09",
+      "sku": "071",
+      "product": "Silver 27",
+      "category": "Infantil / Exploradores",
+      "unitCost": 56004.4285,
+      "sheet": "Inf-de-Cos-Men",
+      "cell": "D35"
+    },
+    {
+      "month": "2026-09",
+      "sku": "072",
+      "product": "Silver 28",
+      "category": "Infantil / Exploradores",
+      "unitCost": 56087.525,
+      "sheet": "Inf-de-Cos-Men",
+      "cell": "D36"
+    },
+    {
+      "month": "2026-09",
+      "sku": "160",
+      "product": "Colegial azul 23",
+      "category": "Infantil / Exploradores",
+      "unitCost": 57892.431111,
+      "sheet": "Inf-de-Cos-Men",
+      "cell": "D73"
+    },
+    {
+      "month": "2026-09",
+      "sku": "161",
+      "product": "Colegial azul 24",
+      "category": "Infantil / Exploradores",
+      "unitCost": 57892.430832,
+      "sheet": "Inf-de-Cos-Men",
+      "cell": "D74"
+    },
+    {
+      "month": "2026-09",
+      "sku": "162",
+      "product": "Colegial azul 25",
+      "category": "Infantil / Exploradores",
+      "unitCost": 57892.431111,
+      "sheet": "Inf-de-Cos-Men",
+      "cell": "D75"
+    },
+    {
+      "month": "2026-10",
+      "sku": "059",
+      "product": "Plateado 19",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 48439.48,
+      "sheet": "Inf-de-Cos-Men",
+      "cell": "D27"
+    },
+    {
+      "month": "2026-10",
+      "sku": "062",
+      "product": "Plateado 22",
+      "category": "Bebé / Pequeños Caminantes",
+      "unitCost": 46166.918333,
+      "sheet": "Inf-de-Cos-Men",
+      "cell": "D30"
+    },
+    {
+      "month": "2026-10",
+      "sku": "067",
+      "product": "Silver 23",
+      "category": "Infantil / Exploradores",
+      "unitCost": 58705.538888,
+      "sheet": "Inf-de-Cos-Men",
+      "cell": "D34"
+    },
+    {
+      "month": "2026-10",
+      "sku": "160",
+      "product": "Colegial azul 23",
+      "category": "Infantil / Exploradores",
+      "unitCost": 57892.431428,
+      "sheet": "Inf-de-Cos-Men",
+      "cell": "D100"
+    },
+    {
+      "month": "2026-10",
+      "sku": "161",
+      "product": "Colegial azul 24",
+      "category": "Infantil / Exploradores",
+      "unitCost": 57892.431,
+      "sheet": "Inf-de-Cos-Men",
+      "cell": "D101"
+    },
+    {
+      "month": "2026-10",
+      "sku": "162",
+      "product": "Colegial azul 25",
+      "category": "Infantil / Exploradores",
+      "unitCost": 57892.431428,
+      "sheet": "Inf-de-Cos-Men",
+      "cell": "D102"
+    }
+  ]
+}
