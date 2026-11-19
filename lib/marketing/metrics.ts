@@ -137,6 +137,7 @@ export interface MetricComparison {
 }
 
 export interface MarketingExecutiveReport {
+  contributionMonths?: Array<{ period: DatePeriod; metrics: PeriodMetrics; grossSales: number | null; designCostEstimate: import('./design-costs').DesignCostEstimate }>
   designCostEstimate?: { current: import('./design-costs').DesignCostEstimate; previous: import('./design-costs').DesignCostEstimate }
   commercialGrossSales?: { current: number | null; previous: number | null }
   confirmedSalesComparison?: { excludedCurrentUnits: number; excludedPreviousUnits: number; note: string }

@@ -60,3 +60,30 @@ test('accounting content total replaces separate agency and Nati fees without du
   assert.equal(historic.agencyTotal, 0)
   assert.equal(historic.missing.length, 0)
 })
+
+
+test('monthly contribution clips date ranges and handles leap-year February', () => {
+  const months = api.contributionMonthPeriods({ start: '2024-01-20', end: '2024-03-08' })
+  assert.equal(months.length, 3)
+  assert.equal(months[0].start, '2024-01-20')
+  assert.equal(months[0].end, '2024-01-31')
+  assert.equal(months[0].complete, false)
+  assert.equal(months[1].end, '2024-02-29')
+  assert.equal(months[1].complete, true)
+  assert.equal(months[2].end, '2024-03-08')
+})
+test('monthly advertising uses actual daily totals and never spreads aggregate spend', () => {
+  const full = { start: '2026-08-01', end: '2026-09-15' }
+  const month = { start: '2026-09-01', end: '2026-09-15' }
+  const ads = { totals: { spend: 999 }, dailyAvailable: true, daily: [
+    { date: '2026-08-31', spend: 100, impressions: 200 },
+    { date: '2026-09-02', spend: 40, impressions: 80 },
+    { date: '2026-09-15', spend: 60, impressions: 120 },
+    { date: '2026-09-16', spend: 500, impressions: 900 }
+  ] }
+  assert.equal(api.contributionMonthAds(ads, month, full).totals.spend, 100)
+  assert.equal(api.contributionMonthAds(ads, month, full).totals.impressions, 200)
+  assert.ok(api.contributionMonthAds({ totals: ads.totals }, month, full).error)
+  assert.ok(api.contributionMonthAds({ dailyAvailable: true, daily: [{ date: month.start, spend: 1 }] }, month, full).error)
+  assert.equal(api.contributionMonthAds({ dailyAvailable: true, daily: [] }, month, full).totals.spend, 0)
+})

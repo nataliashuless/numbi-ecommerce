@@ -120,6 +120,9 @@ test('endpoint reconciles summary, design, size, weekday, city, monthly units an
   assert.equal(report.designSales.reduce((s, x) => s + x.sales, 0), 100)
   assert.equal(report.trend.reduce((s, x) => s + x.sales, 0), 100)
   assert.equal(report.availability.meta, false)
+  assert.equal(report.contributionMonths.length, 1)
+  assert.equal(report.contributionMonths[0].metrics.units, 1)
+  assert.equal(report.contributionMonths[0].designCostEstimate.knownCost, 52328.16)
 })
 test('no comparison returns no growth and previous-period mode uses an equal-length preceding range', async () => {
   const params = 'view=ytd&start_date=2026-09-01&end_date=2026-09-30'
@@ -143,6 +146,10 @@ test('Siigo historical basis includes invoices with no sale date in notes and do
   assert.equal(report.current.units, 6)
   assert.equal(report.invoiceUnitReconciliation.current, 6)
   assert.equal(report.current.netSales, 600)
+  assert.equal(report.contributionMonths.length, 10)
+  assert.equal(report.contributionMonths.at(-1).period.end, '2026-10-28')
+  assert.equal(report.contributionMonths.reduce((sum, month) => sum + month.metrics.units, 0), report.current.units)
+  assert.equal(report.contributionMonths.reduce((sum, month) => sum + month.metrics.netSales, 0), report.current.netSales)
 })
 
 test('unclassified invoices are reconciled, not discarded or labelled WhatsApp, and suppress aggregate growth', async () => {

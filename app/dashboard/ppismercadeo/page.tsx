@@ -57,7 +57,8 @@ interface MetaResponse {
   error?: string
   items?: MetaItem[]
   totals?: Omit<MetaItem, 'key'>
-  daily?: Array<{ date: string; spend: number; purchases: number; purchase_value: number }>
+  dailyAvailable?: boolean
+  daily?: Array<{ date: string; spend: number; impressions: number; purchases: number; purchase_value: number }>
 }
 
 interface GA4Response {
@@ -244,7 +245,7 @@ export default function MarketingPage() {
       if (version !== requestVersion.current) return
       const responseError = responses.find(response => response?.error)?.error || null
       setMetaError(responseError)
-      setMetaCurrent({ ...responses[0], daily: responses[5]?.daily || [] }); setMetaPrevious(nextReport.filters.comparisonMode === 'none' ? null : responses[1]); setMetaAds(responses[2]); setMetaAdsPrevious(responses[3]); setMetaAdsets(responses[4])
+      setMetaCurrent({ ...responses[0], daily: responses[5]?.daily || [], dailyAvailable: !responses[5]?.error && Array.isArray(responses[5]?.daily) }); setMetaPrevious(nextReport.filters.comparisonMode === 'none' ? null : responses[1]); setMetaAds(responses[2]); setMetaAdsPrevious(responses[3]); setMetaAdsets(responses[4])
     } else {
       setMetaError(null)
       setMetaCurrent(null); setMetaPrevious(null); setMetaAds(null); setMetaAdsPrevious(null); setMetaAdsets(null)

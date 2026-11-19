@@ -1,17 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { contributionCosts, divide, periodMonths, sumKnown, type CostField, type MonthlyCostUpdates, type MonthlyCosts } from '@/lib/marketing/contribution'
+import { contributionCosts, contributionMonthAds, divide, periodMonths, sumKnown, type ContributionAds, type CostField, type MonthlyCostUpdates, type MonthlyCosts } from '@/lib/marketing/contribution'
 import type { MarketingExecutiveReport, PeriodMetrics } from '@/lib/marketing/metrics'
 import type { DesignCostEstimate } from '@/lib/marketing/design-costs'
 import { SALES_RECONCILIATION_PENDING } from '@/lib/sales/reconciliation-status'
 
 type Traffic = { available: boolean; source?: string; totals?: { totalUsers?: number; conversionRate?: number | null } | null } | null
-type Ads = { error?: string; totals?: { spend?: number; impressions?: number } } | null
+type Ads = ContributionAds
 const money = (value: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(value)
 const number = (value: number) => new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(value)
 const percentage = (value: number) => `${(value * 100).toFixed(1)}%`
@@ -29,6 +29,34 @@ export function ContributionTable({ report, currentAds, previousAds, currentTraf
   const [draft, setDraft] = useState<Partial<Record<CostField, string>>>({})
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [display, setDisplay] = useState<'monthly' | 'comparison'>('monthly')
+  const [monthlyTraffic, setMonthlyTraffic] = useState<Record<string, Traffic>>({})
+  const [trafficLoading, setTrafficLoading] = useState(false)
+  useEffect(() => {
+    if (display !== 'monthly') return
+    const filters = report.filters.applied
+    const scoped = Boolean(filters.channel || filters.product || filters.size || filters.category || filters.city || filters.customerType && filters.customerType !== 'all')
+    setMonthlyTraffic({})
+    if (scoped) { setTrafficLoading(false); return }
+    const ranges = (report.contributionMonths || []).filter(month => month.period.start !== report.periods.current.start || month.period.end !== report.periods.current.end)
+    if (!ranges.length) { setTrafficLoading(false); return }
+    const controller = new AbortController()
+    let active = true, index = 0
+    setTrafficLoading(true)
+    const worker = async () => {
+      while (active && index < ranges.length) {
+        const { period } = ranges[index++]
+        const query = new URLSearchParams({ start_date: period.start, end_date: period.end })
+        try {
+          let traffic = await fetch(`/api/shopify/analytics-ql?${query}`, { signal: controller.signal }).then(response => response.json())
+          if (!traffic.available && report.availability.ga4) traffic = await fetch(`/api/ga4/insights?${query}`, { signal: controller.signal }).then(response => response.json())
+          if (active) setMonthlyTraffic(previous => ({ ...previous, [period.start]: traffic }))
+        } catch { if (active) setMonthlyTraffic(previous => ({ ...previous, [period.start]: { available: false } })) }
+      }
+    }
+    Promise.all(Array.from({ length: Math.min(3, ranges.length) }, worker)).finally(() => { if (active) setTrafficLoading(false) })
+    return () => { active = false; controller.abort() }
+  }, [report, display])
   const comparison = report.filters.comparisonMode !== 'none'
   const months = Array.from(new Set([...periodMonths(report.periods.current), ...(comparison ? periodMonths(report.periods.previous) : [])])).sort().reverse()
   const selectedMonth = months.includes(month) ? month : report.periods.current.end.slice(0, 7)
@@ -41,45 +69,56 @@ export function ContributionTable({ report, currentAds, previousAds, currentTraf
     const webOrders = metrics.channels.filter(channel => channel.key === 'web').reduce((sum, channel) => sum + channel.orders, 0)
     return { spend, impressions, users, ...fees, marketing, cvr: traffic?.source === 'shopify' ? traffic.totals?.conversionRate ?? null : divide(webOrders, users), cpa: divide(spend, metrics.onlineOrders), marketingShare: divide(spend, gross), ticket: divide(gross, metrics.onlineOrders), costPerView: divide(spend, impressions), unitCost: divide(fees.shoes, metrics.units), contribution: marketing !== null && fees.shoes !== null ? metrics.netSales - marketing - fees.shoes : null }
   }
-  const current = periodValues(report.current, report.periods.current, currentAds, currentTraffic, report.commercialGrossSales?.current ?? null, report.designCostEstimate?.current)
-  const previous = periodValues(report.previous, report.periods.previous, previousAds, previousTraffic, report.commercialGrossSales?.previous ?? null, report.designCostEstimate?.previous)
-  const salesComparable = comparison && !SALES_RECONCILIATION_PENDING && report.comparability.netSales
-  const grossCurrent = report.commercialGrossSales?.current ?? null
-  const grossPrevious = report.commercialGrossSales?.previous ?? null
-  const salesDelta = salesComparable && grossCurrent !== null && grossPrevious !== null ? grossCurrent - grossPrevious : null
-  const spendDelta = comparison && current.spend !== null && previous.spend !== null ? current.spend - previous.spend : null
-  const marginal = salesDelta !== null && spendDelta !== null && spendDelta !== 0 ? salesDelta / spendDelta : null
-  const rows: Array<{ label: string; current: number | null; previous: number | null; format: (n: number) => string; formula: string; highlight?: boolean }> = [
-    { label: 'Usuarios', current: current.users, previous: previous.users, format: number, formula: 'Visitantes únicos Shopify del período; GA4 si Shopify no está disponible' },
-    { label: 'Pedidos online', current: report.current.onlineOrders, previous: report.previous.onlineOrders, format: number, formula: 'Pedidos del histórico compartido, contados una vez' },
-    { label: 'Ventas brutas', current: report.commercialGrossSales?.current ?? null, previous: report.commercialGrossSales?.previous ?? null, format: money, formula: 'Valor de producto antes de descuentos e IVA, cuando todas las fuentes lo documentan' },
-    { label: 'Crecimiento ventas brutas', current: salesComparable ? divide(salesDelta, grossPrevious) : null, previous: null, format: percentage, formula: 'Ventas brutas actuales ÷ comparadas − 1' },
-    { label: 'CVR web', current: current.cvr, previous: previous.cvr, format: percentage, formula: 'Shopify: sesiones con compra ÷ sesiones. En GA4: pedidos web ÷ usuarios' },
-    { label: 'Impresiones', current: current.impressions, previous: previous.impressions, format: number, formula: 'Impresiones registradas por Meta' },
-    { label: 'Importe gastado', current: current.spend, previous: previous.spend, format: money, formula: 'Publicidad Meta en las fechas seleccionadas' },
-    { label: 'Costo por pedido', current: current.cpa, previous: previous.cpa, format: money, formula: 'Publicidad Meta ÷ pedidos online' },
-    { label: 'Mkt / ventas brutas', current: current.marketingShare, previous: previous.marketingShare, format: percentage, formula: 'Publicidad Meta ÷ ventas brutas' },
-    { label: 'Agencia + Nati · total', current: current.agencyTotal, previous: previous.agencyTotal, format: money, formula: 'Contenido digital contable; reemplaza fee + variable + Nati. Desde septiembre 2026: base antes de IVA y retenciones por fecha del documento Siigo' },
-    { label: 'Agencia y contenido · subtotal documentado', current: current.agencyDocumented, previous: previous.agencyDocumented, format: money, formula: 'Gastos con soporte en las fechas elegidas; subtotal informativo, sin sumarlo dos veces. Noviembre solo cubre documentos revisados hasta el 12/11/2026' },
-    { label: 'Plataforma Shopify', current: current.platformFee, previous: previous.platformFee, format: money, formula: 'Hasta agosto 2026: informe contable mensual. Septiembre y octubre: documentos Siigo por fecha contable, base antes de IVA, descontando reversiones. Noviembre pendiente' },
-    { label: 'Shopify · subtotal documentado', current: current.platformDocumented, previous: previous.platformDocumented, format: money, formula: 'Importes contables disponibles + cargos bancarios identificados; subtotal informativo, sin sumarlo de nuevo a gastos. Puede faltar información' },
-    { label: 'Fee mensual agencia', current: current.agencyFee, previous: previous.agencyFee, format: money, formula: 'Costo del mes, prorrateado por días seleccionados' },
-    { label: 'Variable agencia', current: current.agencyVariable, previous: previous.agencyVariable, format: money, formula: 'Variable mensual registrada, prorrateada por días' },
-    { label: 'Nati · agencia', current: current.natiFee, previous: previous.natiFee, format: money, formula: 'Costo mensual registrado, prorrateado por días' },
-    { label: 'Ticket medio', current: current.ticket, previous: previous.ticket, format: money, formula: 'Ventas brutas ÷ pedidos online' },
-    { label: 'Costo servidores', current: current.servers, previous: previous.servers, format: money, formula: 'Renovación HostGator: $305.400 ÷ 365 días de servicio, del 04/08/2026 al 03/08/2027. Reemplaza el cargo anual de agosto' },
-    { label: 'Cost per view · impresión', current: current.costPerView, previous: previous.costPerView, format: value => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 1 }).format(value), formula: 'Publicidad Meta ÷ impresiones, como en el archivo' },
-    { label: 'Variación ventas brutas (COP)', current: salesDelta, previous: null, format: money, formula: 'Ventas brutas actuales − comparadas' },
-    { label: 'Variación publicidad (COP)', current: spendDelta, previous: null, format: money, formula: 'Publicidad actual − comparada' },
-    { label: 'Retorno marginal', current: marginal, previous: null, format: ratio, formula: 'Variación ventas brutas ÷ variación publicidad' },
-    { label: 'Ventas netas', current: report.current.netSales, previous: report.previous.netSales, format: money, formula: 'Ventas de producto antes de IVA del tablero', highlight: true },
-    { label: 'Pares vendidos', current: report.current.units, previous: report.previous.units, format: number, formula: 'Unidades del histórico compartido', highlight: true },
-    { label: 'Costo promedio por par', current: current.unitCost, previous: previous.unitCost, format: money, formula: 'Costo total de pares ÷ unidades del período' },
-    { label: 'Total gastos de marketing', current: current.marketing, previous: previous.marketing, format: money, formula: 'Publicidad Meta + agencia/Nati total + servidores + plataforma registrada', highlight: true },
-    { label: 'Costo total de los pares', current: current.shoes, previous: previous.shoes, format: money, formula: 'Hasta agosto: costo mensual. Desde septiembre 2026: OC 32 por diseño; faltantes de septiembre y octubre: costo promedio mensual Siigo por SKU y talla. Requiere cobertura completa' },
-    { label: 'CPA', current: current.cpa, previous: previous.cpa, format: money, formula: 'Publicidad Meta ÷ pedidos online' },
-    { label: 'Contribución estimada', current: current.contribution, previous: previous.contribution, format: money, formula: 'Ventas netas − gastos de marketing − costo de pares', highlight: true },
-  ]
+  function buildRows(report: MarketingExecutiveReport, currentAds: Ads, previousAds: Ads, currentTraffic: Traffic, previousTraffic: Traffic) {
+    const comparison = report.filters.comparisonMode !== 'none'
+    const current = periodValues(report.current, report.periods.current, currentAds, currentTraffic, report.commercialGrossSales?.current ?? null, report.designCostEstimate?.current)
+    const previous = periodValues(report.previous, report.periods.previous, previousAds, previousTraffic, report.commercialGrossSales?.previous ?? null, report.designCostEstimate?.previous)
+    const salesComparable = comparison && !SALES_RECONCILIATION_PENDING && report.comparability.netSales
+    const grossCurrent = report.commercialGrossSales?.current ?? null
+    const grossPrevious = report.commercialGrossSales?.previous ?? null
+    const salesDelta = salesComparable && grossCurrent !== null && grossPrevious !== null ? grossCurrent - grossPrevious : null
+    const spendDelta = comparison && current.spend !== null && previous.spend !== null ? current.spend - previous.spend : null
+    const marginal = salesDelta !== null && spendDelta !== null && spendDelta !== 0 ? salesDelta / spendDelta : null
+    const rows: Array<{ label: string; current: number | null; previous: number | null; format: (n: number) => string; formula: string; highlight?: boolean }> = [
+      { label: 'Usuarios', current: current.users, previous: previous.users, format: number, formula: 'Visitantes únicos Shopify del período; GA4 si Shopify no está disponible' },
+      { label: 'Pedidos online', current: report.current.onlineOrders, previous: report.previous.onlineOrders, format: number, formula: 'Pedidos del histórico compartido, contados una vez' },
+      { label: 'Ventas brutas', current: report.commercialGrossSales?.current ?? null, previous: report.commercialGrossSales?.previous ?? null, format: money, formula: 'Valor de producto antes de descuentos e IVA, cuando todas las fuentes lo documentan' },
+      { label: 'Crecimiento ventas brutas', current: salesComparable ? divide(salesDelta, grossPrevious) : null, previous: null, format: percentage, formula: 'Ventas brutas actuales ÷ comparadas − 1' },
+      { label: 'CVR web', current: current.cvr, previous: previous.cvr, format: percentage, formula: 'Shopify: sesiones con compra ÷ sesiones. En GA4: pedidos web ÷ usuarios' },
+      { label: 'Impresiones', current: current.impressions, previous: previous.impressions, format: number, formula: 'Impresiones registradas por Meta' },
+      { label: 'Importe gastado', current: current.spend, previous: previous.spend, format: money, formula: 'Publicidad Meta en las fechas seleccionadas' },
+      { label: 'Costo por pedido', current: current.cpa, previous: previous.cpa, format: money, formula: 'Publicidad Meta ÷ pedidos online' },
+      { label: 'Mkt / ventas brutas', current: current.marketingShare, previous: previous.marketingShare, format: percentage, formula: 'Publicidad Meta ÷ ventas brutas' },
+      { label: 'Agencia + Nati · total', current: current.agencyTotal, previous: previous.agencyTotal, format: money, formula: 'Contenido digital contable; reemplaza fee + variable + Nati. Desde septiembre 2026: base antes de IVA y retenciones por fecha del documento Siigo' },
+      { label: 'Agencia y contenido · subtotal documentado', current: current.agencyDocumented, previous: previous.agencyDocumented, format: money, formula: 'Gastos con soporte en las fechas elegidas; subtotal informativo, sin sumarlo dos veces. Noviembre solo cubre documentos revisados hasta el 12/11/2026' },
+      { label: 'Plataforma Shopify', current: current.platformFee, previous: previous.platformFee, format: money, formula: 'Hasta agosto 2026: informe contable mensual. Septiembre y octubre: documentos Siigo por fecha contable, base antes de IVA, descontando reversiones. Noviembre pendiente' },
+      { label: 'Shopify · subtotal documentado', current: current.platformDocumented, previous: previous.platformDocumented, format: money, formula: 'Importes contables disponibles + cargos bancarios identificados; subtotal informativo, sin sumarlo de nuevo a gastos. Puede faltar información' },
+      { label: 'Fee mensual agencia', current: current.agencyFee, previous: previous.agencyFee, format: money, formula: 'Costo del mes, prorrateado por días seleccionados' },
+      { label: 'Variable agencia', current: current.agencyVariable, previous: previous.agencyVariable, format: money, formula: 'Variable mensual registrada, prorrateada por días' },
+      { label: 'Nati · agencia', current: current.natiFee, previous: previous.natiFee, format: money, formula: 'Costo mensual registrado, prorrateado por días' },
+      { label: 'Ticket medio', current: current.ticket, previous: previous.ticket, format: money, formula: 'Ventas brutas ÷ pedidos online' },
+      { label: 'Costo servidores', current: current.servers, previous: previous.servers, format: money, formula: 'Renovación HostGator: $305.400 ÷ 365 días de servicio, del 04/08/2026 al 03/08/2027. Reemplaza el cargo anual de agosto' },
+      { label: 'Cost per view · impresión', current: current.costPerView, previous: previous.costPerView, format: value => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 1 }).format(value), formula: 'Publicidad Meta ÷ impresiones, como en el archivo' },
+      { label: 'Variación ventas brutas (COP)', current: salesDelta, previous: null, format: money, formula: 'Ventas brutas actuales − comparadas' },
+      { label: 'Variación publicidad (COP)', current: spendDelta, previous: null, format: money, formula: 'Publicidad actual − comparada' },
+      { label: 'Retorno marginal', current: marginal, previous: null, format: ratio, formula: 'Variación ventas brutas ÷ variación publicidad' },
+      { label: 'Ventas netas', current: report.current.netSales, previous: report.previous.netSales, format: money, formula: 'Ventas de producto antes de IVA del tablero', highlight: true },
+      { label: 'Pares vendidos', current: report.current.units, previous: report.previous.units, format: number, formula: 'Unidades del histórico compartido', highlight: true },
+      { label: 'Costo promedio por par', current: current.unitCost, previous: previous.unitCost, format: money, formula: 'Costo total de pares ÷ unidades del período' },
+      { label: 'Total gastos de marketing', current: current.marketing, previous: previous.marketing, format: money, formula: 'Publicidad Meta + agencia/Nati total + servidores + plataforma registrada', highlight: true },
+      { label: 'Costo total de los pares', current: current.shoes, previous: previous.shoes, format: money, formula: 'Hasta agosto: costo mensual. Desde septiembre 2026: OC 32 por diseño; faltantes de septiembre y octubre: costo promedio mensual Siigo por SKU y talla. Requiere cobertura completa' },
+      { label: 'CPA', current: current.cpa, previous: previous.cpa, format: money, formula: 'Publicidad Meta ÷ pedidos online' },
+      { label: 'Contribución estimada', current: current.contribution, previous: previous.contribution, format: money, formula: 'Ventas netas − gastos de marketing − costo de pares', highlight: true },
+    ]
+    return { rows, current, grossCurrent, grossPrevious }
+  }
+  const { rows, current, grossCurrent, grossPrevious } = buildRows(report, currentAds, previousAds, currentTraffic, previousTraffic)
+  const monthlyColumns = (report.contributionMonths || []).map(month => {
+    const scope = { ...report, filters: { ...report.filters, comparisonMode: 'none' as const }, periods: { ...report.periods, current: month.period }, current: month.metrics, commercialGrossSales: { current: month.grossSales, previous: null }, designCostEstimate: { current: month.designCostEstimate, previous: month.designCostEstimate } }
+    const traffic = month.period.start === report.periods.current.start && month.period.end === report.periods.current.end ? currentTraffic : monthlyTraffic[month.period.start]
+    return { period: month.period, ...buildRows(scope, contributionMonthAds(currentAds, month.period, report.periods.current), null, traffic || null, null) }
+  })
+  const comparisonRows = new Set(['Crecimiento ventas brutas', 'Variación ventas brutas (COP)', 'Variación publicidad (COP)', 'Retorno marginal'])
   async function saveCosts() {
     setSaving(true); setMessage('')
     const values: Partial<Record<CostField, number | null>> = {}
@@ -97,7 +136,7 @@ export function ContributionTable({ report, currentAds, previousAds, currentTraf
   return <Card className="border-0 shadow-sm" aria-label="Cálculo de marketing y contribución">
     <CardHeader className="flex flex-wrap flex-row items-start justify-between gap-3">
       <div><CardTitle className="text-xl text-[#172239]">Marketing y contribución</CardTitle><p className="mt-2 text-sm text-slate-500">{report.periods.current.start} al {report.periods.current.end}{comparison ? ` · comparado con ${report.periods.previous.start} al ${report.periods.previous.end}` : ''}</p></div>
-      <Button variant="outline" onClick={() => { setEditing(!editing); setMessage('') }}>Costos mensuales</Button>
+      <div className="flex flex-wrap gap-2"><Button variant={display === 'monthly' ? 'default' : 'outline'} onClick={() => setDisplay('monthly')}>Mensual</Button>{comparison && <Button variant={display === 'comparison' ? 'default' : 'outline'} onClick={() => setDisplay('comparison')}>Comparar períodos</Button>}<Button variant="outline" onClick={() => { setEditing(!editing); setMessage('') }}>Costos mensuales</Button></div>
     </CardHeader>
     <CardContent className="space-y-4">
       {(grossCurrent === null || comparison && grossPrevious === null) && <p className="text-xs text-slate-500">El importe bruto y sus ratios requieren precios anteriores a descuentos en todas las ventas del período. El histórico con solo importe neto queda pendiente en esas filas.</p>}
@@ -111,7 +150,10 @@ export function ContributionTable({ report, currentAds, previousAds, currentTraf
         {!settingsAvailable && <p className="mt-2 text-sm text-amber-800">La configuración de costos aún no está disponible para guardar.</p>}
         {message && <p className="mt-2 text-sm" role="status">{message}</p>}
       </div>}
-      <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Indicador</TableHead><TableHead className="text-right">Período actual</TableHead>{comparison && <TableHead className="text-right">Período comparado</TableHead>}<TableHead>Cálculo / fuente</TableHead></TableRow></TableHeader><TableBody>{rows.filter(row => !Object.values(costs).some(month => month.contentFee !== undefined) || !['Fee mensual agencia', 'Variable agencia', 'Nati · agencia'].includes(row.label)).map(row => <TableRow key={row.label} className={row.highlight ? 'bg-slate-50 font-semibold' : ''}><TableCell>{row.label}</TableCell><TableCell className="whitespace-nowrap text-right">{row.current === null ? 'Pendiente / sin base' : row.format(row.current)}</TableCell>{comparison && <TableCell className="whitespace-nowrap text-right">{row.previous === null ? '—' : row.format(row.previous)}</TableCell>}<TableCell className="min-w-56 text-xs font-normal text-slate-500">{row.formula}</TableCell></TableRow>)}</TableBody></Table></div>
+      {display === 'monthly' ? <>
+        {trafficLoading && <p role="status" className="text-xs text-slate-500">Consultando visitantes y conversión de cada mes…</p>}
+        {!monthlyColumns.length ? <p className="text-sm text-slate-500">No se pudieron cargar los datos mensuales.</p> : <div className="overflow-x-auto"><Table aria-label="Marketing y contribución por mes"><TableHeader><TableRow><TableHead className="sticky left-0 z-20 min-w-56 bg-white">Indicador</TableHead>{monthlyColumns.map(column => <TableHead key={column.period.start} className="min-w-36 whitespace-nowrap text-right">{column.period.label}{!column.period.complete && <span className="block text-xs font-normal">Días {Number(column.period.start.slice(8))}–{Number(column.period.end.slice(8))}</span>}</TableHead>)}</TableRow></TableHeader><TableBody>{monthlyColumns[0].rows.filter(row => !comparisonRows.has(row.label) && (!Object.values(costs).some(month => month.contentFee !== undefined) || !['Fee mensual agencia', 'Variable agencia', 'Nati · agencia'].includes(row.label))).map(row => <TableRow key={row.label} className={row.highlight ? 'bg-slate-50 font-semibold' : ''}><TableCell title={row.formula} className={`sticky left-0 z-10 ${row.highlight ? 'bg-slate-50' : 'bg-white'}`}>{row.label}</TableCell>{monthlyColumns.map(column => { const value = column.rows.find(item => item.label === row.label)?.current ?? null; return <TableCell key={column.period.start} className="whitespace-nowrap text-right">{value === null ? 'Pendiente' : row.format(value)}</TableCell> })}</TableRow>)}</TableBody></Table></div>}
+      </> : <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Indicador</TableHead><TableHead className="text-right">Período actual</TableHead>{comparison && <TableHead className="text-right">Período comparado</TableHead>}<TableHead>Cálculo / fuente</TableHead></TableRow></TableHeader><TableBody>{rows.filter(row => !Object.values(costs).some(month => month.contentFee !== undefined) || !['Fee mensual agencia', 'Variable agencia', 'Nati · agencia'].includes(row.label)).map(row => <TableRow key={row.label} className={row.highlight ? 'bg-slate-50 font-semibold' : ''}><TableCell>{row.label}</TableCell><TableCell className="whitespace-nowrap text-right">{row.current === null ? 'Pendiente / sin base' : row.format(row.current)}</TableCell>{comparison && <TableCell className="whitespace-nowrap text-right">{row.previous === null ? '—' : row.format(row.previous)}</TableCell>}<TableCell className="min-w-56 text-xs font-normal text-slate-500">{row.formula}</TableCell></TableRow>)}</TableBody></Table></div>}
     </CardContent>
   </Card>
 }

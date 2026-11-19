@@ -2,7 +2,7 @@ import { cloudDesignSource, readCloudValues } from '@/lib/marketing/cloud-state'
 import { estimateDesignCosts } from '@/lib/marketing/design-costs'
 import monthlySkuCosts from '@/data/marketing-siigo-monthly-sku-costs.json'
 import { SALES_RECONCILIATION_PENDING, SALES_RECONCILIATION_MESSAGE } from '@/lib/sales/reconciliation-status'
-import { documentedGrossSales } from '@/lib/marketing/contribution'
+import { contributionMonthPeriods, documentedGrossSales } from '@/lib/marketing/contribution'
 import { canonicalInvoices } from '@/lib/marketing/canonical-source'
 import { NextResponse } from 'next/server'
 import excelHistory from '@/data/marketing-online-excel-2025.json'
@@ -298,6 +298,11 @@ export async function GET(request: Request) {
     const designCostSource = cloudDesignSource(await readCloudValues())
     const costInputs = ledger.records.flatMap(({ invoice }) => marketingProductItems(invoice, nonRetailProductCodes).map(item => ({ date: invoice.date.slice(0, 10), ...marketingItem(item.description || ''), sku: item.code || undefined, units: Math.max(0, Number(item.quantity) || 0) })))
     const report: MarketingExecutiveReport = {
+      contributionMonths: contributionMonthPeriods(periods.current).map(period => ({
+        period, metrics: aggregatePeriod(salesOrders, period, stockBySku),
+        grossSales: documentedGrossSales(ledger.records, orders, period, siigoInvoices),
+        designCostEstimate: estimateDesignCosts(costInputs, period, designCostSource, monthlySkuCosts),
+      })),
       source: 'Shopify directo + Excel no Shopify 2025 + WhatsApp Siigo 2026',
       historyAudit,
       unitComparisonReview: SALES_RECONCILIATION_PENDING ? { ...review, status: 'pending', message: SALES_RECONCILIATION_MESSAGE } : pendingUnitsReview ? review : undefined,

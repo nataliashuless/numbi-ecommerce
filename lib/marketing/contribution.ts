@@ -22,6 +22,27 @@ export function periodMonths(period: Pick<DatePeriod, 'start' | 'end'>): string[
   return result
 }
 
+/** Calendar buckets clipped to the global selection; never spread totals across months. */
+export function contributionMonthPeriods(period: DatePeriod): DatePeriod[] {
+  return periodMonths(period).map(month => {
+    const [year, number] = month.split('-').map(Number)
+    const last = new Date(Date.UTC(year, number, 0)).toISOString().slice(0, 10)
+    const start = period.start > `${month}-01` ? period.start : `${month}-01`
+    const end = period.end < last ? period.end : last
+    return { start, end, label: new Intl.DateTimeFormat('es-CO', { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${month}-01T12:00:00Z`)), complete: start === `${month}-01` && end === last }
+  })
+}
+
+export type ContributionAds = { error?: string; totals?: { spend?: number; impressions?: number }; dailyAvailable?: boolean; daily?: Array<{ date: string; spend?: number; impressions?: number }> } | null
+export function contributionMonthAds(ads: ContributionAds, month: DatePeriod, full: DatePeriod): ContributionAds {
+  if (!ads || ads.error) return { error: 'Publicidad no disponible' }
+  if (month.start === full.start && month.end === full.end) return ads
+  if (!ads.dailyAvailable || !Array.isArray(ads.daily)) return { error: 'Publicidad mensual no disponible' }
+  const days = ads.daily.filter(day => day.date >= month.start && day.date <= month.end)
+  if (days.some(day => !Number.isFinite(day.spend) || !Number.isFinite(day.impressions))) return { error: 'Publicidad mensual incompleta' }
+  return { totals: { spend: days.reduce((sum, day) => sum + day.spend!, 0), impressions: days.reduce((sum, day) => sum + day.impressions!, 0) } }
+}
+
 /** Fixed monthly fees accrue over selected days. Shoe cost follows sold units. */
 export function contributionCosts(period: DatePeriod, metrics: PeriodMetrics, costs: MonthlyCosts, estimate?: DesignCostEstimate) {
   const missing: string[] = []
