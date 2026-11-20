@@ -31,13 +31,14 @@ async function siigoToken(supabase: ReturnType<typeof getAdminClient>): Promise<
     .limit(1)
     .maybeSingle()
   if (!cred?.siigo_username || !cred?.siigo_access_key) throw new Error('Siigo no configurado')
-  const res = await fetch('https://services.siigo.com/alliances/api/siigoapi-users/v1/sign-in', {
+  const res = await fetch('https://api.siigo.com/auth', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Partner-Id': 'shuless' },
     body: JSON.stringify({ username: cred.siigo_username, access_key: cred.siigo_access_key }),
   })
-  const data = await res.json()
-  if (!res.ok || !data.access_token) throw new Error('Error autenticando Siigo')
+  if (!res.ok) throw new Error(`Error autenticando Siigo (${res.status})`)
+  const data = await res.json().catch(() => { throw new Error('Siigo devolvió una respuesta no válida al autenticar') })
+  if (!data.access_token) throw new Error('Siigo no devolvió un token de acceso')
   return data.access_token
 }
 
@@ -65,7 +66,7 @@ export async function POST() {
     }
     const warehouses: SiigoWarehouse[] = await whRes.json()
     if (warehouses.length > 0) {
-      await supabase.from('siigo_warehouses').upsert(
+      const { error: warehouseError } = await supabase.from('siigo_warehouses').upsert(
         warehouses.map(w => ({
           id: w.id,
           name: w.name,
@@ -74,6 +75,7 @@ export async function POST() {
         })),
         { onConflict: 'id' }
       )
+      if (warehouseError) throw new Error('No se pudieron guardar las bodegas de Siigo')
     }
 
     // 2. Product stock — paginate
@@ -116,9 +118,10 @@ export async function POST() {
       total += products.length
 
       if (stockRows.length >= 1000) {
-        await supabase
+        const { error: stockError } = await supabase
           .from('siigo_product_stock')
           .upsert(stockRows, { onConflict: 'product_id,warehouse_id' })
+        if (stockError) throw new Error('No se pudo guardar el inventario de Siigo')
         stockRows = []
       }
 
@@ -128,15 +131,18 @@ export async function POST() {
     }
 
     if (stockRows.length > 0) {
-      await supabase
+      const { error: stockError } = await supabase
         .from('siigo_product_stock')
         .upsert(stockRows, { onConflict: 'product_id,warehouse_id' })
+      if (stockError) throw new Error('No se pudo guardar el inventario de Siigo')
     }
 
-    await supabase.from('siigo_stock_sync_state').upsert(
+    const { error: syncError } = await supabase.from('siigo_stock_sync_state').upsert(
       { id: 1, last_full_sync_at: now, products_synced: total },
       { onConflict: 'id' }
     )
+
+    if (syncError) throw new Error('No se pudo registrar la actualización del inventario')
 
     return NextResponse.json({
       products: total,

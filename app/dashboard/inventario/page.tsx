@@ -285,6 +285,7 @@ export default function InventarioPage() {
 
   const [lastStockSync, setLastStockSync] = useState<string | null>(null)
   const [syncingStock, setSyncingStock] = useState(false)
+  const [stockSyncError, setStockSyncError] = useState<string | null>(null)
 
   // Backend is the single source of truth for production, coverage and priority.
   const forecastKpis = useMemo(() => {
@@ -333,15 +334,19 @@ export default function InventarioPage() {
   // (and forecast if already computed) so the page reflects current numbers.
   async function syncStockFromSiigo() {
     setSyncingStock(true)
+    setStockSyncError(null)
     try {
       const res = await fetch('/api/siigo/sync-stock', { method: 'POST' })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'No se pudo actualizar el inventario')
       if (res.ok) {
-        const d = await res.json()
         setLastStockSync(d.synced_at || new Date().toISOString())
         await fetchInventario()
         if (forecastData) await fetchForecast()
       }
-    } catch {}
+    } catch (error) {
+      setStockSyncError(error instanceof Error ? error.message : 'No se pudo actualizar el inventario')
+    }
     finally {
       setSyncingStock(false)
     }
@@ -795,6 +800,8 @@ export default function InventarioPage() {
           </div>
 
           {/* Inventario Tab */}
+          {stockSyncError && <p role="alert" className="text-sm text-red-700 my-4">No se actualizó el inventario: {stockSyncError}. El forecast conserva las existencias de la última sincronización correcta.</p>}
+
           <TabsContent value="inventario">
             {/* KPIs */}
             <div className="grid gap-4 md:grid-cols-4 mb-8">
