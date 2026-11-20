@@ -200,6 +200,7 @@ interface ForecastData {
     fechaInicio: string
     fechaFin: string
     horizonteDias: number
+    fechaFinProyeccion: string
     fechaInicioEstacional: string
     fechaFinEstacional: string
   }
@@ -487,6 +488,7 @@ export default function InventarioPage() {
       { Parámetro: 'Demanda EVA incluida (pares)', Valor: String(forecastData.feriaEva?.demandaIncluida || 0) },
       { Parámetro: 'Supuesto EVA', Valor: forecastData.feriaEva?.supuesto || '' },
       { Parámetro: 'Período de análisis (días)', Valor: diasAnalisis },
+      { Parámetro: 'Proyección hasta', Valor: forecastData.parametros.fechaFinProyeccion },
       { Parámetro: 'Lead time producción (días hábiles)', Valor: leadTime },
       { Parámetro: 'Stock de seguridad (días)', Valor: stockSeguridad },
       { Parámetro: 'Stock a descontar', Valor: incluirConsignado ? 'Bodega + Consignado' : 'Solo bodega' },
@@ -1697,7 +1699,7 @@ export default function InventarioPage() {
                             <div className="mt-4 pt-4 border-t">
                               <div className="flex justify-between items-center text-sm">
                                 <div className="text-[#545454]">
-                                  Estimación hasta enero: demanda mensual prevista + seguridad − bodega − órdenes en camino
+                                  Estimación hasta {forecastData.parametros.fechaFinProyeccion}: demanda mensual prevista + seguridad − bodega − órdenes en camino
                                 </div>
                                 <div>
                                   <span className="text-[#545454]">Total a producir: </span>

@@ -1,6 +1,6 @@
 import { loadSalesSource, reportingInvoices } from '@/lib/sales/source'
 import { NextResponse } from 'next/server'
-import { businessDateBogota, buildSchoolSeasonPeriods } from '@/lib/forecast/calendar'
+import { businessDateBogota, buildForecastPeriods } from '@/lib/forecast/calendar'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 import {
   addBusinessDays,
@@ -169,7 +169,7 @@ export async function GET(request: Request) {
     const startDateStr = startDate.toISOString().slice(0, 10)
     const endDateStr = endDate.toISOString().slice(0, 10)
     const leadTimeEnd = addBusinessDays(endDate, leadTimeBusinessDays)
-    const { periods: planningPeriods, planningEnd: protectionEnd } = buildSchoolSeasonPeriods(endDate)
+    const { periods: planningPeriods, planningEnd: protectionEnd } = buildForecastPeriods(endDate)
     const protectionDays = Math.max(1, Math.round((Date.UTC(protectionEnd.getFullYear(), protectionEnd.getMonth(), protectionEnd.getDate()) - Date.UTC(endDate.getFullYear(), endDate.getMonth(), endDate.getDate())) / 86_400_000) + 1)
     const horizonteDias = protectionDays
     const seasonalStart = new Date(endDate)
@@ -1169,6 +1169,7 @@ export async function GET(request: Request) {
         fechaInicio: startDateStr,
         fechaFin: endDateStr,
         horizonteDias,
+        fechaFinProyeccion: protectionEnd.toISOString().slice(0, 10),
         fechaInicioEstacional: seasonalStartStr,
         fechaFinEstacional: seasonalEndStr,
       },

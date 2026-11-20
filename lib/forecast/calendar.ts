@@ -20,11 +20,10 @@ function civilDateKey(date: Date): string {
 }
 
 // Pass the date-only value returned by businessDateBogota, not a UTC instant.
-export function buildSchoolSeasonPeriods(today: Date): { periods: PlanningPeriod[]; planningEnd: Date } {
-  let planningEnd = new Date(today.getFullYear(), 0, 31, 12)
-  if (civilDateKey(today) > civilDateKey(planningEnd)) {
-    planningEnd = new Date(today.getFullYear() + 1, 0, 31, 12)
-  }
+export function buildForecastPeriods(today: Date): { periods: PlanningPeriod[]; planningEnd: Date } {
+  // Include the complete following calendar year, even when production arrives
+  // after the January school-season cutoff.
+  const planningEnd = new Date(today.getFullYear() + 1, 11, 31, 12)
 
   const currentMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 12)
   const daysInCurrentMonth = currentMonthEnd.getDate()
