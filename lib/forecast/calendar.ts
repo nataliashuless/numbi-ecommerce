@@ -19,33 +19,29 @@ function civilDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-// Pass the date-only value returned by businessDateBogota, not a UTC instant.
-export function buildForecastPeriods(today: Date): { periods: PlanningPeriod[]; planningEnd: Date } {
-  // Include the complete following calendar year, even when production arrives
-  // after the January school-season cutoff.
-  const planningEnd = new Date(today.getFullYear() + 1, 11, 31, 12)
+// Monthly orders use the same civil day, clamped to the next month's last day.
+export function nextMonthlyOrder(today: Date): Date {
+  const lastDay = new Date(today.getFullYear(), today.getMonth() + 2, 0, 12).getDate()
+  return new Date(today.getFullYear(), today.getMonth() + 1, Math.min(today.getDate(), lastDay), 12)
+}
 
-  const currentMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 12)
-  const daysInCurrentMonth = currentMonthEnd.getDate()
-  const remainingDays = Math.max(0, daysInCurrentMonth - today.getDate() + 1)
-  const periods: PlanningPeriod[] = [{
-    month: civilDateKey(today).slice(0, 7),
-    demandDate: currentMonthEnd,
-    fraction: remainingDays / daysInCurrentMonth,
-    futureIndex: null,
-  }]
-
-  const cursor = new Date(today.getFullYear(), today.getMonth() + 1, 1, 12)
-  let futureIndex = 0
+// Include inventory depletion before arrival and stop before the next order arrives.
+export function buildForecastPeriods(today: Date, planningEnd: Date): { periods: PlanningPeriod[]; planningEnd: Date } {
+  const periods: PlanningPeriod[] = []
+  const cursor = new Date(today.getFullYear(), today.getMonth(), 1, 12)
+  let index = 0
   while (civilDateKey(cursor) <= civilDateKey(planningEnd)) {
+    const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 12)
+    const demandDate = civilDateKey(monthEnd) > civilDateKey(planningEnd) ? new Date(planningEnd) : monthEnd
+    const startDay = index === 0 ? today.getDate() : 1
     periods.push({
       month: civilDateKey(cursor).slice(0, 7),
-      demandDate: new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 12),
-      fraction: 1,
-      futureIndex,
+      demandDate,
+      fraction: (demandDate.getDate() - startDay + 1) / monthEnd.getDate(),
+      futureIndex: index === 0 ? null : index - 1,
     })
     cursor.setMonth(cursor.getMonth() + 1)
-    futureIndex += 1
+    index += 1
   }
   return { periods, planningEnd }
 }

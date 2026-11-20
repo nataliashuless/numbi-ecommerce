@@ -164,7 +164,7 @@ interface ForecastData {
   validacion?: { revisionReferencias?: Array<{ referencia: string; produccion: number; error: number | null; errorAnterior?: number | null; errorBase: number | null; canalesEvaluados: number; canalesSinEvaluar: number }>; porCanal?: Array<{ canal: string; series: number; error: number | null; errorBase: number | null }>; horizonteMeses: number; errorAnterior?: number | null; errorModelo: number | null; errorBase: number | null; seriesEvaluadas: number; seriesSinEvaluar: number; observations: number; alcance: string }
   auditoria?: Array<{ referencia: string; canal: string; modelo: string; mesesHistoria: number; meses: string[]; fuentes: string[]; demandaSinComparable?: number[]; vendidoMes?: number; proyeccionCompleta?: number[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }>
 
-  cobertura?: { fechaLlegadaProduccion: string; faltanteAntesLlegada: number; distribucion: string }
+  cobertura?: { fechaLlegadaProduccion: string; fechaSiguientePedido: string; fechaLlegadaSiguientePedido: string; faltanteAntesLlegada: number; distribucion: string }
   tiendasForecast?: Array<{ id: string; nombre: string; incluida: boolean; tieneBodega: boolean }>
   reposicionTiendas?: { mes: string; tiendasSinBodega: number }
   forecast: ForecastItem[]
@@ -488,7 +488,9 @@ export default function InventarioPage() {
       { Parámetro: 'Demanda EVA incluida (pares)', Valor: String(forecastData.feriaEva?.demandaIncluida || 0) },
       { Parámetro: 'Supuesto EVA', Valor: forecastData.feriaEva?.supuesto || '' },
       { Parámetro: 'Período de análisis (días)', Valor: diasAnalisis },
-      { Parámetro: 'Proyección hasta', Valor: forecastData.parametros.fechaFinProyeccion },
+      { Parámetro: 'Cobertura del pedido mensual hasta', Valor: forecastData.parametros.fechaFinProyeccion },
+      { Parámetro: 'Próximo pedido mensual', Valor: forecastData.cobertura?.fechaSiguientePedido },
+      { Parámetro: 'Llegada próximo pedido', Valor: forecastData.cobertura?.fechaLlegadaSiguientePedido },
       { Parámetro: 'Lead time producción (días hábiles)', Valor: leadTime },
       { Parámetro: 'Stock de seguridad (días)', Valor: stockSeguridad },
       { Parámetro: 'Stock a descontar', Valor: incluirConsignado ? 'Bodega + Consignado' : 'Solo bodega' },
@@ -1202,7 +1204,7 @@ export default function InventarioPage() {
 
                 {forecastData.cobertura && <Card className="mb-6 border-amber-300 bg-amber-50"><CardContent className="pt-6">
                   <p className="font-semibold">Faltantes antes de llegada: {forecastData.cobertura.faltanteAntesLlegada} pares</p>
-                  <p className="text-sm mt-1">Producción nueva: llegada estimada {forecastData.cobertura.fechaLlegadaProduccion}. Los faltantes anteriores requieren adelantar entregas o conseguir inventario; no están sumados a “Producir”. La reserva de seguridad puede requerir reposición adicional.</p>
+                  <p className="text-sm mt-1">Pedido mensual: llegada estimada {forecastData.cobertura.fechaLlegadaProduccion}, cobertura hasta {forecastData.parametros.fechaFinProyeccion}. El siguiente pedido se realiza el {forecastData.cobertura.fechaSiguientePedido} y llega el {forecastData.cobertura.fechaLlegadaSiguientePedido}. Los faltantes anteriores requieren adelantar entregas o conseguir inventario; no están sumados a “Producir”. La reserva de seguridad puede requerir reposición adicional.</p>
                   <p className="text-xs mt-2">Supuesto de fechas: {forecastData.cobertura.distribucion} Los picos dentro del mes pueden cambiar la cobertura.</p>
                 </CardContent></Card>}
                 {/* Forecast KPIs */}
@@ -1699,7 +1701,7 @@ export default function InventarioPage() {
                             <div className="mt-4 pt-4 border-t">
                               <div className="flex justify-between items-center text-sm">
                                 <div className="text-[#545454]">
-                                  Estimación hasta {forecastData.parametros.fechaFinProyeccion}: demanda mensual prevista + seguridad − bodega − órdenes en camino
+                                  Pedido mensual hasta {forecastData.parametros.fechaFinProyeccion}: demanda mensual prevista + seguridad − bodega − órdenes en camino
                                 </div>
                                 <div>
                                   <span className="text-[#545454]">Total a producir: </span>

@@ -102,12 +102,12 @@ test('open month subtracts actual sales once and does not depress future complet
     tables.siigo_invoices.push(invoice('current', '333', 20))
     const result = await calculate('')
     const variant = result.forecast[0]
-    // October 100 - 20, plus fourteen full months at 100 each.
-    assert.equal(Math.round(variant.velocidadDiaria * result.metodologia.protectionDays), 1480)
+    // October 100 - 20, November/December 100 each, January 24/31 × 100.
+    assert.equal(Math.round(variant.velocidadDiaria * result.metodologia.protectionDays), 357)
     assert.equal(variant.stockBodega, 80)
     tables.siigo_invoices.at(-1).items[0].quantity = 120
     const overTarget = await calculate('')
-    assert.equal(Math.round(overTarget.forecast[0].velocidadDiaria * overTarget.metodologia.protectionDays), 1400)
+    assert.equal(Math.round(overTarget.forecast[0].velocidadDiaria * overTarget.metodologia.protectionDays), 277)
     assert.equal(overTarget.forecast[0].stockBodega, 80)
   } finally { Object.assign(tables, original) }
 })
@@ -286,8 +286,8 @@ test('endpoint uses previous November December and January and subtracts current
     tables.siigo_invoices.push(invoice('current', '333', 3))
     const result = await calculate('')
     const row = result.auditoria.find(row => row.canal === 'WhatsApp')
-    assert.deepEqual(Array.from(row.demanda), [5,36,26,12, ...Array(11).fill(8)])
-    assert.deepEqual(Array.from(row.fuentes), [...Array(12).fill('año anterior × crecimiento observado'), ...Array(3).fill('sin mes comparable: promedio reciente, sin crecimiento adicional')])
+    assert.deepEqual(Array.from(row.demanda), [5,36,26,9])
+    assert.deepEqual(Array.from(row.fuentes), Array(4).fill('año anterior × crecimiento observado'))
     assert.equal(row.modelo, 'año anterior × crecimiento observado')
   } finally { Object.assign(tables, original) }
 })
@@ -303,7 +303,7 @@ test('Siigo store invoices reduce current demand once; manual duplicates cannot 
     tables.ventas_terceros = [{ tienda_id: 'a', producto_sku: 'P20', fecha: date, cantidad: 7 }]
     const result = await calculate()
     const audit = result.auditoria.find(row => row.canal === 'A')
-    assert.deepEqual(Array.from(audit.demanda), [80, ...Array(14).fill(100)])
+    assert.deepEqual(Array.from(audit.demanda), [80, 100, 100, 77])
     assert.equal(result.forecast[0].stockBodega, 80)
     assert.equal(result.forecast[0].ventasTiendas, 320)
     assert.equal(result.resumen.totalProducirSugerido,
@@ -355,13 +355,13 @@ test('configured seven days cap every channel reserve even with large annual err
   } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
 })
 
-test('inclusive horizon covers October 5 through next December 31 and reference audit preserves missing evidence', async () => {
+test('inclusive horizon covers October 5 through January 24 and reference audit preserves missing evidence', async () => {
   const original = { ...tables }
   try {
     isolatedSupplyFixture()
     const result = await calculate('', '&stock_seguridad=7')
-    assert.equal(result.metodologia.protectionDays, 453)
-    assert.equal(result.parametros.fechaFinProyeccion, '2027-12-31')
+    assert.equal(result.metodologia.protectionDays, 112)
+    assert.equal(result.parametros.fechaFinProyeccion, '2027-01-24')
     const review = result.validacion.revisionReferencias.find(row => row.referencia === 'Prueba')
     assert.equal(review.produccion, result.resumen.totalProducirSugerido)
     assert.equal(review.error, result.validacion.errorModelo)
@@ -392,8 +392,8 @@ test('Shopify WhatsApp and individual stores use separate observed growth exclud
     assert.equal(result.crecimientoObservado.find(row => row.canal === 'WhatsApp').factor, .5)
     assert.equal(result.crecimientoObservado.find(row => row.canal === 'A').factor, 1.5)
     assert.equal(result.crecimientoObservado.find(row => row.canal === 'B').factor, 1)
-    assert.deepEqual(Array.from(result.auditoria.find(row => row.canal === 'Shopify').demanda), [0, ...Array(8).fill(200), ...Array(3).fill(400), ...Array(3).fill(200)])
-    assert.deepEqual(Array.from(result.auditoria.find(row => row.canal === 'WhatsApp').demanda), [...Array(9).fill(50), ...Array(3).fill(25), ...Array(3).fill(50)])
+    assert.deepEqual(Array.from(result.auditoria.find(row => row.canal === 'Shopify').demanda), [0, 200, 200, 155])
+    assert.deepEqual(Array.from(result.auditoria.find(row => row.canal === 'WhatsApp').demanda), [50, 50, 50, 39])
     assert.deepEqual(Array.from(result.crecimientoObservado[0].mesesActuales), ['2026-07', '2026-08', '2026-09'])
     assert.deepEqual(Array.from(result.crecimientoObservado[0].mesesComparables), ['2025-07', '2025-08', '2025-09'])
   } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
@@ -417,7 +417,7 @@ test('EVA is off by default and adds only matched event demand when enabled', as
     assert.equal(off.feriaEva.demandaIncluida, 0)
     assert.equal(on.feriaEva.demandaIncluida, 12)
     assert.equal(on.resumen.totalProducirSugerido - off.resumen.totalProducirSugerido, 12)
-    assert.deepEqual(Array.from(on.auditoria.find(row => row.canal === 'Feria EVA').demanda), [0, 0, 12, ...Array(12).fill(0)])
+    assert.deepEqual(Array.from(on.auditoria.find(row => row.canal === 'Feria EVA').demanda), [0, 0, 12, 0])
     assert.deepEqual(on.auditoria.find(row => row.canal === 'WhatsApp').demanda, off.auditoria.find(row => row.canal === 'WhatsApp').demanda)
     // An explicitly different fair must not become EVA through overlapping dates.
     tables.siigo_invoices = tables.siigo_invoices.filter(row => row.id !== 'eva-sale')
@@ -460,7 +460,7 @@ test('recent-only reference contributes production from actual sales without res
     const result = await calculate('a,b', '&stock_seguridad=0')
     const row = result.auditoria.find(row => row.referencia === 'Prueba' && row.canal === 'WhatsApp')
     assert.ok(row.demandaSinComparable.some(value => value > 0))
-    assert.ok(row.demanda.every(value => value === 30))
+    assert.deepEqual(Array.from(row.demanda), [30, 30, 30, 23])
     assert.ok(result.forecast.find(row => row.sku === 'P20').sugerenciaProduccion > 0)
   } finally { tables.siigo_invoices = previous }
 })
@@ -471,20 +471,23 @@ test('first-month new model uses current sales and the sizes actually sold', asy
     tables.siigo_invoices = [invoice('first-month-only', '333', 3)]
     const result = await calculate('a,b', '&stock_seguridad=0')
     const row = result.auditoria.find(row => row.referencia === 'Prueba' && row.canal === 'WhatsApp')
-    assert.deepEqual(Array.from(row.demanda), [0, ...Array(14).fill(3)])
+    assert.deepEqual(Array.from(row.demanda), [0, 3, 3, 2])
     assert.ok(result.forecast.find(row => row.sku === 'P20').sugerenciaProduccion > 0)
   } finally { tables.siigo_invoices = previous }
 })
 
-test('November forecast includes demand after February production arrival through December 2027', async () => {
+test('November monthly order covers February 8 through March 4, before next arrival', async () => {
   const original = { ...tables }
   try {
     auditInstant = '2026-11-20T17:00:00Z'
     isolatedSupplyFixture()
     const result = await calculate('', '&lead_time=52&stock_seguridad=0')
-    assert.equal(result.parametros.fechaFinProyeccion, '2027-12-31')
-    assert.equal(result.metodologia.planningMonths.length, 14)
-    assert.equal(result.metodologia.planningMonths.at(-1), '2027-12')
+    assert.equal(result.parametros.fechaFinProyeccion, '2027-03-04')
+    assert.equal(result.cobertura.fechaLlegadaProduccion, '2027-02-08')
+    assert.equal(result.cobertura.fechaSiguientePedido, '2026-12-20')
+    assert.equal(result.cobertura.fechaLlegadaSiguientePedido, '2027-03-05')
+    assert.equal(result.metodologia.planningMonths.length, 5)
+    assert.equal(result.metodologia.planningMonths.at(-1), '2027-03')
     assert.ok(result.resumen.totalProducirSugerido > 0)
     assert.ok(result.forecast[0].faltanteAntesLlegada > 0)
     assert.ok(result.auditoria.some(row => row.demanda.at(-1) > 0))

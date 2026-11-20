@@ -1,6 +1,6 @@
 import { loadSalesSource, reportingInvoices } from '@/lib/sales/source'
 import { NextResponse } from 'next/server'
-import { businessDateBogota, buildForecastPeriods } from '@/lib/forecast/calendar'
+import { businessDateBogota, buildForecastPeriods, nextMonthlyOrder } from '@/lib/forecast/calendar'
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 import {
   addBusinessDays,
@@ -169,7 +169,11 @@ export async function GET(request: Request) {
     const startDateStr = startDate.toISOString().slice(0, 10)
     const endDateStr = endDate.toISOString().slice(0, 10)
     const leadTimeEnd = addBusinessDays(endDate, leadTimeBusinessDays)
-    const { periods: planningPeriods, planningEnd: protectionEnd } = buildForecastPeriods(endDate)
+    const nextOrderDate = nextMonthlyOrder(endDate)
+    const nextOrderArrival = addBusinessDays(nextOrderDate, leadTimeBusinessDays)
+    const monthlyCoverageEnd = new Date(nextOrderArrival)
+    monthlyCoverageEnd.setDate(monthlyCoverageEnd.getDate() - 1)
+    const { periods: planningPeriods, planningEnd: protectionEnd } = buildForecastPeriods(endDate, monthlyCoverageEnd)
     const protectionDays = Math.max(1, Math.round((Date.UTC(protectionEnd.getFullYear(), protectionEnd.getMonth(), protectionEnd.getDate()) - Date.UTC(endDate.getFullYear(), endDate.getMonth(), endDate.getDate())) / 86_400_000) + 1)
     const horizonteDias = protectionDays
     const seasonalStart = new Date(endDate)
@@ -627,7 +631,7 @@ export async function GET(request: Request) {
       const directCurrentMonth = directProjection[0] || 0
       const directFuture = directProjection.slice(1)
       const directPeriodDemand = planningPeriods.map(period => Math.max(0, Math.round(
-        (period.futureIndex == null ? remainingMonthDemand(directCurrentMonth, directActual) : (directFuture[period.futureIndex] || 0)),
+        (period.futureIndex == null ? remainingMonthDemand(directCurrentMonth, directActual) : (directFuture[period.futureIndex] || 0) * period.fraction),
       )))
       for (let periodIndex = 0; periodIndex < planningPeriods.length; periodIndex++) {
         const period = planningPeriods[periodIndex]
@@ -651,7 +655,7 @@ export async function GET(request: Request) {
       const manualSafety = directExpected / Math.max(1, protectionDays) * Math.max(0, stockSeguridad)
       // Configured days are a hard ceiling, never a floor for statistical inflation.
       const directSafety = Math.floor(manualSafety)
-      auditRows.push({ referencia: reference, canal: directChannel, historial: monthSequence.map((mes, i) => ({ mes, pares: directSeries[i] || 0 })), modelo: 'año anterior × crecimiento observado', mesesHistoria: directFirst >= 0 ? directTraining.length : 0, meses: futureMonthKeys, fuentes: directAnnual.sources, demandaSinComparable: directAnnual.recentForecast.map((value, i) => Math.round(Math.max(0, value - (i === 0 ? directActual : 0)))), vendidoMes: directActual, proyeccionCompleta: [directCurrentMonth, ...directFuture], demanda: directPeriodDemand, reserva: directSafety, evidencia: directFirst >= 0 ? 'ventas directas' : 'sin historial cerrado: estimación provisional' })
+      auditRows.push({ referencia: reference, canal: directChannel, historial: monthSequence.map((mes, i) => ({ mes, pares: directSeries[i] || 0 })), modelo: 'año anterior × crecimiento observado', mesesHistoria: directFirst >= 0 ? directTraining.length : 0, meses: futureMonthKeys, fuentes: directAnnual.sources, demandaSinComparable: directAnnual.recentForecast.map((value, i) => Math.round(Math.max(0, i === 0 ? value - directActual : value * planningPeriods[i].fraction))), vendidoMes: directActual, proyeccionCompleta: [directCurrentMonth, ...directFuture], demanda: directPeriodDemand, reserva: directSafety, evidencia: directFirst >= 0 ? 'ventas directas' : 'sin historial cerrado: estimación provisional' })
       const directSafetyProfile = variabilityAdjustedSizeProfile(directSizeSeries, directProfile)
       for (const [sku, units] of allocateToSkus(skus, directSafety, directSafetyProfile)) addTarget(sku, units, protectionEnd)
 
@@ -684,12 +688,12 @@ export async function GET(request: Request) {
         const storePeriodDemand = planningPeriods.map(period => Math.max(0, Math.round(
           period.futureIndex == null
             ? remainingMonthDemand(storeCurrentMonth, storeActual)
-            : storeFuture[period.futureIndex] || 0,
+            : (storeFuture[period.futureIndex] || 0) * period.fraction,
         )))
         const storeDayLimit = storePeriodDemand.reduce((sum, value) => sum + value, 0)
           / Math.max(1, protectionDays) * Math.max(0, stockSeguridad)
         const storeBuffer = Math.floor(storeDayLimit)
-        auditRows.push({ referencia: reference, canal: store.nombre, historial: monthSequence.map((mes, i) => ({ mes, pares: storeSeries[i] || 0 })), modelo: 'año anterior × crecimiento observado', mesesHistoria: storeTraining.length, meses: futureMonthKeys, fuentes: storeAnnual.sources, demandaSinComparable: storeAnnual.recentForecast.map((value, i) => Math.round(Math.max(0, value - (i === 0 ? storeActual : 0)))), vendidoMes: storeActual, proyeccionCompleta: [storeCurrentMonth, ...storeFuture], demanda: storePeriodDemand, reserva: storeBuffer, evidencia: enoughHistory ? 'ventas de tienda facturadas en Siigo; registros manuales solo sin factura del SKU/mes' : 'historial escaso: participación reciente observada, sin validación individual' })
+        auditRows.push({ referencia: reference, canal: store.nombre, historial: monthSequence.map((mes, i) => ({ mes, pares: storeSeries[i] || 0 })), modelo: 'año anterior × crecimiento observado', mesesHistoria: storeTraining.length, meses: futureMonthKeys, fuentes: storeAnnual.sources, demandaSinComparable: storeAnnual.recentForecast.map((value, i) => Math.round(Math.max(0, i === 0 ? value - storeActual : value * planningPeriods[i].fraction))), vendidoMes: storeActual, proyeccionCompleta: [storeCurrentMonth, ...storeFuture], demanda: storePeriodDemand, reserva: storeBuffer, evidencia: enoughHistory ? 'ventas de tienda facturadas en Siigo; registros manuales solo sin factura del SKU/mes' : 'historial escaso: participación reciente observada, sin validación individual' })
         const storeSizeSeries = new Map<string, number[]>()
         for (const sku of skus) {
           const size = parseProductName(stockBySku.get(sku)?.product_name || '').size || sku
@@ -1143,6 +1147,8 @@ export async function GET(request: Request) {
       },
       cobertura: {
         fechaLlegadaProduccion: leadTimeEnd.toISOString().slice(0, 10),
+        fechaSiguientePedido: nextOrderDate.toISOString().slice(0, 10),
+        fechaLlegadaSiguientePedido: nextOrderArrival.toISOString().slice(0, 10),
         faltanteAntesLlegada: forecast.reduce((sum, row) => sum + row.faltanteAntesLlegada, 0),
         distribucion: 'Demanda directa uniforme por día; reposición de tiendas al inicio de cada mes. No incluye tiempo de traslado a tiendas.',
       },
