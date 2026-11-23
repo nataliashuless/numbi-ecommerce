@@ -2,6 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   addBusinessDays,
+  rotationSafety,
+  salesRotation,
   forecastSalesWithRecentFallback,
   observedSizeProfile,
   coverageAtArrival,
@@ -364,4 +366,23 @@ test('new reference with only current-month sales uses provisional actual sales 
   const later = forecastSalesWithRecentFallback([], [], 4, {units: 10, elapsedDays: 10, daysInMonth: 30})
   assert.deepEqual(later.values, [30, 30, 30, 30])
   assert.deepEqual(forecastSalesWithRecentFallback([], [], 4).values, [0, 0, 0, 0])
+})
+
+
+test('rotation safety uses observed rate cap, protects steady sales and never forces slow sizes', () => {
+  assert.equal(rotationSafety([30, 30, 30, 30, 30, 30], 90, 100, 14), 10)
+  assert.equal(rotationSafety([0, 1000, 0, 1000, 0, 1000], 90, 100, 14), 14)
+  assert.equal(rotationSafety([1000, 1000, 1000], 0, 100, 14), 0)
+  assert.equal(rotationSafety([0, 0, 1], 1, 100, 14), 0)
+  assert.equal(rotationSafety([30, 30, 30], 90, 100, 0), 0)
+  assert.equal(rotationSafety([30, 30, 30], 90, 100, 7), 7)
+})
+
+test('rotation reports sell speed and indicative coverage without inventing turnover or lost sales', () => {
+  const result = salesRotation(30, 90, 45)
+  assert.equal(result.paresSemana, 7)
+  assert.equal(result.diasPorPar, 1)
+  assert.equal(result.coberturaGlobalDias, 45)
+  assert.equal(salesRotation(0, 0, 200).coberturaGlobalDias, null)
+  assert.equal(salesRotation(0, 0, 0).diasPorPar, null)
 })

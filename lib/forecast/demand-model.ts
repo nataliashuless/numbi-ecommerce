@@ -15,6 +15,35 @@ export interface SelectedModel {
 
 const mean = (values: number[]) => values.length ? values.reduce((s, x) => s + x, 0) / values.length : 0
 
+// Planning heuristic, not a service-level guarantee. Monthly variability is
+// scaled to the whole protection period; counting noise provides a floor for
+// apparently constant sales. The cap uses actual recent sales, never a seasonal
+// forecast. Floor the cap so slow sizes cannot receive an automatic minimum pair.
+export function rotationSafety(history: number[], sold90: number, protectionDays: number, capDays: number) {
+  const rate = Math.max(0, sold90) / 90
+  const cap = Math.floor(rate * Math.max(0, capDays) + 1e-9)
+  if (!cap) return 0
+  const first = history.findIndex(value => value > 0)
+  const sample = first < 0 ? [] : history.slice(first).slice(-6).map(value => Math.max(0, value))
+  const level = mean(sample)
+  const variance = sample.length >= 3
+    ? sample.reduce((sum, value) => sum + (value - level) ** 2, 0) / (sample.length - 1)
+    : 0
+  const spread = Math.sqrt(Math.max(rate * 30, variance) * Math.max(1, protectionDays) / 30)
+  return Math.min(cap, Math.ceil(spread))
+}
+
+export function salesRotation(sold30: number, sold90: number, stock: number) {
+  const daily = Math.max(0, sold90) / 90
+  return {
+    ventas30: sold30, ventas90: sold90,
+    paresSemana: daily * 7,
+    diasPorPar: daily > 0 ? 1 / daily : null,
+    coberturaGlobalDias: daily > 0 ? Math.max(0, stock) / daily : null,
+    ritmo: sold90 <= 0 ? 'Sin ventas en 90 días' : daily * 7 >= 1 ? 'Al menos 1 par/semana' : 'Menos de 1 par/semana',
+  }
+}
+
 // Siigo stock is already net of recorded sales. Remove actual sales from the
 // month's demand target only; never deduct them from current stock again.
 export function remainingMonthDemand(fullMonthForecast: number, soldToDate: number): number {

@@ -520,3 +520,49 @@ test('monthly order excludes pre-arrival lost sales and nets incoming supply onc
     assert.equal(supplied.resumen.totalFaltanteAntesLlegada, 0)
   } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
 })
+
+
+test('rotation counts exact rolling windows without fairs, excluded stores or manual duplicates', async () => {
+  const original = { ...tables }
+  try {
+    isolatedSupplyFixture()
+    tables.tiendas_terceros = stores
+    tables.siigo_invoices = [
+      { ...invoice('old', '333', 100), date: '2026-07-07' },
+      { ...invoice('boundary90', '333', 2), date: '2026-07-08' },
+      { ...invoice('boundary30', '333', 3), date: '2026-09-06' },
+      invoice('current', '333', 4), invoice('excluded', '222', 100),
+      invoice('store', '111', 5), { ...invoice('fair', '333', 200), assigned_feria_id: 'fair' },
+    ]
+    tables.ventas_terceros = [{ tienda_id: 'a', producto_sku: 'P20', fecha: date, cantidad: 5 }]
+    const result = await calculate('b', '&stock_seguridad=14&reserva_rotacion=true')
+    const row = result.forecast.find(v => v.sku === 'P20')
+    assert.equal(row.rotacion.ventas30, 12)
+    assert.equal(row.rotacion.ventas90, 14)
+    assert.equal(row.rotacion.paresSemana, 14 / 90 * 7)
+  } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
+})
+
+test('rotation reserve stays on the selling size and existing supply covers it without double ordering', async () => {
+  const original = { ...tables }
+  try {
+    isolatedSupplyFixture()
+    tables.siigo_product_stock.push(stock('P21', '21', 0))
+    tables.siigo_invoices.push({ ...invoice('slow', '333', 1), items: [{ code: 'P21', quantity: 1 }] })
+    const result = await calculate('', '&stock_seguridad=14&reserva_rotacion=true')
+    const fast = result.forecast.find(v => v.sku === 'P20')
+    const slow = result.forecast.find(v => v.sku === 'P21')
+    assert.ok(fast.reservaObjetivo > 0)
+    assert.ok(fast.reservaObjetivo <= Math.floor(fast.rotacion.ventas90 / 90 * 14))
+    assert.equal(slow.reservaObjetivo, 0)
+    assert.equal(fast.totalPedido, fast.produccionSinReserva + fast.produccionPorReserva)
+    assert.ok(fast.faltanteAntesLlegada > 0)
+    tables.production_orders = [{ id: 'cover', numero: 'test', estado: 'pendiente', fecha_entrega: date }]
+    tables.production_order_items = [{ id: 'item', order_id: 'cover', diseno: 'Prueba', talla: '20', cantidad: 1000 }]
+    const supplied = await calculate('', '&stock_seguridad=14&reserva_rotacion=true')
+    const covered = supplied.forecast.find(v => v.sku === 'P20')
+    assert.equal(covered.reservaObjetivo, fast.reservaObjetivo)
+    assert.equal(covered.produccionPorReserva, 0)
+    assert.equal(covered.totalPedido, 0)
+  } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
+})

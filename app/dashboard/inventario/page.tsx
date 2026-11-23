@@ -122,6 +122,8 @@ interface ForecastItem {
   ventasTiendas: number
   ventasTotal: number
   ventasPeriodoEstacional: number
+  rotacion?: { stockTiendasIncluidas: number; ventas30: number; ventas90: number; paresSemana: number; diasPorPar: number | null; coberturaGlobalDias: number | null; ritmo: string }
+  reservaObjetivo?: number
   velocidadDiariaReciente: number
   velocidadDiariaEstacional: number
   demandaFuente: 'reciente' | 'estacional'
@@ -200,6 +202,7 @@ interface ForecastData {
   parametros: {
     diasAnalisis: number
     leadTimeDias: number
+    reservaRotacion?: boolean
     stockSeguridad: number
     fechaInicio: string
     fechaFin: string
@@ -282,7 +285,7 @@ export default function InventarioPage() {
   // Forecast parameters
   const [diasAnalisis, setDiasAnalisis] = useState('90')
   const [leadTime, setLeadTime] = useState('52')
-  const [stockSeguridad, setStockSeguridad] = useState('0')
+  const [stockSeguridad, setStockSeguridad] = useState('14')
   // Store stock is already netted independently by location in the backend.
   // Never pool it here or subtract it a second time from production needs.
   const incluirConsignado = false
@@ -382,7 +385,7 @@ export default function InventarioPage() {
       const saved: unknown = JSON.parse(localStorage.getItem('shuless.forecast.excludedStores') || '[]')
       const excluded = Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string') : []
       const eva = localStorage.getItem('shuless.forecast.eva.' + new Intl.DateTimeFormat('en', { timeZone: 'America/Bogota', year: 'numeric' }).format(new Date())) === 'true'
-      const res = await fetch(`/api/forecast?incluir_eva=${eva}&dias=${diasAnalisis}&lead_time=${leadTime}&stock_seguridad=${stockSeguridad}&excluir_tiendas=${encodeURIComponent(excluded.join(','))}`)
+      const res = await fetch(`/api/forecast?incluir_eva=${eva}&dias=${diasAnalisis}&lead_time=${leadTime}&stock_seguridad=${stockSeguridad}&reserva_rotacion=true&excluir_tiendas=${encodeURIComponent(excluded.join(','))}`)
       if (!res.ok) {
         const failure = await res.json().catch(() => null)
         throw new Error(failure?.error || 'Error al cargar forecast')
@@ -460,6 +463,10 @@ export default function InventarioPage() {
       'Velocidad diaria': Number(f.velocidadDiaria.toFixed(2)),
       'Velocidad semanal': Number(f.velocidadSemanal.toFixed(2)),
       'Días hasta agotamiento': f.diasHastaAgotamiento ?? '∞',
+      'Ventas reales 30 días (sin ferias)': f.rotacion?.ventas30 ?? '',
+      'Ventas reales 90 días (sin ferias)': f.rotacion?.ventas90 ?? '',
+      'Pares por semana observados': f.rotacion ? Number(f.rotacion.paresSemana.toFixed(2)) : '',
+      'Reserva objetivo (no sumar al pedido)': f.reservaObjetivo ?? '',
       'Producción sin reserva': f.produccionSinReserva ?? '',
       'Producción adicional por reserva': f.produccionPorReserva ?? '',
       'Pedido mensual': f.sugerenciaProduccion,
@@ -504,7 +511,8 @@ export default function InventarioPage() {
       { Parámetro: 'Próximo pedido mensual', Valor: forecastData.cobertura?.fechaSiguientePedido },
       { Parámetro: 'Llegada próximo pedido', Valor: forecastData.cobertura?.fechaLlegadaSiguientePedido },
       { Parámetro: 'Lead time producción (días hábiles)', Valor: leadTime },
-      { Parámetro: 'Stock de seguridad (días)', Valor: stockSeguridad },
+      { Parámetro: 'Límite de reserva (días de ventas reales)', Valor: forecastData.parametros.stockSeguridad },
+      { Parámetro: 'Método reserva', Valor: 'Por talla y canal/tienda: variación mensual de hasta 6 meses, mínimo por variación de conteos; límite según ventas reales de 90 días, redondeado hacia abajo. Sin ventas recientes: sin reserva. No garantiza nivel de servicio.' },
       { Parámetro: 'Stock a descontar', Valor: incluirConsignado ? 'Bodega + Consignado' : 'Solo bodega' },
       { Parámetro: 'Total a pedir (solo llegada normal)', Valor: detalle.reduce((s, d) => s + (d['Total a pedir'] || 0), 0) },
       { Parámetro: 'Faltantes antes de llegada (excluidos del pedido)', Valor: forecastData.resumen.totalFaltanteAntesLlegada },
@@ -565,6 +573,17 @@ export default function InventarioPage() {
         'Canales evaluados': row.canalesEvaluados, 'Canales sin evaluar': row.canalesSinEvaluar,
         'Alcance': 'Demanda mensual; no certifica producción ni ventas futuras',
       }))), 'Validación por referencia')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(forecastData.forecast.map(v => ({
+      Referencia: v.producto, Talla: v.size, SKU: v.sku,
+      'Ventas 30 días': v.rotacion?.ventas30 ?? 0, 'Ventas 90 días': v.rotacion?.ventas90 ?? 0,
+      'Pares por semana observados': v.rotacion ? Number(v.rotacion.paresSemana.toFixed(2)) : 0,
+      'Días por par observado': v.rotacion?.diasPorPar == null ? 'Sin ventas' : Number(v.rotacion.diasPorPar.toFixed(1)),
+      'Stock bodega': v.stockBodega, 'Stock tiendas incluidas': v.rotacion?.stockTiendasIncluidas || 0, 'En camino': v.enCamino,
+      'Cobertura global días (sin traslados)': v.rotacion?.coberturaGlobalDias == null ? 'Sin ventas' : Number(v.rotacion.coberturaGlobalDias.toFixed(1)),
+      'Ritmo observado': v.rotacion?.ritmo, 'Reserva objetivo (no sumar)': v.reservaObjetivo || 0,
+      'Pedido sin reserva': v.produccionSinReserva || 0, 'Adicional para reserva': v.produccionPorReserva || 0, 'Total a pedir': v.totalPedido,
+      Alcance: 'Ventas registradas sin ferias de canales/tiendas seleccionados. Sin inventario histórico: no corrige días agotados ni mide rotación contable. La cobertura global no implica disponibilidad entre ubicaciones.',
+    }))), 'Rotación por talla')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(parametros), 'Parámetros')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(forecastData.forecast.filter(v => (v.faltanteAntesLlegada || 0) > 0).map(v => ({ Referencia: v.producto, Talla: v.size, SKU: v.sku, Faltante: v.faltanteAntesLlegada, Desde: v.primeraFechaFaltante, 'Llegada producción nueva': forecastData.cobertura?.fechaLlegadaProduccion }))), 'Faltantes antes de llegada')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(envios), 'Enviar a tiendas')
@@ -1153,6 +1172,30 @@ export default function InventarioPage() {
                     </CardContent>
                   </Card>
                 <Card className="mb-6">
+                  <CardHeader><CardTitle>Rotación real y reserva</CardTitle></CardHeader>
+                  <CardContent>
+                    <p>Ventas registradas de los últimos 30 y 90 días, sin ferias. La reserva usa la variación de hasta seis meses cerrados y el ritmo real de cada talla. El cálculo actual suma {forecastData.resumen.totalProduccionSinReserva || 0} pares de demanda + {forecastData.resumen.totalProduccionPorReserva || 0} para reserva, después de descontar inventario y órdenes.</p>
+                    <p className="text-sm mt-2 text-amber-800">Sin historial de inventario diario no sabemos cuántos días estuvo agotada cada talla: pocas ventas pueden significar poca disponibilidad. La cobertura global sirve para detectar acumulación; el stock de una tienda no está disponible automáticamente para otra.</p>
+                    <details className="mt-3">
+                      <summary className="cursor-pointer font-medium">Ver rotación por referencia y talla, de mayor a menor venta</summary>
+                      <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                        <Table><TableHeader><TableRow>
+                          <TableHead>Referencia / talla</TableHead><TableHead>Ventas 30d / 90d</TableHead><TableHead>Pares reales/sem</TableHead><TableHead>Stock bodega / tiendas incluidas</TableHead><TableHead>Cobertura global</TableHead><TableHead>Reserva objetivo</TableHead><TableHead>Adicional a pedir por reserva</TableHead>
+                        </TableRow></TableHeader><TableBody>
+                          {[...forecastData.forecast].filter(v => v.stockTotal > 0 || (v.rotacion?.ventas90 || 0) > 0 || v.enCamino > 0).sort((a, b) => (b.rotacion?.ventas90 || 0) - (a.rotacion?.ventas90 || 0)).map(v => <TableRow key={v.sku}>
+                            <TableCell>{v.producto} · {v.size || v.sku}</TableCell>
+                            <TableCell>{v.rotacion?.ventas30 || 0} / {v.rotacion?.ventas90 || 0}</TableCell>
+                            <TableCell>{(v.rotacion?.paresSemana || 0).toFixed(2)}</TableCell>
+                            <TableCell>{v.stockBodega} / {v.rotacion?.stockTiendasIncluidas || 0}</TableCell>
+                            <TableCell>{v.rotacion?.coberturaGlobalDias == null ? 'Sin ventas en 90d' : `${Math.round(v.rotacion.coberturaGlobalDias)} días`}</TableCell>
+                            <TableCell>{v.reservaObjetivo || 0}</TableCell><TableCell>{v.produccionPorReserva || 0}</TableCell>
+                          </TableRow>)}
+                        </TableBody></Table>
+                      </div>
+                    </details>
+                  </CardContent>
+                </Card>
+                <Card className="mb-6">
                   <CardHeader><CardTitle>Tiendas incluidas en el forecast</CardTitle></CardHeader>
                   <CardContent>
                     <p className="text-sm text-[#545454] mb-3">Marca las tiendas que quieres incluir en el forecast de producción. La selección se guarda en este navegador. El inventario físico seguirá visible.</p>
@@ -1202,7 +1245,7 @@ export default function InventarioPage() {
                       <table className="w-full text-left text-xs"><thead><tr><th className="p-2">Canal / tienda</th><th className="p-2">Pares actuales</th><th className="p-2">Pares año pasado</th><th className="p-2">Variación aplicada</th></tr></thead><tbody>{forecastData.crecimientoObservado?.map(row => <tr key={row.canal} className="border-t"><td className="p-2">{row.canal}</td><td className="p-2">{row.recent}</td><td className="p-2">{row.previous}</td><td className="p-2">{row.observed ? `${((row.factor - 1) * 100).toFixed(1)} %` : 'No calculable: sin ajuste'}</td></tr>)}</tbody></table>
                     </details>
                     <p>{forecastData.validacion.seriesEvaluadas} combinaciones de referencia y canal evaluadas; {forecastData.validacion.seriesSinEvaluar} sin validación individual suficiente.</p>
-                    <p>Reserva limitada a {forecastData.parametros.stockSeguridad} días de demanda media prevista por referencia y canal, redondeada hacia abajo a pares completos. El error histórico no puede aumentar ese límite.</p>
+                    <p>Reserva por talla y canal/tienda según su variación de ventas, con límite de {forecastData.parametros.stockSeguridad} días de ventas reales recientes. El límite se redondea hacia abajo: no se añade un par mínimo a tallas lentas. Se descuenta el inventario disponible antes de pedir la reserva. No es una garantía de disponibilidad.</p>
                     {forecastData.resumen.totalProduccionSinReserva != null && <p className="rounded bg-amber-50 p-3 font-medium">Desglose del pedido mensual: {forecastData.resumen.totalProduccionSinReserva} pares para cubrir la demanda sin reserva + {forecastData.resumen.totalProduccionPorReserva} pares adicionales por reserva de seguridad = {forecastData.resumen.totalProducirSugerido} pares. Ambos cálculos descuentan stock y pedidos según talla y fecha de llegada.</p>}
                     <p className="text-[#545454]">{forecastData.validacion.alcance} Las facturas de Siigo son ventas reales de las tiendas. Las ventas del mes en curso se descuentan de la demanda pendiente, sin volver a descontarlas del stock. La sugerencia es una estimación, no una garantía de ventas.</p>
                     {seasonalReview.length > 0 && <div className="rounded border border-amber-300 p-3">
@@ -1383,14 +1426,14 @@ export default function InventarioPage() {
                         <p className="mt-1 text-xs text-[#545454]">Excluye fines de semana y festivos nacionales de Colombia.</p>
                       </div>
                       <div className="flex-1">
-                        <Label htmlFor="seguridad">Límite de seguridad (días)</Label>
+                        <Label htmlFor="seguridad">Límite de reserva según rotación (días)</Label>
                         <Input
                           id="seguridad"
                           type="number"
                           min="0"
                           value={stockSeguridad}
                           onChange={(e) => setStockSeguridad(e.target.value)}
-                          placeholder="7"
+                          placeholder="14"
                         />
                       </div>
                       <Button onClick={fetchForecast} className="bg-[#1DA9EF] hover:bg-[#1DA9EF]/90 text-[#1A2238]">
@@ -1543,7 +1586,7 @@ export default function InventarioPage() {
                                   <TableHead className="text-center">Total Stock</TableHead>
                                   <TableHead className="text-center bg-amber-50">En camino</TableHead>
                                   <TableHead className="text-center">Ventas ({diasAnalisis}d)</TableHead>
-                                  <TableHead className="text-center">Vel. Semanal</TableHead>
+                                  <TableHead className="text-center">Rotación real / proyección</TableHead>
                                   <TableHead className="text-center">Días Restantes</TableHead>
                                   <TableHead className="text-center">Prioridad</TableHead>
                                   <TableHead className="text-center bg-amber-50">Riesgo antes de llegada (no pedir)</TableHead>
@@ -1614,8 +1657,8 @@ export default function InventarioPage() {
                                             )}
                                           </TableCell>
                                           <TableCell className="text-center">
-                                            <span className="font-medium">{(r.velocidadDiaria * 7).toFixed(1)}</span>
-                                            <span className="text-xs text-[#545454]"> uds/sem</span>
+                                            <div className="font-medium">{r.variants.reduce((sum, v) => sum + (v.rotacion?.paresSemana || 0), 0).toFixed(1)} reales/sem</div>
+                                            <div className="text-xs text-[#545454]">{(r.velocidadDiaria * 7).toFixed(1)} previstos/sem</div>
                                           </TableCell>
                                           <TableCell className="text-center">
                                             {diasParent !== null ? (
@@ -1686,7 +1729,9 @@ export default function InventarioPage() {
                                                 </div>
                                               </TableCell>
                                               <TableCell className="text-center text-sm">
-                                                <span className="font-medium">{v.velocidadSemanal.toFixed(1)}</span>
+                                                <div className="font-medium">{(v.rotacion?.paresSemana || 0).toFixed(1)} reales/sem</div>
+                                                <div className="text-xs text-[#545454]">{v.velocidadSemanal.toFixed(1)} previstos/sem</div>
+                                                <div className="text-xs">{v.rotacion?.ventas30 || 0} en 30d · {v.rotacion?.ventas90 || 0} en 90d</div>
                                               </TableCell>
                                               <TableCell className="text-center">
                                                 {v.diasHastaAgotamiento !== null ? (

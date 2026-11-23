@@ -4,6 +4,8 @@ import { businessDateBogota, buildForecastPeriods, nextMonthlyOrder } from '@/li
 import { requireAuth, getAdminClient } from '@/lib/auth-helpers'
 import {
   addBusinessDays,
+  rotationSafety,
+  salesRotation,
   observedSizeProfile,
   largestRemainder,
   monthlyStoreReplenishments,
@@ -45,6 +47,8 @@ interface VariantForecast {
   ventasFerias: number
   ventasTotal: number
   ventasPeriodoEstacional: number
+  rotacion: ReturnType<typeof salesRotation> & { stockTiendasIncluidas: number }
+  reservaObjetivo: number
   velocidadDiariaReciente: number
   velocidadDiariaEstacional: number
   demandaFuente: 'reciente' | 'estacional'
@@ -160,7 +164,9 @@ export async function GET(request: Request) {
     ? Math.min(365, Math.max(1, requestedLeadTime))
     : DEFAULT_PRODUCTION_LEAD_BUSINESS_DAYS
   const incluirEva = searchParams.get('incluir_eva') === 'true'
-  const stockSeguridad = parseInt(searchParams.get('stock_seguridad') || '0')
+  const requestedSafety = Number(searchParams.get('stock_seguridad') || '14')
+  const stockSeguridad = Number.isFinite(requestedSafety) ? Math.min(60, Math.max(0, requestedSafety)) : 14
+  const reservaRotacion = searchParams.get('reserva_rotacion') === 'true'
 
   const supabase = getAdminClient()
 
@@ -400,6 +406,36 @@ export async function GET(request: Request) {
         )
       }
     }
+
+    // Fixed rolling windows, independent of the configurable display period.
+    // No fairs, duplicate invoices or duplicate manual store sales in rotation.
+    const recentByLocation = new Map<string, number>()
+    const rotationBySku = new Map<string, { sold30: number; sold90: number }>()
+    const start90 = new Date(endDate); start90.setDate(start90.getDate() - 89)
+    const start30 = new Date(endDate); start30.setDate(start30.getDate() - 29)
+    const cutoff90 = start90.toISOString().slice(0, 10)
+    const cutoff30 = start30.toISOString().slice(0, 10)
+    const recordRecent = (sku: string, location: string, date: string, quantity: number) => {
+      if (date < cutoff90 || date > endDateStr || !stockBySku.has(sku)) return
+      const qty = Math.max(0, Number(quantity) || 0)
+      recentByLocation.set(`${location}|${sku}`, (recentByLocation.get(`${location}|${sku}`) || 0) + qty)
+      const row = rotationBySku.get(sku) || { sold30: 0, sold90: 0 }
+      row.sold90 += qty
+      if (date >= cutoff30) row.sold30 += qty
+      rotationBySku.set(sku, row)
+    }
+    for (const inv of uniqueInvoices) {
+      if (inv.salesChannel === 'feria') continue
+      const store = identificationKeys(inv.customer_identification).map(nit => storeByNit.get(nit)).find(Boolean)
+      if (store && excludedStoreIds.has(store.id)) continue
+      const location = store?.id || (inv.salesChannel === 'shopify' || inv.salesChannel === 'woocommerce' ? 'Shopify' : 'WhatsApp')
+      for (const item of inv.items || []) if (item.code) recordRecent(item.code, location, inv.date, item.quantity)
+    }
+    for (const sale of supplementalStoreSales) {
+      if (sale.producto_sku && !excludedStoreIds.has(sale.tienda_id)) recordRecent(sale.producto_sku, sale.tienda_id, sale.fecha, sale.cantidad)
+    }
+    const reserveBySku = new Map<string, number>()
+    const recordReserve = (sku: string, quantity: number) => reserveBySku.set(sku, (reserveBySku.get(sku) || 0) + quantity)
 
     // Complete monthly actual sales history, with Siigo as the primary source.
     const monthKey = (date: string) => date.slice(0, 7)
@@ -656,10 +692,15 @@ export async function GET(request: Request) {
       const directExpected = directPeriodDemand.reduce((sum, value) => sum + value, 0)
       const manualSafety = directExpected / Math.max(1, protectionDays) * Math.max(0, stockSeguridad)
       // Configured days are a hard ceiling, never a floor for statistical inflation.
-      const directSafety = Math.floor(manualSafety)
+      const directSafetyAllocation = reservaRotacion
+        ? new Map(skus.map(sku => [sku, rotationSafety(onlineMonthly[directChannel].get(sku) || [], recentByLocation.get(`${directChannel}|${sku}`) || 0, protectionDays, stockSeguridad)]))
+        : allocateToSkus(skus, Math.floor(manualSafety), variabilityAdjustedSizeProfile(directSizeSeries, directProfile))
+      const directSafety = [...directSafetyAllocation.values()].reduce((sum, value) => sum + value, 0)
       auditRows.push({ referencia: reference, canal: directChannel, historial: monthSequence.map((mes, i) => ({ mes, pares: directSeries[i] || 0 })), modelo: 'año anterior × crecimiento observado', mesesHistoria: directFirst >= 0 ? directTraining.length : 0, meses: futureMonthKeys, fuentes: directAnnual.sources, demandaSinComparable: directAnnual.recentForecast.map((value, i) => Math.round(Math.max(0, i === 0 ? value - directActual : value * planningPeriods[i].fraction))), vendidoMes: directActual, proyeccionCompleta: [directCurrentMonth, ...directFuture], demanda: directPeriodDemand, reserva: directSafety, evidencia: directFirst >= 0 ? 'ventas directas' : 'sin historial cerrado: estimación provisional' })
-      const directSafetyProfile = variabilityAdjustedSizeProfile(directSizeSeries, directProfile)
-      for (const [sku, units] of allocateToSkus(skus, directSafety, directSafetyProfile)) addTarget(sku, units, protectionEnd)
+      for (const [sku, units] of directSafetyAllocation) {
+        recordReserve(sku, units)
+        addTarget(sku, units, protectionEnd)
+      }
 
       }
 
@@ -694,7 +735,8 @@ export async function GET(request: Request) {
         )))
         const storeDayLimit = storePeriodDemand.reduce((sum, value) => sum + value, 0)
           / Math.max(1, protectionDays) * Math.max(0, stockSeguridad)
-        const storeBuffer = Math.floor(storeDayLimit)
+        const storeRotationReserve = new Map(skus.map(sku => [sku, rotationSafety(storeSkuMonthly.get(store.id)?.get(sku) || [], recentByLocation.get(`${store.id}|${sku}`) || 0, protectionDays, stockSeguridad)]))
+        const storeBuffer = reservaRotacion ? [...storeRotationReserve.values()].reduce((sum, value) => sum + value, 0) : Math.floor(storeDayLimit)
         auditRows.push({ referencia: reference, canal: store.nombre, historial: monthSequence.map((mes, i) => ({ mes, pares: storeSeries[i] || 0 })), modelo: 'año anterior × crecimiento observado', mesesHistoria: storeTraining.length, meses: futureMonthKeys, fuentes: storeAnnual.sources, demandaSinComparable: storeAnnual.recentForecast.map((value, i) => Math.round(Math.max(0, i === 0 ? value - storeActual : value * planningPeriods[i].fraction))), vendidoMes: storeActual, proyeccionCompleta: [storeCurrentMonth, ...storeFuture], demanda: storePeriodDemand, reserva: storeBuffer, evidencia: enoughHistory ? 'ventas de tienda facturadas en Siigo; registros manuales solo sin factura del SKU/mes' : 'historial escaso: participación reciente observada, sin validación individual' })
         const storeSizeSeries = new Map<string, number[]>()
         for (const sku of skus) {
@@ -710,7 +752,8 @@ export async function GET(request: Request) {
         // Only linked stores are eligible. Each store's reserve uses its own
         // size curve and is netted only against that store's stock.
         const storeSafetyProfile = variabilityAdjustedSizeProfile(storeSizeSeries, storeProfile)
-        const safetyAllocation = allocateToSkus(skus, storeBuffer, storeSafetyProfile)
+        const safetyAllocation = reservaRotacion ? storeRotationReserve : allocateToSkus(skus, storeBuffer, storeSafetyProfile)
+        for (const [sku, units] of safetyAllocation) recordReserve(sku, units)
         // One monthly shipment target, separate from production through January.
         // Do not net warehouse stock or inbound orders here: this is what the
         // store needs to receive, not additional manufacturing demand.
@@ -899,6 +942,7 @@ export async function GET(request: Request) {
         pendingKeysBySku.set(candidates[0], list)
       }
     }
+    const rotationWarehouses = [...new Set(stores.map(store => store.siigo_warehouse_id).filter((id): id is number => id != null && id !== PRINCIPAL_WAREHOUSE_ID))]
     const variantsForecast: VariantForecast[] = []
 
     for (const sku of allSkus) {
@@ -929,6 +973,7 @@ export async function GET(request: Request) {
       // replenishment needs. It must not be subtracted again as a pooled asset.
       const planningStock = stockInfo.stockBodega + receivedOutsideSiigo
       const stockTotal = planningStock + stockInfo.stockConsignado
+      const stockTiendasIncluidas = rotationWarehouses.reduce((sum, id) => sum + Math.max(0, stockByWarehouseSku.get(`${id}|${sku}`) || 0), 0)
 
       const velocidadDiariaReciente = ventasTotal / diasAnalisis
       const velocidadDiariaEstacional = ventasPeriodoEstacional / horizonteDias
@@ -993,6 +1038,8 @@ export async function GET(request: Request) {
         ventasFerias: ventas.ferias,
         ventasTotal,
         ventasPeriodoEstacional,
+        rotacion: { ...salesRotation(rotationBySku.get(sku)?.sold30 || 0, rotationBySku.get(sku)?.sold90 || 0, planningStock + stockTiendasIncluidas), stockTiendasIncluidas },
+        reservaObjetivo: reserveBySku.get(sku) || 0,
         velocidadDiariaReciente: Math.round(velocidadDiariaReciente * 100) / 100,
         velocidadDiariaEstacional: Math.round(velocidadDiariaEstacional * 100) / 100,
         demandaFuente,
@@ -1179,6 +1226,7 @@ export async function GET(request: Request) {
         diasAnalisis,
         leadTimeDias: leadTimeBusinessDays,
         stockSeguridad,
+        reservaRotacion,
         fechaInicio: startDateStr,
         fechaFin: endDateStr,
         horizonteDias,
@@ -1196,7 +1244,7 @@ export async function GET(request: Request) {
         protectionDays,
         historyStart: firstInvoiceMonth,
         historyMonths: monthSequence.length,
-        safetyPolicy: 'configured_days_hard_cap_per_reference_and_channel_floor_to_whole_pairs',
+        safetyPolicy: reservaRotacion ? 'sku_location_recent_90d_rate_cap_monthly_variability_count_noise_floor_no_service_guarantee' : 'configured_days_hard_cap_per_reference_and_channel_floor_to_whole_pairs',
         stockoutHistory: 'inferred_size_gaps_only_no_historical_stock_snapshots',
         storeDemand: 'siigo_invoices_are_actual_sales_manual_fallback_without_same_sku_month_invoice',
         stores: {
