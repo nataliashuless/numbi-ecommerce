@@ -560,7 +560,8 @@ export async function GET(request: Request) {
       locationAudit.push({ sku, referencia: info.reference, talla: info.size || '', canal, mes, demanda, reposicion, stockInicial, haceUnAno: past(1), haceDosAnos: past(2) })
     }
     const auditRows: Array<{ referencia: string; canal: string; modelo: string; seleccion?: ReturnType<typeof forecastSelectedSales>['selection']; mesesHistoria: number; meses: string[]; fuentes: string[]; demandaSinComparable?: number[]; vendidoMes?: number; proyeccionCompleta?: number[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }> = []
-    const validation = { previousAbsoluteError: 0, actualUnits: 0, selectedAbsoluteError: 0, baselineAbsoluteError: 0, observations: 0, seriesEvaluadas: 0, seriesSinEvaluar: 0 }
+    const validation = { previousAbsoluteError: 0, actualUnits: 0, selectedAbsoluteError: 0, baselineAbsoluteError: 0, observations: 0, seriesEvaluadas: 0, seriesSinEvaluar: 0,
+      periodSelectedError: 0, periodBaselineError: 0, periodExcess: 0, periodShortage: 0 }
     const validationByChannel = {
       directo: { actual: 0, abs: 0, baselineAbs: 0, series: 0 },
       tiendas: { actual: 0, abs: 0, baselineAbs: 0, series: 0 },
@@ -595,6 +596,10 @@ export async function GET(request: Request) {
       validation.previousAbsoluteError += check.previousAbsoluteError
       validation.selectedAbsoluteError += check.selectedAbsoluteError
       validation.baselineAbsoluteError += check.baselineAbsoluteError
+      validation.periodSelectedError += check.protection.selected.absoluteError
+      validation.periodBaselineError += check.protection.baseline.absoluteError
+      validation.periodExcess += check.protection.selected.excess
+      validation.periodShortage += check.protection.selected.shortage
       validation.observations += check.selected.observations
       validation.seriesEvaluadas++
     }
@@ -1219,6 +1224,14 @@ export async function GET(request: Request) {
         errorAnterior: validation.actualUnits > 0 ? validation.previousAbsoluteError / validation.actualUnits : null,
         errorModelo: validation.actualUnits > 0 ? validation.selectedAbsoluteError / validation.actualUnits : null,
         errorBase: validation.actualUnits > 0 ? validation.baselineAbsoluteError / validation.actualUnits : null,
+        errorCantidadPeriodo: validation.actualUnits > 0 ? validation.periodSelectedError / validation.actualUnits : null,
+        errorBaseCantidadPeriodo: validation.actualUnits > 0 ? validation.periodBaselineError / validation.actualUnits : null,
+        produccionSinValidacion: referencias.filter(row => !checksByReference.get(row.reference)?.evaluated)
+          .reduce((sum, row) => sum + row.totalPedido, 0),
+        produccionValidacionParcial: referencias.filter(row => {
+          const check = checksByReference.get(row.reference)
+          return check && check.evaluated > 0 && check.missing > 0
+        }).reduce((sum, row) => sum + row.totalPedido, 0),
         alcance: 'Validación externa de cuatro meses: en cada corte se vuelve a elegir el método usando solo meses anteriores. Nuevo selector, regla anual anterior y promedio de tres meses se evalúan sobre los mismos cortes con base anual comparable, para comparar el cambio sin alterar la muestra. Los cortes se solapan y no son observaciones independientes. Series sin evidencia comparable quedan fuera del porcentaje, no equivalen a error cero. No valida inventario histórico, tallas ni nivel de servicio.',
       },
       cobertura: {

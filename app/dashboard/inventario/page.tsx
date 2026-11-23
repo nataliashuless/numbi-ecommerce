@@ -168,8 +168,8 @@ interface ForecastData {
 
   feriaEva?: { incluida: boolean; demandaHistoricaComparable: number; demandaIncluida: number; supuesto: string }
   crecimientoObservado?: Array<{ canal: string; recent: number; previous: number; factor: number; observed: boolean; mesesActuales: string[]; mesesComparables: string[] }>
-  validacion?: { revisionReferencias?: Array<{ referencia: string; produccion: number; error: number | null; errorAnterior?: number | null; errorBase: number | null; canalesEvaluados: number; canalesSinEvaluar: number }>; porCanal?: Array<{ canal: string; series: number; error: number | null; errorBase: number | null }>; horizonteMeses: number; errorAnterior?: number | null; errorModelo: number | null; errorBase: number | null; seriesEvaluadas: number; seriesSinEvaluar: number; observations: number; alcance: string }
-  auditoria?: Array<{ referencia: string; canal: string; modelo: string; seleccion?: { method: string; label: string; confirmation: string; evidence: boolean; origins: number; candidates: Array<{ method: string; wape: number | null; bias: number; origins: number }> }; mesesHistoria: number; meses: string[]; fuentes: string[]; demandaSinComparable?: number[]; vendidoMes?: number; proyeccionCompleta?: number[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }>
+  validacion?: { errorCantidadPeriodo?: number | null; errorBaseCantidadPeriodo?: number | null; produccionSinValidacion?: number; produccionValidacionParcial?: number; revisionReferencias?: Array<{ referencia: string; produccion: number; error: number | null; errorAnterior?: number | null; errorBase: number | null; canalesEvaluados: number; canalesSinEvaluar: number }>; porCanal?: Array<{ canal: string; series: number; error: number | null; errorBase: number | null }>; horizonteMeses: number; errorAnterior?: number | null; errorModelo: number | null; errorBase: number | null; seriesEvaluadas: number; seriesSinEvaluar: number; observations: number; alcance: string }
+  auditoria?: Array<{ referencia: string; canal: string; modelo: string; seleccion?: { method: string; label: string; confirmation: string; evidence: boolean; origins: number; candidates: Array<{ method: string; wape: number | null; bias: number; origins: number; protection?: { wape: number | null } }> }; mesesHistoria: number; meses: string[]; fuentes: string[]; demandaSinComparable?: number[]; vendidoMes?: number; proyeccionCompleta?: number[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }>
 
   cobertura?: { fechaLlegadaProduccion: string; fechaSiguientePedido: string; fechaLlegadaSiguientePedido: string; faltanteAntesLlegada: number; distribucion: string }
   tiendasForecast?: Array<{ id: string; nombre: string; incluida: boolean; tieneBodega: boolean }>
@@ -512,6 +512,10 @@ export default function InventarioPage() {
 
     // Sheet 3: Parámetros usados
     const parametros = [
+      { Parámetro: 'Error mensual (proporción)', Valor: forecastData.validacion?.errorModelo },
+      { Parámetro: 'Error cantidad acumulada en cuatro meses (proporción)', Valor: forecastData.validacion?.errorCantidadPeriodo },
+      { Parámetro: 'Pares en referencias sin validación histórica', Valor: forecastData.validacion?.produccionSinValidacion },
+      { Parámetro: 'Pares en referencias con validación parcial', Valor: forecastData.validacion?.produccionValidacionParcial },
       { Parámetro: 'Asistencia a Feria EVA', Valor: forecastData.feriaEva?.incluida ? 'Sí' : 'No' },
       { Parámetro: 'Demanda EVA incluida (pares)', Valor: String(forecastData.feriaEva?.demandaIncluida || 0) },
       { Parámetro: 'Supuesto EVA', Valor: forecastData.feriaEva?.supuesto || '' },
@@ -597,7 +601,8 @@ export default function InventarioPage() {
       Referencia: row.referencia, Canal: row.canal, 'Método elegido': row.modelo,
       Evidencia: row.seleccion?.evidence ? 'Comparación histórica disponible' : 'Provisional: evidencia insuficiente',
       Decisión: row.seleccion?.confirmation,
-      Candidato: candidate.method, 'Error selección (%)': candidate.origins < 3 || candidate.wape == null ? 'Sin evidencia' : Number((candidate.wape * 100).toFixed(1)),
+      Candidato: candidate.method, 'Error mensual selección (%)': candidate.origins < 3 || candidate.wape == null ? 'Sin evidencia' : Number((candidate.wape * 100).toFixed(1)),
+      'Error acumulado cuatro meses (%)': candidate.origins < 3 || candidate.protection?.wape == null ? 'Sin evidencia' : Number((candidate.protection.wape * 100).toFixed(1)),
       'Sesgo selección (%)': Number((candidate.bias * 100).toFixed(1)), Cortes: candidate.origins,
       Alcance: 'Errores internos de selección; la mejora se verifica aparte en Validación por referencia usando cortes externos sin datos futuros',
     })))), 'Métodos comparados')
@@ -1185,14 +1190,16 @@ export default function InventarioPage() {
               <>
                                   <Card className="mb-6 border-green-200">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium text-[#545454]">Total a pedir</CardTitle>
+                      <CardTitle className="text-sm font-medium text-[#545454]">Pedido estimado (por revisar)</CardTitle>
                       <Factory className="h-4 w-4 text-[#1A2238]" />
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-[#1A2238]">{totalProducirToggle.toLocaleString()}</div>
                       <p className="text-xs text-[#545454]">Pedido mensual para llegada en {leadTime} días hábiles. Los {forecastData.resumen.totalFaltanteAntesLlegada} pares en riesgo antes de la llegada no se suman.</p>
                     <p className="text-sm mt-2">Estimación sujeta a revisión de ventas por referencia y talla. Registra cada pedido y su recepción en <Link href="/dashboard/inventario/ordenes" className="underline">Órdenes en camino</Link> para que el siguiente cálculo los descuente.</p>
-                      <p className="text-sm mt-2 text-amber-800" role="alert">Revisa la demanda antes de comprar: {forecastData.validacion?.errorModelo != null ? `error histórico del modelo ${(forecastData.validacion.errorModelo * 100).toFixed(1)} %. ` : 'Sin validación histórica suficiente. '}{forecastData.validacion?.errorBase != null ? `Error del promedio de tres meses: ${(forecastData.validacion.errorBase * 100).toFixed(1)} %. ` : ''}{forecastData.validacion?.errorAnterior != null ? `Regla anual anterior: ${(forecastData.validacion.errorAnterior * 100).toFixed(1)} %. ` : ''}Estos errores comparan ventas estimadas con ventas reales; no garantizan la cantidad que venderás.</p>
+                      <p className="text-sm mt-2 text-amber-800" role="alert">Revisa la demanda antes de comprar: {forecastData.validacion?.errorModelo != null ? `error histórico mensual del modelo ${(forecastData.validacion.errorModelo * 100).toFixed(1)} %. ` : 'Sin validación histórica suficiente. '}{forecastData.validacion?.errorBase != null ? `Error del promedio de tres meses: ${(forecastData.validacion.errorBase * 100).toFixed(1)} %. ` : ''}{forecastData.validacion?.errorAnterior != null ? `Regla anual anterior: ${(forecastData.validacion.errorAnterior * 100).toFixed(1)} %. ` : ''}Estos errores comparan ventas estimadas con ventas reales; no garantizan la cantidad que venderás.</p>
+                      {forecastData.validacion?.errorCantidadPeriodo != null && <p className="text-sm mt-2">Error de cantidad acumulada en cuatro meses: <strong>{(forecastData.validacion.errorCantidadPeriodo * 100).toFixed(1)} %</strong>. Promedio sencillo en esos mismos períodos: {((forecastData.validacion.errorBaseCantidadPeriodo || 0) * 100).toFixed(1)} %. Esta medida admite diferencias entre meses; no sustituye el error mensual ni valida los pares a fabricar.</p>}
+                      {forecastData.validacion?.produccionSinValidacion != null && <p className="text-sm mt-2 text-amber-800">{forecastData.validacion.produccionSinValidacion} pares pertenecen a referencias sin validación histórica suficiente en ninguno de sus canales. Otros {forecastData.validacion.produccionValidacionParcial || 0} pares tienen validación parcial. El porcentaje de error solo describe las series evaluables; no certifica estas cantidades.</p>}
                     </CardContent>
                   </Card>
                 <Card className="mb-6">
@@ -1263,14 +1270,14 @@ export default function InventarioPage() {
                         {(forecastData.detalleUbicaciones || []).filter(row => !forecastSearchTerm || `${row.referencia} ${row.talla} ${row.sku}`.toLowerCase().includes(forecastSearchTerm.toLowerCase())).map((row, i) => <tr key={`${row.sku}-${row.canal}-${row.mes}-${i}`} className="border-t"><td className="p-2">{row.referencia} {row.talla}</td><td>{row.canal}</td><td>{row.mes}</td><td>{row.demanda}</td><td>{row.reposicion}</td><td>{row.stockInicial ?? 'Bodega compartida'}</td><td>{row.haceUnAno ?? 'Sin comparable'}</td><td>{row.haceDosAnos ?? 'Sin comparable'}</td></tr>)}
                       </tbody></table></div>
                     </details>
-                    <p>Base de demanda: se comparan promedio de tres meses, promedio con más peso en meses recientes, mismo mes del año anterior sin crecimiento y año anterior ajustado por crecimiento. La elección se hace por referencia y canal/tienda, probando los mismos períodos de cuatro meses.</p>
-                    <p>Se mantiene el promedio sencillo salvo que otro método reduzca el error al menos un 10 % y no empeore materialmente la tendencia a estimar de más o de menos. Esa ventaja también debe confirmarse en cuatro meses posteriores a una elección hecha sin conocerlos. Se requieren al menos tres cortes históricos; sin evidencia suficiente se usa el promedio reciente como provisional. Los nuevos usan sus ventas actuales; antes de siete días no se extrapola el ritmo.</p>
+                    <p>Base de demanda: se comparan promedios recientes de tres y seis meses, ventas intermitentes, mediana acumulada de cuatro meses y alternativas estacionales del año anterior. La elección se hace por referencia y canal/tienda, probando los mismos períodos de cuatro meses.</p>
+                    <p>Se mantiene el promedio sencillo salvo que otro método reduzca al menos un 10 % el error de cantidad acumulada en cuatro meses. El error mensual no puede aumentar más de un 5 % relativo y tampoco puede empeorar materialmente la tendencia a estimar de más o de menos. Esa ventaja también debe confirmarse en cuatro meses posteriores a una elección hecha sin conocerlos. Se requieren al menos tres cortes históricos; sin evidencia suficiente se usa el promedio reciente como provisional. Los nuevos usan sus ventas actuales; antes de siete días no se extrapola el ritmo.</p>
                     <p className="rounded border border-blue-200 bg-blue-50 p-3">Control de inventario: el año anterior se usa solo cuando gana la comparación histórica. No se añade un aumento extra por campañas. Las tallas se distribuyen según ventas registradas, sin inventar ventas por falta de stock. El faltante final se redondea al par más cercano: puede dejar una fracción de demanda estimada sin cubrir.</p>
                     <details><summary className="cursor-pointer font-medium">Demanda basada en ventas recientes</summary>
                       <p className="my-2">Estas cantidades son demanda estimada incluida. Para calcular lo que falta fabricar se descuentan inventario y pedidos por talla y fecha.</p>
                       {(forecastData.auditoria || []).filter(row => row.demandaSinComparable?.some(value => value > 0)).map(row => <p key={`${row.referencia}-${row.canal}`}>{row.referencia} · {row.canal}: {row.meses.map((mes, i) => (row.demandaSinComparable?.[i] || 0) > 0 ? `${mes}: ${row.demandaSinComparable![i]}` : '').filter(Boolean).join('; ')}</p>)}
                     </details>
-                    <p>{forecastData.validacion.errorModelo == null ? 'No hay suficientes períodos comparables para medir el error; esto no certifica precisión.' : `Error histórico en períodos comparables a cuatro meses: ${(forecastData.validacion.errorModelo * 100).toFixed(1)} %. Promedio de tres meses como comparación: ${((forecastData.validacion.errorBase || 0) * 100).toFixed(1)} %.`}</p>
+                    <p>{forecastData.validacion.errorModelo == null ? 'No hay suficientes períodos comparables para medir el error; esto no certifica precisión.' : `Error mensual en pruebas de cuatro meses: ${(forecastData.validacion.errorModelo * 100).toFixed(1)} %. Promedio de tres meses como comparación: ${((forecastData.validacion.errorBase || 0) * 100).toFixed(1)} %.`}</p>
                     {forecastData.validacion.errorAnterior != null && <p>Error de la regla anual anterior, en los mismos cortes: {(forecastData.validacion.errorAnterior * 100).toFixed(1)} %. La comparación es retrospectiva y no una garantía de ventas.</p>}
                     {forecastData.validacion.porCanal?.map(row => <p key={row.canal}>{row.canal === 'directo' ? 'Online + WhatsApp' : 'Tiendas'}: {row.error == null ? 'sin evidencia suficiente' : `${(row.error * 100).toFixed(1)} % de error histórico`} ({row.series} series evaluadas).</p>)}
                     <p className="rounded border border-amber-300 bg-amber-50 p-3 font-medium">Estimación con incertidumbre: compara el error del modelo con el promedio sencillo. Una mejora retrospectiva pequeña no garantiza precisión futura. La cantidad calculada no debe tomarse como una orden de fabricación confirmada.</p>

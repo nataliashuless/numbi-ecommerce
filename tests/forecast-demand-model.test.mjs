@@ -1,6 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  protectionPeriodMetrics,
+  intermittentMonthlyDemand,
   addBusinessDays,
   rotationSafety,
   selectPurchaseDemand,
@@ -397,8 +399,8 @@ test('purchase selector preserves proven annual seasonality on identical candida
   assert.equal(selection.method, 'annual')
   assert.equal(selection.evidence, true)
   assert.match(selection.confirmation, /confirmada/)
-  assert.deepEqual(selection.candidates.map(row => row.origins), [12, 12, 12, 12])
-  assert.deepEqual(selection.candidates.map(row => row.observations), [48, 48, 48, 48])
+  assert.deepEqual(selection.candidates.map(row => row.origins), [12, 12, 12, 12, 12, 12, 12])
+  assert.deepEqual(selection.candidates.map(row => row.observations), [48, 48, 48, 48, 48, 48, 48])
   assert.deepEqual(forecastSelectedSales(h, c, 3).values, [10, 10, 10])
 })
 
@@ -434,4 +436,32 @@ test('external validation reselects using past-only data and preserves old-rule 
   }
   assert.equal(after.selectedAbsoluteError, expected)
   assert.notEqual(after.selectedAbsoluteError, leaked)
+})
+
+
+test('protection error distinguishes timing from quantity without hiding zero-sales errors', () => {
+  const timing = protectionPeriodMetrics([0, 4, 0, 0], [1, 1, 1, 1])
+  assert.equal(timing.absoluteError, 0)
+  const empty = protectionPeriodMetrics([0, 0, 0, 0], [1, 1, 1, 1])
+  assert.equal(empty.excess, 4)
+  assert.equal(empty.wape, Infinity)
+  const mixed = protectionPeriodMetrics([0, 4, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 1, 1, 1, 1])
+  assert.equal(mixed.absoluteError, 8)
+  assert.equal(mixed.excess, 4)
+  assert.equal(mixed.shortage, 4)
+})
+
+test('intermittent demand decays through observed zero months but never invents demand', () => {
+  assert.equal(intermittentMonthlyDemand([0, 0, 0]), 0)
+  assert.equal(intermittentMonthlyDemand([5, 5, 5, 5]), 5)
+  assert.ok(intermittentMonthlyDemand([5, 0, 0, 0]) < intermittentMonthlyDemand([5, 0]))
+  assert.ok(intermittentMonthlyDemand([0, 0, 5]) < intermittentMonthlyDemand([5]))
+})
+
+test('external period metrics keep identical actual denominator and account for both risks', () => {
+  const h = Array.from({ length: 36 }, (_, i) => i % 3 === 0 ? 8 : 0)
+  const result = backtestObservedGrowth(h, Array(36).fill(100), 4, true)
+  assert.equal(result.protection.selected.absoluteError, result.protection.selected.excess + result.protection.selected.shortage)
+  assert.ok(Math.abs(result.protection.selected.wape - result.protection.selected.absoluteError / result.actualUnits) < 1e-12)
+  assert.ok(result.protection.selected.absoluteError <= result.selectedAbsoluteError + 1e-9)
 })

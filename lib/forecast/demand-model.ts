@@ -354,13 +354,50 @@ export function forecastSalesWithRecentFallback(values: number[], channel: numbe
     recentForecast: projected.map((value, i) => sources[i].startsWith('año anterior') ? 0 : value) }
 }
 
-export type PurchaseDemandMethod = 'ma3' | 'wma3' | 'annual' | 'seasonal'
+export type PurchaseDemandMethod = 'ma3' | 'wma3' | 'annual' | 'seasonal' | 'ma6' | 'tsb' | 'cycle_median'
 export const PURCHASE_METHOD_LABELS: Record<PurchaseDemandMethod, string> = {
   ma3: 'promedio últimos 3 meses', wma3: 'promedio ponderado últimos 3 meses',
   annual: 'año anterior × crecimiento observado', seasonal: 'año anterior sin crecimiento',
+  ma6: 'promedio últimos 6 meses', tsb: 'ventas intermitentes: frecuencia × cantidad',
+  cycle_median: 'mediana de ventas acumuladas en cuatro meses',
+}
+
+// TSB: smooth event frequency every month and size on positive events only.
+// Fixed .2 coefficients are not fitted to the external validation outcomes.
+export function intermittentMonthlyDemand(values: number[]) {
+  const first = values.findIndex(value => value > 0)
+  if (first < 0) return 0
+  let size = values[first], probability = 1 / (first + 1)
+  for (const value of values.slice(first + 1)) {
+    probability += .2 * ((value > 0 ? 1 : 0) - probability)
+    if (value > 0) size += .2 * (value - size)
+  }
+  return size * probability
+}
+
+// Report month timing and total protection-period quantity separately. Neither
+// metric replaces the other; zero-sales windows retain their overforecast error.
+export function protectionPeriodMetrics(actual: number[], predicted: number[], horizon = 4) {
+  if (!Number.isInteger(horizon) || horizon < 1 || actual.length !== predicted.length) throw new Error('Invalid protection-period observations')
+  const a: number[] = [], p: number[] = []
+  for (let i = 0; i < actual.length; i += horizon) {
+    a.push(actual.slice(i, i + horizon).reduce((sum, n) => sum + n, 0))
+    p.push(predicted.slice(i, i + horizon).reduce((sum, n) => sum + n, 0))
+  }
+  const excess = p.reduce((sum, value, i) => sum + Math.max(0, value - a[i]), 0)
+  const shortage = p.reduce((sum, value, i) => sum + Math.max(0, a[i] - value), 0)
+  return { ...metrics(a, p), absoluteError: excess + shortage, excess, shortage }
 }
 
 function purchaseProjection(method: PurchaseDemandMethod, values: number[], channel: number[], months: number) {
+  if (method === 'cycle_median') {
+    const tail = values.slice(-12)
+    const totals = Array.from({ length: Math.max(0, tail.length - 3) }, (_, i) => tail.slice(i, i + 4).reduce((s,n) => s+n,0)).sort((a,b)=>a-b)
+    const mid = Math.floor(totals.length / 2)
+    const level = totals.length ? (totals.length % 2 ? totals[mid] : (totals[mid-1]+totals[mid])/2) / 4 : mean(tail)
+    return Array(months).fill(level)
+  }
+  if (method === 'ma6' || method === 'tsb') return Array(months).fill(method === 'ma6' ? mean(values.slice(-6)) : intermittentMonthlyDemand(values))
   if (method === 'seasonal') return Array.from({ length: months }, (_, i) => Math.max(0, values[values.length - 12 + i % 12] ?? mean(values.slice(-3))))
   return method === 'annual' ? forecastObservedGrowth(values, channel, months).values : forecastMonths(values, method, months)
 }
@@ -383,6 +420,8 @@ function selectPurchaseCandidate(values: number[], channel: number[]) {
   const annualEligible = annualOrigins.length >= 3
   const sharedOrigins = annualEligible ? annualOrigins : origins
   const names: PurchaseDemandMethod[] = annualEligible ? ['ma3', 'wma3', 'annual', 'seasonal'] : ['ma3', 'wma3']
+  if (sharedOrigins.length && sharedOrigins.every(origin => origin >= 6)) names.push('ma6', 'tsb')
+  if (sharedOrigins.length && sharedOrigins.every(origin => origin >= 12)) names.push('cycle_median')
   const candidates = names.map(method => {
     const actual: number[] = [], predicted: number[] = []
     for (const origin of sharedOrigins) {
@@ -391,15 +430,16 @@ function selectPurchaseCandidate(values: number[], channel: number[]) {
       predicted.push(...purchaseProjection(method, training, channelTraining, horizon))
       actual.push(...values.slice(origin, origin + horizon))
     }
-    return { method, ...metrics(actual, predicted), origins: sharedOrigins.length }
+    return { method, ...metrics(actual, predicted), protection: protectionPeriodMetrics(actual, predicted, horizon), origins: sharedOrigins.length }
   })
   const baseline = candidates[0]
   let winner = baseline
   if (sharedOrigins.length >= 3) for (const candidate of candidates.slice(1)) {
-    const better = Number.isFinite(candidate.wape) && candidate.wape < baseline.wape
-      && candidate.wape <= baseline.wape * .9
+    const better = Number.isFinite(candidate.protection.wape) && candidate.protection.wape < baseline.protection.wape
+      && candidate.protection.wape <= baseline.protection.wape * .9
+      && candidate.wape <= baseline.wape * 1.05
       && Math.abs(candidate.bias) <= Math.abs(baseline.bias) + .05
-    if (better && candidate.wape + .2 * Math.abs(candidate.bias) < winner.wape + .2 * Math.abs(winner.bias)) winner = candidate
+    if (better && candidate.protection.wape + .2 * Math.abs(candidate.bias) < winner.protection.wape + .2 * Math.abs(winner.bias)) winner = candidate
   }
   return { method: winner.method, label: PURCHASE_METHOD_LABELS[winner.method],
     evidence: sharedOrigins.length >= 3 && Number.isFinite(winner.wape),
@@ -419,9 +459,12 @@ export function selectPurchaseDemand(values: number[], channel: number[]) {
   const actual = values.slice(origin)
   const candidate = metrics(actual, purchaseProjection(current.method, training, channelTraining, 4))
   const baseline = metrics(actual, purchaseProjection('ma3', training, channelTraining, 4))
+  const candidatePeriod = protectionPeriodMetrics(actual, purchaseProjection(current.method, training, channelTraining, 4))
+  const baselinePeriod = protectionPeriodMetrics(actual, purchaseProjection('ma3', training, channelTraining, 4))
   const confirmed = previous.evidence && previous.method === current.method
-    && Number.isFinite(candidate.wape) && candidate.wape < baseline.wape
-    && candidate.wape <= baseline.wape * .9 && Math.abs(candidate.bias) <= Math.abs(baseline.bias) + .05
+    && Number.isFinite(candidatePeriod.wape) && candidatePeriod.wape < baselinePeriod.wape
+    && candidatePeriod.wape <= baselinePeriod.wape * .9 && candidate.wape <= baseline.wape * 1.05
+    && Math.abs(candidate.bias) <= Math.abs(baseline.bias) + .05
   return confirmed ? { ...current, confirmation: 'ventaja confirmada en cuatro meses posteriores a la selección' }
     : { ...current, method: 'ma3' as PurchaseDemandMethod, label: PURCHASE_METHOD_LABELS.ma3,
       confirmation: 'promedio sencillo; alternativa no confirmó ventaja fuera de selección' }
@@ -471,6 +514,7 @@ export function backtestObservedGrowth(values: number[], channel: number[], hori
     actual.push(...values.slice(origin, origin + steps)); origins++
   }
   return { previousAbsoluteError: previous.reduce((sum, value, i) => sum + Math.abs(value - actual[i]), 0),
+    protection: { selected: protectionPeriodMetrics(actual, forecasts, steps), baseline: protectionPeriodMetrics(actual, baseline, steps), previous: protectionPeriodMetrics(actual, previous, steps) },
     selected: metrics(actual, forecasts), baseline: metrics(actual, baseline), horizon: steps, origins,
     actualUnits: actual.reduce((sum, value) => sum + value, 0),
     selectedAbsoluteError: forecasts.reduce((sum, value, i) => sum + Math.abs(value - actual[i]), 0),
