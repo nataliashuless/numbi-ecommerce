@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import {
   addBusinessDays,
   rotationSafety,
+  selectPurchaseDemand,
+  forecastSelectedSales,
   salesRotation,
   forecastSalesWithRecentFallback,
   observedSizeProfile,
@@ -385,4 +387,51 @@ test('rotation reports sell speed and indicative coverage without inventing turn
   assert.equal(result.coberturaGlobalDias, 45)
   assert.equal(salesRotation(0, 0, 200).coberturaGlobalDias, null)
   assert.equal(salesRotation(0, 0, 0).diasPorPar, null)
+})
+
+
+test('purchase selector preserves proven annual seasonality on identical candidate windows', () => {
+  const h = Array.from({ length: 48 }, (_, i) => i % 12 >= 10 ? 100 : 10)
+  const c = Array(48).fill(100)
+  const selection = selectPurchaseDemand(h, c)
+  assert.equal(selection.method, 'annual')
+  assert.equal(selection.evidence, true)
+  assert.match(selection.confirmation, /confirmada/)
+  assert.deepEqual(selection.candidates.map(row => row.origins), [12, 12, 12])
+  assert.deepEqual(selection.candidates.map(row => row.observations), [48, 48, 48])
+  assert.deepEqual(forecastSelectedSales(h, c, 3).values, [10, 10, 10])
+})
+
+test('purchase selector keeps simple averages for ties, sparse histories and unsupported seasonal spikes', () => {
+  assert.equal(selectPurchaseDemand(Array(36).fill(20), Array(36).fill(100)).method, 'ma3')
+  const short = forecastSelectedSales([2, 3, 4], [100, 100, 100], 2)
+  assert.equal(short.selection.evidence, false)
+  assert.equal(short.selection.method, 'ma3')
+  assert.equal(short.values[0], 3)
+  assert.equal(short.selection.candidates.some(row => row.method === 'annual'), false)
+  const h = Array.from({ length: 24 }, (_, i) => i === 13 ? 36 : i === 14 ? 26 : 8)
+  assert.equal(selectPurchaseDemand(h, h).method, 'ma3')
+  const firstMonth = forecastSelectedSales([], [], 2, { units: 3, elapsedDays: 3, daysInMonth: 30 })
+  assert.deepEqual(firstMonth.values, [3, 3])
+  assert.equal(firstMonth.selection.evidence, false)
+})
+
+test('external validation reselects using past-only data and preserves old-rule comparison sample', () => {
+  const h = Array.from({ length: 32 }, (_, i) => i < 24 ? (i % 12 >= 10 ? 100 : 10) : 2)
+  const c = Array(h.length).fill(100)
+  const before = backtestObservedGrowth(h, c, 4)
+  const after = backtestObservedGrowth(h, c, 4, true)
+  assert.equal(after.actualUnits, before.actualUnits)
+  assert.equal(after.origins, before.origins)
+  assert.equal(after.previousAbsoluteError, before.selectedAbsoluteError)
+  assert.equal(after.baselineAbsoluteError, before.baselineAbsoluteError)
+  let expected = 0, leaked = 0
+  for (let origin = Math.max(6, h.length - 4 - 11); origin <= h.length - 4; origin++) {
+    if (origin <= 15) continue
+    const predictions = forecastSelectedSales(h.slice(0, origin), c.slice(0, origin), 4).values
+    const invalidFuture = forecastSelectedSales(h, c, 4).values
+    predictions.forEach((value, i) => { expected += Math.abs(value - h[origin + i]); leaked += Math.abs(invalidFuture[i] - h[origin + i]) })
+  }
+  assert.equal(after.selectedAbsoluteError, expected)
+  assert.notEqual(after.selectedAbsoluteError, leaked)
 })

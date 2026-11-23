@@ -354,6 +354,93 @@ export function forecastSalesWithRecentFallback(values: number[], channel: numbe
     recentForecast: projected.map((value, i) => sources[i].startsWith('año anterior') ? 0 : value) }
 }
 
+export type PurchaseDemandMethod = 'ma3' | 'wma3' | 'annual'
+export const PURCHASE_METHOD_LABELS: Record<PurchaseDemandMethod, string> = {
+  ma3: 'promedio últimos 3 meses', wma3: 'promedio ponderado últimos 3 meses',
+  annual: 'año anterior × crecimiento observado',
+}
+
+function purchaseProjection(method: PurchaseDemandMethod, values: number[], channel: number[], months: number) {
+  return method === 'annual' ? forecastObservedGrowth(values, channel, months).values : forecastMonths(values, method, months)
+}
+
+function annualOriginAvailable(values: number[], channel: number[], origin: number) {
+  const cut = channel.length - values.length + origin
+  const first = values.findIndex(value => value > 0)
+  const firstChannel = channel.findIndex(value => value > 0)
+  return first >= 0 && origin - 12 >= first && firstChannel >= 0 && cut - 15 > firstChannel
+    && channel.slice(cut - 15, cut - 12).reduce((sum, value) => sum + value, 0) > 0
+}
+
+// All candidates face the SAME held-out four-month windows. Recent models can
+// be compared without annual history; the annual candidate needs three valid
+// origins before it may compete. No future observations enter training.
+function selectPurchaseCandidate(values: number[], channel: number[]) {
+  const horizon = 4
+  const origins = Array.from({ length: Math.max(0, values.length - horizon - 2) }, (_, i) => i + 3).slice(-12)
+  const annualOrigins = origins.filter(origin => annualOriginAvailable(values, channel, origin))
+  const annualEligible = annualOrigins.length >= 3
+  const sharedOrigins = annualEligible ? annualOrigins : origins
+  const names: PurchaseDemandMethod[] = annualEligible ? ['ma3', 'wma3', 'annual'] : ['ma3', 'wma3']
+  const candidates = names.map(method => {
+    const actual: number[] = [], predicted: number[] = []
+    for (const origin of sharedOrigins) {
+      const training = values.slice(0, origin)
+      const channelTraining = channel.slice(0, channel.length - values.length + origin)
+      predicted.push(...purchaseProjection(method, training, channelTraining, horizon))
+      actual.push(...values.slice(origin, origin + horizon))
+    }
+    return { method, ...metrics(actual, predicted), origins: sharedOrigins.length }
+  })
+  const baseline = candidates[0]
+  let winner = baseline
+  if (sharedOrigins.length >= 3) for (const candidate of candidates.slice(1)) {
+    const better = Number.isFinite(candidate.wape) && candidate.wape < baseline.wape
+      && candidate.wape <= baseline.wape * .9
+      && Math.abs(candidate.bias) <= Math.abs(baseline.bias) + .05
+    if (better && candidate.wape + .2 * Math.abs(candidate.bias) < winner.wape + .2 * Math.abs(winner.bias)) winner = candidate
+  }
+  return { method: winner.method, label: PURCHASE_METHOD_LABELS[winner.method],
+    evidence: sharedOrigins.length >= 3 && Number.isFinite(winner.wape),
+    origins: sharedOrigins.length, candidates }
+}
+
+// Confirm a proposed change on the latest four months: choose the candidate
+// before those months, then test it against the baseline on unseen outcomes.
+// Require the same candidate to remain preferred after adding the new history.
+export function selectPurchaseDemand(values: number[], channel: number[]) {
+  const current = selectPurchaseCandidate(values, channel)
+  if (current.method === 'ma3') return { ...current, confirmation: 'promedio sencillo; alternativas sin ventaja suficiente' }
+  const origin = values.length - 4
+  const training = values.slice(0, origin)
+  const channelTraining = channel.slice(0, channel.length - 4)
+  const previous = selectPurchaseCandidate(training, channelTraining)
+  const actual = values.slice(origin)
+  const candidate = metrics(actual, purchaseProjection(current.method, training, channelTraining, 4))
+  const baseline = metrics(actual, purchaseProjection('ma3', training, channelTraining, 4))
+  const confirmed = previous.evidence && previous.method === current.method
+    && Number.isFinite(candidate.wape) && candidate.wape < baseline.wape
+    && candidate.wape <= baseline.wape * .9 && Math.abs(candidate.bias) <= Math.abs(baseline.bias) + .05
+  return confirmed ? { ...current, confirmation: 'ventaja confirmada en cuatro meses posteriores a la selección' }
+    : { ...current, method: 'ma3' as PurchaseDemandMethod, label: PURCHASE_METHOD_LABELS.ma3,
+      confirmation: 'promedio sencillo; alternativa no confirmó ventaja fuera de selección' }
+}
+
+export function forecastSelectedSales(values: number[], channel: number[], months: number,
+  currentMonth?: { units: number; elapsedDays: number; daysInMonth: number }) {
+  const selection = selectPurchaseDemand(values, channel)
+  if (!values.some(value => value > 0)) {
+    const provisional = forecastSalesWithRecentFallback(values, channel, months, currentMonth)
+    return { ...provisional, selection: { ...selection, evidence: false } }
+  }
+  const annual = forecastObservedGrowth(values, channel, months)
+  const projection = purchaseProjection(selection.method, values, channel, months)
+  const sources = selection.method === 'annual' ? annual.sources
+    : projection.map(() => `${selection.label}${selection.evidence ? ': seleccionado por validación' : ': provisional, historial insuficiente'}`)
+  return { ...annual, values: projection, sources, selection,
+    recentForecast: projection.map((value, i) => sources[i].startsWith('año anterior') ? 0 : value) }
+}
+
 // Actual observed shares only; no inferred lost sales and no equal-share demand.
 export function observedSizeProfile(series: Map<string, number[]>): Map<string, number> {
   const totals = new Map([...series].map(([size, values]) => [size, values.reduce((sum, value) => sum + Math.max(0, value), 0)]))
@@ -361,9 +448,9 @@ export function observedSizeProfile(series: Map<string, number[]>): Map<string, 
   return new Map([...totals].map(([size, value]) => [size, total > 0 ? value / total : 0]))
 }
 
-export function backtestObservedGrowth(values: number[], channel: number[], horizon = 4): RollingDemandBacktest {
+export function backtestObservedGrowth(values: number[], channel: number[], horizon = 4, useSelection = false) {
   const steps = Math.max(1, Math.min(4, Math.floor(horizon) || 4))
-  const actual: number[] = [], forecasts: number[] = [], baseline: number[] = []
+  const actual: number[] = [], forecasts: number[] = [], baseline: number[] = [], previous: number[] = []
   const offset = channel.length - values.length
   let origins = 0
   const firstReferenceSale = values.findIndex(value => value > 0)
@@ -376,11 +463,14 @@ export function backtestObservedGrowth(values: number[], channel: number[], hori
     if (firstReferenceSale < 0 || origin - 12 < firstReferenceSale ||
       firstChannelSale < 0 || channelCut - 15 <= firstChannelSale ||
       channel.slice(channelCut - 15, channelCut - 12).reduce((sum, value) => sum + value, 0) <= 0) continue
-    forecasts.push(...forecastObservedGrowth(values.slice(0, origin), channel.slice(0, offset + origin), steps).values)
+    const oldProjection = forecastObservedGrowth(values.slice(0, origin), channel.slice(0, offset + origin), steps).values
+    previous.push(...oldProjection)
+    forecasts.push(...(useSelection ? forecastSelectedSales(values.slice(0, origin), channel.slice(0, offset + origin), steps).values : oldProjection))
     baseline.push(...forecastMonths(values.slice(0, origin), 'ma3', steps))
     actual.push(...values.slice(origin, origin + steps)); origins++
   }
-  return { selected: metrics(actual, forecasts), baseline: metrics(actual, baseline), horizon: steps, origins,
+  return { previousAbsoluteError: previous.reduce((sum, value, i) => sum + Math.abs(value - actual[i]), 0),
+    selected: metrics(actual, forecasts), baseline: metrics(actual, baseline), horizon: steps, origins,
     actualUnits: actual.reduce((sum, value) => sum + value, 0),
     selectedAbsoluteError: forecasts.reduce((sum, value, i) => sum + Math.abs(value - actual[i]), 0),
     baselineAbsoluteError: baseline.reduce((sum, value, i) => sum + Math.abs(value - actual[i]), 0) }
