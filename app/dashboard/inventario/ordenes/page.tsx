@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { isFirmSaleProductionOrder } from '@/lib/forecast/policy'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -210,7 +211,7 @@ export default function OrdenesProduccionPage() {
               <Truck className="h-7 w-7 text-[#F59E0B]" />Órdenes de producción
             </h1>
             <p className="text-[#545454] max-w-2xl">
-              Zapatos en camino. El forecast de demanda descuenta lo que ya está pedido (órdenes pendientes) para no sobre-pedir.
+              El forecast descuenta las órdenes pendientes disponibles para tus ventas. Las órdenes identificadas como Travesuras están reservadas para esa venta en firme y quedan excluidas.
             </p>
           </div>
           <Button onClick={() => setShowForm(v => !v)} className="bg-[#1DA9EF] hover:bg-[#0073D1] text-white">
@@ -339,6 +340,11 @@ export default function OrdenesProduccionPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
+                  {o.estado === 'pendiente' && isFirmSaleProductionOrder(o) && (
+                    <p className="mb-3 rounded bg-amber-50 p-3 text-sm text-amber-900">
+                      Reservada para Travesuras: {o.totalPares} pares no disponibles para el forecast de tus otros canales.
+                    </p>
+                  )}
                   {editingDateId === o.id && o.estado === 'pendiente' && (
                     <form onSubmit={e => saveReceptionDate(e, o)} className="mb-4 rounded-md border bg-gray-50 p-4 space-y-3">
                       <div className="max-w-xs">

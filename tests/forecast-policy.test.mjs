@@ -1,10 +1,25 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { forecastPolicy, DEFAULT_EXCLUDED_STORES } from '../lib/forecast/policy.ts'
+import { forecastPolicy, DEFAULT_EXCLUDED_STORES, isFirmSaleProductionOrder } from '../lib/forecast/policy.ts'
+import { coverageAtArrival } from '../lib/forecast/demand-model.ts'
 import { netCreditInvoices } from '../lib/forecast/net-credits.ts'
 import fs from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
+
+test('Travesuras production is committed to firm sale, ordinary orders remain available', () => {
+  for (const numero of ['travesuras', 'OC 33 TRAVESURAS', ' Travesúras ']) {
+    assert.equal(isFirmSaleProductionOrder({ numero }), true)
+  }
+  for (const numero of [null, 'OC 33', 'travesuritas']) {
+    assert.equal(isFirmSaleProductionOrder({ numero }), false)
+  }
+  const orders = [{ numero: 'travesuras', quantity: 152, arrival: '2026-11-29' }, { numero: 'OC34', quantity: 3, arrival: '2026-11-29' }]
+  const needs = [{ date: '2027-02-09', quantity: 10 }]
+  const coverage = coverageAtArrival(2, orders.filter(o => !isFirmSaleProductionOrder(o)), needs, '2027-02-09', 'nearest')
+  assert.equal(coverage.production, 5)
+  assert.equal(orders[0].quantity, 152)
+})
 
 test('permanent policy keeps monthly 52 business days, 14 day ceiling and firm exclusion', () => {
   const policy = forecastPolicy({ leadTime: 400, reserveDays: 100, excludedStores: ['store'] })

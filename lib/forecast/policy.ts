@@ -1,4 +1,9 @@
 export const FIRM_STORE_NIT = '830145876'
+// The owner confirmed that production orders identified as Travesuras are
+// committed to that outright-sale customer, not replenishment for our channels.
+export function isFirmSaleProductionOrder(order: { numero: string | null }) {
+  return /\btravesuras\b/i.test((order.numero || '').normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
+}
 export const DEFAULT_EXCLUDED_STORES = [
   'f6b22b8b-cbcc-4dfe-b13f-31f551e79cce', '7e317f42-035b-4786-a3ed-199e002a0761',
   'e7b2e7f8-b269-4f7e-9453-52fa31b58614', 'bb7ec817-5e7e-4e42-9d0d-a75bbc4f3975',

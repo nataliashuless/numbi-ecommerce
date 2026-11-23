@@ -177,6 +177,7 @@ interface ForecastData {
   forecast: ForecastItem[]
   referencias: ForecastReference[]
   enCamino?: {
+    reservadoVentaFirme?: number
     totalUnidades: number
     matchUnidades: number
     sinMatch: Array<{ label: string; unidades: number }>
@@ -512,6 +513,7 @@ export default function InventarioPage() {
 
     // Sheet 3: Parámetros usados
     const parametros = [
+      { Parámetro: 'En camino reservado para Travesuras (no disponible)', Valor: forecastData.enCamino?.reservadoVentaFirme || 0 },
       { Parámetro: 'Error mensual (proporción)', Valor: forecastData.validacion?.errorModelo },
       { Parámetro: 'Error cantidad acumulada en cuatro meses (proporción)', Valor: forecastData.validacion?.errorCantidadPeriodo },
       { Parámetro: 'Pares en referencias sin validación histórica', Valor: forecastData.validacion?.produccionSinValidacion },
@@ -1405,6 +1407,11 @@ export default function InventarioPage() {
                 )}
 
                 {/* En camino diagnostic */}
+                {!!forecastData.enCamino?.reservadoVentaFirme && (
+                  <p className="mb-6 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                    <b>{forecastData.enCamino.reservadoVentaFirme} pares en camino reservados para Travesuras.</b> No se descuentan del pedido para tus ventas y las tiendas de consignación.
+                  </p>
+                )}
                 {forecastData.enCamino && forecastData.enCamino.totalUnidades > 0 && (
                   <Card className="mb-6 border-l-4 border-l-[#F59E0B]">
                     <CardContent className="pt-6">

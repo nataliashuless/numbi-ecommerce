@@ -1,4 +1,4 @@
-import { forecastPolicy, FIRM_STORE_NIT } from '@/lib/forecast/policy'
+import { forecastPolicy, FIRM_STORE_NIT, isFirmSaleProductionOrder } from '@/lib/forecast/policy'
 import { loadSalesSource, reportingInvoices } from '@/lib/sales/source'
 import { NextResponse } from 'next/server'
 import { businessDateBogota, buildForecastPeriods, nextMonthlyOrder } from '@/lib/forecast/calendar'
@@ -873,6 +873,7 @@ export async function GET(request: Request) {
     // normalized key.
     const enCaminoLabelByKey = new Map<string, string>()
     let enCaminoTotalUnits = 0
+    let enCaminoReservadoVentaFirme = 0
     {
       type OrderRow = { id: string; numero: string | null; fecha_creacion: string | null; fecha_entrega: string | null; estado: string }
       const orderRows: OrderRow[] = []
@@ -911,12 +912,17 @@ export async function GET(request: Request) {
           if (!data || data.length < 1000) break
         }
         const oc30 = typedOrders.find(order => /^(orden\s+)?0*30$/i.test((order.numero || '').trim()))
+        const reservedOrderIds = new Set(typedOrders.filter(isFirmSaleProductionOrder).map(order => order.id))
         const oc30Items = typedItems.filter(item => item.order_id === oc30?.id)
         const receivedAllocation = largestRemainder(30, oc30Items.map(item => ({
           key: item.id,
           share: Math.max(0, Number(item.cantidad) || 0),
         })))
         for (const it of typedItems) {
+          if (reservedOrderIds.has(it.order_id)) {
+            enCaminoReservadoVentaFirme += Math.max(0, Number(it.cantidad) || 0)
+            continue
+          }
           const key = enCaminoKey(it.diseno, it.talla)
           const qty = Number(it.cantidad) || 0
           const lines = enCaminoByKey.get(key) || []
@@ -1250,6 +1256,7 @@ export async function GET(request: Request) {
       referencias,
       resumen,
       enCamino: {
+        reservadoVentaFirme: enCaminoReservadoVentaFirme,
         totalUnidades: enCaminoTotalUnits,
         matchUnidades: enCaminoDiscountedUnits,
         sinMatch: enCaminoSinMatch,
