@@ -1011,7 +1011,7 @@ export async function GET(request: Request) {
         produccionSinReserva,
         produccionPorReserva,
         sugerenciaProduccion,
-        totalPedido: sugerenciaProduccion + faltanteAntesLlegada,
+        totalPedido: sugerenciaProduccion,
         prioridad,
       })
     }
@@ -1099,7 +1099,7 @@ export async function GET(request: Request) {
       totalProduccionSinReserva: forecast.reduce((sum, f) => sum + f.produccionSinReserva, 0),
       totalProduccionPorReserva: forecast.reduce((sum, f) => sum + f.produccionPorReserva, 0),
       totalPedido: forecast.reduce((sum, f) => sum + f.totalPedido, 0),
-      totalEntregaAnticipada: forecast.reduce((sum, f) => sum + f.faltanteAntesLlegada, 0),
+      totalFaltanteAntesLlegada: forecast.reduce((sum, f) => sum + f.faltanteAntesLlegada, 0),
       totalProducirSugerido: forecast.reduce((sum, f) => sum + f.sugerenciaProduccion, 0),
       totalVentasPeriodo: forecast.reduce((sum, f) => sum + f.ventasTotal, 0),
       totalVentasOnline: forecast.reduce((sum, f) => sum + f.ventasShopify, 0),

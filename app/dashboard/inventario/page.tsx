@@ -189,7 +189,7 @@ interface ForecastData {
     totalProduccionPorReserva?: number
     totalProducirSugerido: number
     totalPedido: number
-    totalEntregaAnticipada: number
+    totalFaltanteAntesLlegada: number
     totalVentasPeriodo: number
     totalVentasOnline: number
     totalVentasWhatsApp: number
@@ -488,7 +488,7 @@ export default function InventarioPage() {
       'Ventas período estacional año anterior': r.ventasPeriodoEstacional,
       'Promedio mensual tiendas': Number((r.ventasTiendas * 30 / (parseInt(diasAnalisis) || 1)).toFixed(1)),
       'Velocidad diaria': Number(r.velocidadDiaria.toFixed(2)),
-      'Entrega anticipada': r.faltanteAntesLlegada || 0,
+      'Riesgo antes de llegada (no pedir)': r.faltanteAntesLlegada || 0,
       'Pedido mensual': r.sugerenciaProduccion,
       'Total a pedir': suggestion,
       'Prioridad': PRIORIDAD_LABEL[r.prioridad] || r.prioridad,
@@ -506,7 +506,9 @@ export default function InventarioPage() {
       { Parámetro: 'Lead time producción (días hábiles)', Valor: leadTime },
       { Parámetro: 'Stock de seguridad (días)', Valor: stockSeguridad },
       { Parámetro: 'Stock a descontar', Valor: incluirConsignado ? 'Bodega + Consignado' : 'Solo bodega' },
-      { Parámetro: 'Total a pedir (incluye entrega anticipada)', Valor: detalle.reduce((s, d) => s + (d['Total a pedir'] || 0), 0) },
+      { Parámetro: 'Total a pedir (solo llegada normal)', Valor: detalle.reduce((s, d) => s + (d['Total a pedir'] || 0), 0) },
+      { Parámetro: 'Faltantes antes de llegada (excluidos del pedido)', Valor: forecastData.resumen.totalFaltanteAntesLlegada },
+      { Parámetro: 'Estado de la estimación', Valor: 'Revisar ventas por referencia y talla antes de comprar; no incluye ventas perdidas antes de llegada' },
       { Parámetro: 'Ventas en el período', Valor: forecastData.resumen.totalVentasPeriodo },
       { Parámetro: 'Período estacional comparado', Valor: `${forecastData.parametros.fechaInicioEstacional} a ${forecastData.parametros.fechaFinEstacional}` },
       { Parámetro: 'Productos/tallas ajustados por estacionalidad', Valor: forecastData.resumen.skusConAjusteEstacional },
@@ -538,7 +540,7 @@ export default function InventarioPage() {
       SKU: row.sku, Referencia: row.producto, Talla: row.size,
       'Stock inicial propio': row.conciliacion?.stockInicial ?? row.stockBodega,
       'Llegada producción': row.conciliacion?.llegadaProduccion || forecastData.cobertura?.fechaLlegadaProduccion,
-      'Pedido mensual': row.sugerenciaProduccion, 'Entrega anticipada': row.faltanteAntesLlegada || 0, 'Total a pedir': row.totalPedido,
+      'Pedido mensual': row.sugerenciaProduccion, 'Riesgo antes de llegada (no pedir)': row.faltanteAntesLlegada || 0, 'Total a pedir': row.totalPedido,
     }))), 'Conciliación stock')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(forecastData.forecast.flatMap(row => [
       ...(row.conciliacion?.entradas || []).map(item => ({ SKU: row.sku, Fecha: item.fecha, Tipo: 'Entrada confirmada', Pares: item.pares, 'Reserva recuperable': 0 })),
@@ -1145,8 +1147,9 @@ export default function InventarioPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-[#1A2238]">{totalProducirToggle.toLocaleString()}</div>
-                      <p className="text-xs text-[#545454]">{forecastData.resumen.totalEntregaAnticipada} anticipados + {forecastData.resumen.totalProducirSugerido} del pedido mensual</p>
-                    <p className="text-sm mt-2">La entrega anticipada requiere confirmar fechas con el proveedor. Registra cada pedido y su recepción en <Link href="/dashboard/inventario/ordenes" className="underline">Órdenes en camino</Link> para que el siguiente cálculo los descuente.</p>
+                      <p className="text-xs text-[#545454]">Pedido mensual para llegada en {leadTime} días hábiles. Los {forecastData.resumen.totalFaltanteAntesLlegada} pares en riesgo antes de la llegada no se suman.</p>
+                    <p className="text-sm mt-2">Estimación sujeta a revisión de ventas por referencia y talla. Registra cada pedido y su recepción en <Link href="/dashboard/inventario/ordenes" className="underline">Órdenes en camino</Link> para que el siguiente cálculo los descuente.</p>
+                      <p className="text-sm mt-2 text-amber-800" role="alert">Revisa la demanda antes de comprar: {forecastData.validacion?.errorModelo != null ? `error histórico del modelo ${(forecastData.validacion.errorModelo * 100).toFixed(1)} %. ` : 'Sin validación histórica suficiente. '}{forecastData.validacion?.errorBase != null ? `Error del promedio de tres meses: ${(forecastData.validacion.errorBase * 100).toFixed(1)} %. ` : ''}Estos errores comparan ventas estimadas con ventas reales; no garantizan la cantidad que venderás.</p>
                     </CardContent>
                   </Card>
                 <Card className="mb-6">
@@ -1228,8 +1231,8 @@ export default function InventarioPage() {
                 </Card>}
 
                 {forecastData.cobertura && <Card className="mb-6 border-amber-300 bg-amber-50"><CardContent className="pt-6">
-                  <p className="font-semibold">Entrega anticipada: {forecastData.cobertura.faltanteAntesLlegada} pares, incluidos en el total a pedir</p>
-                  <p className="text-sm mt-1">Pedido mensual: llegada estimada {forecastData.cobertura.fechaLlegadaProduccion}, cobertura hasta {forecastData.parametros.fechaFinProyeccion}. El siguiente pedido se realiza el {forecastData.cobertura.fechaSiguientePedido} y llega el {forecastData.cobertura.fechaLlegadaSiguientePedido}. El total a pedir suma la entrega anticipada y el pedido mensual. Confirma con el proveedor las fechas para cubrir los faltantes anteriores a la llegada normal. La reserva de seguridad puede requerir reposición adicional.</p>
+                  <p className="font-semibold">Riesgo antes de la llegada: {forecastData.cobertura.faltanteAntesLlegada} pares, excluidos del total a pedir</p>
+                  <p className="text-sm mt-1">Pedido mensual: llegada estimada {forecastData.cobertura.fechaLlegadaProduccion}, cobertura hasta {forecastData.parametros.fechaFinProyeccion}. El siguiente pedido se realiza el {forecastData.cobertura.fechaSiguientePedido} y llega el {forecastData.cobertura.fechaLlegadaSiguientePedido}. Los faltantes anteriores son ventas estimadas que podrían perderse, no pedidos confirmados. Fabricarlos para una llegada posterior puede generar exceso. Revisa posibles traslados de inventario existente. La reserva de seguridad puede requerir reposición adicional.</p>
                   <p className="text-xs mt-2">Supuesto de fechas: {forecastData.cobertura.distribucion} Los picos dentro del mes pueden cambiar la cobertura.</p>
                 </CardContent></Card>}
                 {/* Forecast KPIs */}
@@ -1543,7 +1546,7 @@ export default function InventarioPage() {
                                   <TableHead className="text-center">Vel. Semanal</TableHead>
                                   <TableHead className="text-center">Días Restantes</TableHead>
                                   <TableHead className="text-center">Prioridad</TableHead>
-                                  <TableHead className="text-center bg-amber-50">Entrega anticipada</TableHead>
+                                  <TableHead className="text-center bg-amber-50">Riesgo antes de llegada (no pedir)</TableHead>
                                   <TableHead className="text-center">Pedido mensual</TableHead>
                                   <TableHead className="text-center bg-green-50">Total a pedir</TableHead>
                                 </TableRow>
@@ -1721,7 +1724,7 @@ export default function InventarioPage() {
                             <div className="mt-4 pt-4 border-t">
                               <div className="flex justify-between items-center text-sm">
                                 <div className="text-[#545454]">
-                                  Entrega anticipada + pedido mensual hasta {forecastData.parametros.fechaFinProyeccion}. Inventario y órdenes en camino descontados por talla y fecha.
+                                  Solo pedido mensual hasta {forecastData.parametros.fechaFinProyeccion}. Inventario y órdenes en camino descontados por talla y fecha.
                                 </div>
                                 <div>
                                   <span className="text-[#545454]">Total a pedir: </span>

@@ -498,25 +498,25 @@ test('November monthly order covers February 8 through March 4, before next arri
 })
 
 
-test('total order reconciles urgency and monthly coverage and nets incoming supply once', async () => {
+test('monthly order excludes pre-arrival lost sales and nets incoming supply once', async () => {
   const original = { ...tables }
   try {
     isolatedSupplyFixture()
     const result = await calculate('', '&stock_seguridad=0')
     let monthly = 0, urgent = 0
     for (const row of result.forecast) {
-      assert.equal(row.totalPedido, row.sugerenciaProduccion + row.faltanteAntesLlegada)
+      assert.equal(row.totalPedido, row.sugerenciaProduccion)
       monthly += row.sugerenciaProduccion
       urgent += row.faltanteAntesLlegada
     }
     assert.ok(urgent > 0)
-    assert.equal(result.resumen.totalPedido, monthly + urgent)
-    assert.equal(result.resumen.totalEntregaAnticipada, urgent)
-    assert.equal(result.referencias.reduce((sum, row) => sum + row.totalPedido, 0), monthly + urgent)
+    assert.equal(result.resumen.totalPedido, monthly)
+    assert.equal(result.resumen.totalFaltanteAntesLlegada, urgent)
+    assert.equal(result.referencias.reduce((sum, row) => sum + row.totalPedido, 0), monthly)
     tables.production_orders = [{ id: 'cover', numero: 'test', estado: 'pendiente', fecha_entrega: '2026-10-05' }]
     tables.production_order_items = [{ id: 'cover-item', order_id: 'cover', diseno: 'Prueba', talla: '20', cantidad: 1000 }]
     const supplied = await calculate('', '&stock_seguridad=0')
     assert.equal(supplied.resumen.totalPedido, 0)
-    assert.equal(supplied.resumen.totalEntregaAnticipada, 0)
+    assert.equal(supplied.resumen.totalFaltanteAntesLlegada, 0)
   } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
 })
