@@ -415,7 +415,10 @@ export default function InventarioPage() {
     const policy = await response.json()
     const result = await fetch('/api/forecast/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...policy, excludedStores: excludedStoreIds,
       ...(included === undefined ? {} : { includeEva: included, evaYear: new Intl.DateTimeFormat('en', { timeZone: 'America/Bogota', year: 'numeric' }).format(new Date()) }) }) })
-    if (!result.ok) throw new Error('No se pudo guardar en la cuenta; el cálculo no se ha cambiado.')
+    if (!result.ok) {
+      const failure = await result.json().catch(() => null)
+      throw new Error(failure?.error || 'No se pudo guardar en la cuenta; el cálculo no se ha cambiado.')
+    }
     await fetchForecast()
   }
   async function changeEvaAttendance(included: boolean) {

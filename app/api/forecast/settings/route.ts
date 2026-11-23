@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAdminClient, requireAuth } from '@/lib/auth-helpers'
+import { createApiClient, requireAuth } from '@/lib/auth-helpers'
 import { forecastPolicy } from '@/lib/forecast/policy'
 export async function GET() {
   const { user, error } = await requireAuth()
@@ -14,7 +14,8 @@ export async function PATCH(request: Request) {
   if (!body || !Array.isArray(body.excludedStores) || body.excludedStores.some((id: unknown) => typeof id !== 'string') || typeof body.includeEva !== 'boolean')
     return NextResponse.json({ error: 'Preferencias inválidas' }, { status: 400 })
   const policy = forecastPolicy(body)
-  const result = await getAdminClient().auth.admin.updateUserById(user.id, { user_metadata: { forecastPolicy: policy } })
-  if (result.error) return NextResponse.json({ error: 'No se pudieron guardar las preferencias en la cuenta' }, { status: 503 })
+  const client = await createApiClient()
+  const result = await client.auth.updateUser({ data: { forecastPolicy: policy } })
+  if (result.error) return NextResponse.json({ error: `No se pudieron guardar las preferencias: ${result.error.message}` }, { status: 503 })
   return NextResponse.json(policy)
 }

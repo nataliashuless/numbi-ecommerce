@@ -10,7 +10,7 @@ function getServiceClient() {
   )
 }
 
-async function createApiClient() {
+export async function createApiClient() {
   const cookieStore = await cookies()
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

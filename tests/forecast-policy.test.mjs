@@ -33,13 +33,12 @@ test('settings save in authenticated account; failed writes do not report succes
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../app/api/forecast/settings/route.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { exports, require(name) {
     if (name === 'next/server') return { NextResponse: { json: (body, options) => ({ body, status: options?.status || 200 }) } }
     if (name === '@/lib/forecast/policy') return { forecastPolicy }
-    if (name === '@/lib/auth-helpers') return { requireAuth: async () => authorized ? { user: { id: 'account-1' } } : { error: { status: 401 } }, getAdminClient: () => ({ auth: { admin: { updateUserById: async (id, payload) => { updated = { id, payload }; return { error: fail ? {} : null } } } } }) }
+    if (name === '@/lib/auth-helpers') return { requireAuth: async () => authorized ? { user: { id: 'account-1' } } : { error: { status: 401 } }, createApiClient: async () => ({ auth: { updateUser: async (payload) => { updated = { payload }; return { error: fail ? {} : null } } } }) }
     throw new Error(name)
   } })
   const request = { json: async () => ({ excludedStores: ['other'], includeEva: false }) }
   assert.equal((await exports.PATCH(request)).status, 200)
-  assert.equal(updated.id, 'account-1')
-  assert.equal(updated.payload.user_metadata.forecastPolicy.leadTime, 52)
+  assert.equal(updated.payload.data.forecastPolicy.leadTime, 52)
   fail = true; assert.equal((await exports.PATCH(request)).status, 503)
   authorized = false; assert.equal((await exports.GET()).status, 401)
 })
