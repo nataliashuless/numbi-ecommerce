@@ -63,6 +63,7 @@ interface VariantForecast {
     necesidades: Array<{ fecha: string; pares: number; reservaRecuperable: number }>
   }
   sugerenciaProduccion: number
+  totalPedido: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
 }
 
@@ -81,6 +82,7 @@ interface ReferenceForecast {
   faltanteAntesLlegada: number
   primeraFechaFaltante?: string | null
   sugerenciaProduccion: number
+  totalPedido: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
   variants: VariantForecast[]
 }
@@ -1009,6 +1011,7 @@ export async function GET(request: Request) {
         produccionSinReserva,
         produccionPorReserva,
         sugerenciaProduccion,
+        totalPedido: sugerenciaProduccion + faltanteAntesLlegada,
         prioridad,
       })
     }
@@ -1033,6 +1036,7 @@ export async function GET(request: Request) {
           enviarTiendas: 0,
           faltanteAntesLlegada: 0,
           sugerenciaProduccion: 0,
+          totalPedido: 0,
           prioridad: 'baja',
           variants: [],
         }
@@ -1051,6 +1055,7 @@ export async function GET(request: Request) {
       r.enviarTiendas += v.enviarTiendas
       r.faltanteAntesLlegada += v.faltanteAntesLlegada
       r.sugerenciaProduccion += v.sugerenciaProduccion
+      r.totalPedido += v.totalPedido
       // Inherit worst priority of any variant
       const order = { critica: 0, alta: 1, media: 2, baja: 3 }
       if (order[v.prioridad] < order[r.prioridad]) r.prioridad = v.prioridad
@@ -1072,7 +1077,7 @@ export async function GET(request: Request) {
     const referencias = Array.from(refMap.values()).sort((a, b) => {
       const d = order[a.prioridad] - order[b.prioridad]
       if (d !== 0) return d
-      return b.sugerenciaProduccion - a.sugerenciaProduccion
+      return b.totalPedido - a.totalPedido
     })
 
     // Flat forecast (for backward compatibility) — sort like before
@@ -1093,6 +1098,8 @@ export async function GET(request: Request) {
       bajos: forecast.filter(f => f.prioridad === 'baja').length,
       totalProduccionSinReserva: forecast.reduce((sum, f) => sum + f.produccionSinReserva, 0),
       totalProduccionPorReserva: forecast.reduce((sum, f) => sum + f.produccionPorReserva, 0),
+      totalPedido: forecast.reduce((sum, f) => sum + f.totalPedido, 0),
+      totalEntregaAnticipada: forecast.reduce((sum, f) => sum + f.faltanteAntesLlegada, 0),
       totalProducirSugerido: forecast.reduce((sum, f) => sum + f.sugerenciaProduccion, 0),
       totalVentasPeriodo: forecast.reduce((sum, f) => sum + f.ventasTotal, 0),
       totalVentasOnline: forecast.reduce((sum, f) => sum + f.ventasShopify, 0),
@@ -1131,7 +1138,7 @@ export async function GET(request: Request) {
           const check = checksByReference.get(row.reference)
           return {
             referencia: row.reference,
-            produccion: row.sugerenciaProduccion,
+            produccion: row.totalPedido,
             error: check?.actual ? check.error / check.actual : null,
             errorAnterior: null,
             errorBase: check?.actual ? check.baselineError / check.actual : null,

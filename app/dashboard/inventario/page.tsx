@@ -136,6 +136,7 @@ interface ForecastItem {
   produccionPorReserva?: number
   conciliacion?: { stockInicial: number; llegadaProduccion: string; entradas: Array<{ fecha: string; pares: number }>; necesidades: Array<{ fecha: string; pares: number; reservaRecuperable: number }> }
   sugerenciaProduccion: number
+  totalPedido: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
 }
 
@@ -154,6 +155,7 @@ interface ForecastReference {
   faltanteAntesLlegada?: number
   primeraFechaFaltante?: string | null
   sugerenciaProduccion: number
+  totalPedido: number
   prioridad: 'critica' | 'alta' | 'media' | 'baja'
   variants: ForecastItem[]
 }
@@ -186,6 +188,8 @@ interface ForecastData {
     totalProduccionSinReserva?: number
     totalProduccionPorReserva?: number
     totalProducirSugerido: number
+    totalPedido: number
+    totalEntregaAnticipada: number
     totalVentasPeriodo: number
     totalVentasOnline: number
     totalVentasWhatsApp: number
@@ -294,7 +298,7 @@ export default function InventarioPage() {
     const out = { ...empty }
     for (const r of forecastData.referencias) {
       for (const v of r.variants) {
-        out.totalProducir += v.sugerenciaProduccion
+        out.totalProducir += v.totalPedido
         if (v.prioridad === 'critica') out.criticos += 1
         else if (v.prioridad === 'alta') out.altos += 1
         else if (v.prioridad === 'media') out.medios += 1
@@ -420,7 +424,7 @@ export default function InventarioPage() {
       media: 'Media (≤30 días)',
       baja: 'Baja',
     }
-    const suggestFor = (f: ForecastItem): number => f.sugerenciaProduccion
+    const suggestFor = (f: ForecastItem): number => f.totalPedido
 
     // Export the production estimate for review: omit SKUs
     // that do not need units and sort references alphabetically.
@@ -458,7 +462,8 @@ export default function InventarioPage() {
       'Días hasta agotamiento': f.diasHastaAgotamiento ?? '∞',
       'Producción sin reserva': f.produccionSinReserva ?? '',
       'Producción adicional por reserva': f.produccionPorReserva ?? '',
-      'Sugerencia producción': suggestFor(f),
+      'Pedido mensual': f.sugerenciaProduccion,
+      'Total a pedir': suggestFor(f),
       'Prioridad': PRIORIDAD_LABEL[f.prioridad] || f.prioridad,
     }))
 
@@ -483,7 +488,9 @@ export default function InventarioPage() {
       'Ventas período estacional año anterior': r.ventasPeriodoEstacional,
       'Promedio mensual tiendas': Number((r.ventasTiendas * 30 / (parseInt(diasAnalisis) || 1)).toFixed(1)),
       'Velocidad diaria': Number(r.velocidadDiaria.toFixed(2)),
-      'Sugerencia producción': suggestion,
+      'Entrega anticipada': r.faltanteAntesLlegada || 0,
+      'Pedido mensual': r.sugerenciaProduccion,
+      'Total a pedir': suggestion,
       'Prioridad': PRIORIDAD_LABEL[r.prioridad] || r.prioridad,
       }))
 
@@ -499,7 +506,7 @@ export default function InventarioPage() {
       { Parámetro: 'Lead time producción (días hábiles)', Valor: leadTime },
       { Parámetro: 'Stock de seguridad (días)', Valor: stockSeguridad },
       { Parámetro: 'Stock a descontar', Valor: incluirConsignado ? 'Bodega + Consignado' : 'Solo bodega' },
-      { Parámetro: 'Total a producir sugerido', Valor: detalle.reduce((s, d) => s + (d['Sugerencia producción'] || 0), 0) },
+      { Parámetro: 'Total a pedir (incluye entrega anticipada)', Valor: detalle.reduce((s, d) => s + (d['Total a pedir'] || 0), 0) },
       { Parámetro: 'Ventas en el período', Valor: forecastData.resumen.totalVentasPeriodo },
       { Parámetro: 'Período estacional comparado', Valor: `${forecastData.parametros.fechaInicioEstacional} a ${forecastData.parametros.fechaFinEstacional}` },
       { Parámetro: 'Productos/tallas ajustados por estacionalidad', Valor: forecastData.resumen.skusConAjusteEstacional },
@@ -531,7 +538,7 @@ export default function InventarioPage() {
       SKU: row.sku, Referencia: row.producto, Talla: row.size,
       'Stock inicial propio': row.conciliacion?.stockInicial ?? row.stockBodega,
       'Llegada producción': row.conciliacion?.llegadaProduccion || forecastData.cobertura?.fechaLlegadaProduccion,
-      'Producción calculada': row.sugerenciaProduccion, 'Faltantes anteriores': row.faltanteAntesLlegada || 0,
+      'Pedido mensual': row.sugerenciaProduccion, 'Entrega anticipada': row.faltanteAntesLlegada || 0, 'Total a pedir': row.totalPedido,
     }))), 'Conciliación stock')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(forecastData.forecast.flatMap(row => [
       ...(row.conciliacion?.entradas || []).map(item => ({ SKU: row.sku, Fecha: item.fecha, Tipo: 'Entrada confirmada', Pares: item.pares, 'Reserva recuperable': 0 })),
@@ -1131,6 +1138,17 @@ export default function InventarioPage() {
               </div>
             ) : forecastData ? (
               <>
+                                  <Card className="mb-6 border-green-200">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium text-[#545454]">Total a pedir</CardTitle>
+                      <Factory className="h-4 w-4 text-[#1A2238]" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-[#1A2238]">{totalProducirToggle.toLocaleString()}</div>
+                      <p className="text-xs text-[#545454]">{forecastData.resumen.totalEntregaAnticipada} anticipados + {forecastData.resumen.totalProducirSugerido} del pedido mensual</p>
+                    <p className="text-sm mt-2">La entrega anticipada requiere confirmar fechas con el proveedor. Registra cada pedido y su recepción en <Link href="/dashboard/inventario/ordenes" className="underline">Órdenes en camino</Link> para que el siguiente cálculo los descuente.</p>
+                    </CardContent>
+                  </Card>
                 <Card className="mb-6">
                   <CardHeader><CardTitle>Tiendas incluidas en el forecast</CardTitle></CardHeader>
                   <CardContent>
@@ -1182,7 +1200,7 @@ export default function InventarioPage() {
                     </details>
                     <p>{forecastData.validacion.seriesEvaluadas} combinaciones de referencia y canal evaluadas; {forecastData.validacion.seriesSinEvaluar} sin validación individual suficiente.</p>
                     <p>Reserva limitada a {forecastData.parametros.stockSeguridad} días de demanda media prevista por referencia y canal, redondeada hacia abajo a pares completos. El error histórico no puede aumentar ese límite.</p>
-                    {forecastData.resumen.totalProduccionSinReserva != null && <p className="rounded bg-amber-50 p-3 font-medium">Desglose de producción: {forecastData.resumen.totalProduccionSinReserva} pares para cubrir la demanda sin reserva + {forecastData.resumen.totalProduccionPorReserva} pares adicionales por reserva de seguridad = {forecastData.resumen.totalProducirSugerido} pares. Ambos cálculos descuentan stock y pedidos según talla y fecha de llegada.</p>}
+                    {forecastData.resumen.totalProduccionSinReserva != null && <p className="rounded bg-amber-50 p-3 font-medium">Desglose del pedido mensual: {forecastData.resumen.totalProduccionSinReserva} pares para cubrir la demanda sin reserva + {forecastData.resumen.totalProduccionPorReserva} pares adicionales por reserva de seguridad = {forecastData.resumen.totalProducirSugerido} pares. Ambos cálculos descuentan stock y pedidos según talla y fecha de llegada.</p>}
                     <p className="text-[#545454]">{forecastData.validacion.alcance} Las facturas de Siigo son ventas reales de las tiendas. Las ventas del mes en curso se descuentan de la demanda pendiente, sin volver a descontarlas del stock. La sugerencia es una estimación, no una garantía de ventas.</p>
                     {seasonalReview.length > 0 && <div className="rounded border border-amber-300 p-3">
                       <p className="font-medium">Cambios frente a la misma referencia el año pasado</p>
@@ -1210,8 +1228,8 @@ export default function InventarioPage() {
                 </Card>}
 
                 {forecastData.cobertura && <Card className="mb-6 border-amber-300 bg-amber-50"><CardContent className="pt-6">
-                  <p className="font-semibold">Faltantes antes de llegada: {forecastData.cobertura.faltanteAntesLlegada} pares</p>
-                  <p className="text-sm mt-1">Pedido mensual: llegada estimada {forecastData.cobertura.fechaLlegadaProduccion}, cobertura hasta {forecastData.parametros.fechaFinProyeccion}. El siguiente pedido se realiza el {forecastData.cobertura.fechaSiguientePedido} y llega el {forecastData.cobertura.fechaLlegadaSiguientePedido}. Los faltantes anteriores requieren adelantar entregas o conseguir inventario; no están sumados a “Producir”. La reserva de seguridad puede requerir reposición adicional.</p>
+                  <p className="font-semibold">Entrega anticipada: {forecastData.cobertura.faltanteAntesLlegada} pares, incluidos en el total a pedir</p>
+                  <p className="text-sm mt-1">Pedido mensual: llegada estimada {forecastData.cobertura.fechaLlegadaProduccion}, cobertura hasta {forecastData.parametros.fechaFinProyeccion}. El siguiente pedido se realiza el {forecastData.cobertura.fechaSiguientePedido} y llega el {forecastData.cobertura.fechaLlegadaSiguientePedido}. El total a pedir suma la entrega anticipada y el pedido mensual. Confirma con el proveedor las fechas para cubrir los faltantes anteriores a la llegada normal. La reserva de seguridad puede requerir reposición adicional.</p>
                   <p className="text-xs mt-2">Supuesto de fechas: {forecastData.cobertura.distribucion} Los picos dentro del mes pueden cambiar la cobertura.</p>
                 </CardContent></Card>}
                 {/* Forecast KPIs */}
@@ -1246,16 +1264,7 @@ export default function InventarioPage() {
                       <p className="text-xs text-[#545454]">se agotan en 30 dias</p>
                     </CardContent>
                   </Card>
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium text-[#545454]">Estimación de producción</CardTitle>
-                      <Factory className="h-4 w-4 text-[#1A2238]" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-[#1A2238]">{totalProducirToggle.toLocaleString()}</div>
-                      <p className="text-xs text-[#545454]">estimación para Online, WhatsApp y Tiendas</p>
-                    </CardContent>
-                  </Card>
+
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                       <CardTitle className="text-sm font-medium text-[#545454]">Ventas ({diasAnalisis}d)</CardTitle>
@@ -1510,6 +1519,7 @@ export default function InventarioPage() {
                             enviarTiendas: variants.reduce((s, v) => s + (v.enviarTiendas || 0), 0),
                             faltanteAntesLlegada: variants.reduce((s, v) => s + (v.faltanteAntesLlegada || 0), 0),
                             sugerenciaProduccion: variants.reduce((s, v) => s + v.sugerenciaProduccion, 0),
+                            totalPedido: variants.reduce((s, v) => s + v.totalPedido, 0),
                             prioridad: worst,
                             variants,
                           }
@@ -1533,14 +1543,15 @@ export default function InventarioPage() {
                                   <TableHead className="text-center">Vel. Semanal</TableHead>
                                   <TableHead className="text-center">Días Restantes</TableHead>
                                   <TableHead className="text-center">Prioridad</TableHead>
-                                  <TableHead className="text-center bg-amber-50">Falta antes de llegada</TableHead>
-                                  <TableHead className="text-center bg-green-50">Producir</TableHead>
+                                  <TableHead className="text-center bg-amber-50">Entrega anticipada</TableHead>
+                                  <TableHead className="text-center">Pedido mensual</TableHead>
+                                  <TableHead className="text-center bg-green-50">Total a pedir</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {filteredRefs.length === 0 ? (
                                   <TableRow>
-                                    <TableCell colSpan={12} className="text-center py-8 text-[#545454]">
+                                    <TableCell colSpan={13} className="text-center py-8 text-[#545454]">
                                       No hay productos que mostrar
                                     </TableCell>
                                   </TableRow>
@@ -1616,9 +1627,10 @@ export default function InventarioPage() {
                                             {getPriorityBadge(r.prioridad)}
                                           </TableCell>
                                           <TableCell className="text-center text-amber-800 font-semibold">{r.faltanteAntesLlegada || 0}</TableCell>
+                                          <TableCell className="text-center">{r.sugerenciaProduccion}</TableCell>
                                           <TableCell className="text-center bg-green-50/50">
-                                            {r.sugerenciaProduccion > 0 ? (
-                                              <span className="font-bold text-green-700">{r.sugerenciaProduccion}</span>
+                                            {r.totalPedido > 0 ? (
+                                              <span className="font-bold text-green-700">{r.totalPedido}</span>
                                             ) : (
                                               <span className="text-[#545454]">—</span>
                                             )}
@@ -1686,9 +1698,10 @@ export default function InventarioPage() {
                                                 {getPriorityBadge(v.prioridad)}
                                               </TableCell>
                                               <TableCell className="text-center text-amber-800"><b>{v.faltanteAntesLlegada || 0}</b>{v.primeraFechaFaltante && <div className="text-xs">Desde {v.primeraFechaFaltante}</div>}</TableCell>
+                                              <TableCell className="text-center">{v.sugerenciaProduccion}</TableCell>
                                               <TableCell className="text-center bg-green-50/30">
-                                                {v.sugerenciaProduccion > 0 ? (
-                                                  <span className="font-bold text-green-700 text-sm">{v.sugerenciaProduccion}</span>
+                                                {v.totalPedido > 0 ? (
+                                                  <span className="font-bold text-green-700 text-sm">{v.totalPedido}</span>
                                                 ) : (
                                                   <span className="text-[#545454]">—</span>
                                                 )}
@@ -1708,12 +1721,12 @@ export default function InventarioPage() {
                             <div className="mt-4 pt-4 border-t">
                               <div className="flex justify-between items-center text-sm">
                                 <div className="text-[#545454]">
-                                  Pedido mensual hasta {forecastData.parametros.fechaFinProyeccion}: demanda mensual prevista + seguridad − bodega − órdenes en camino
+                                  Entrega anticipada + pedido mensual hasta {forecastData.parametros.fechaFinProyeccion}. Inventario y órdenes en camino descontados por talla y fecha.
                                 </div>
                                 <div>
-                                  <span className="text-[#545454]">Total a producir: </span>
+                                  <span className="text-[#545454]">Total a pedir: </span>
                                   <span className="font-bold text-green-600">
-                                    {filteredRefs.reduce((sum, r) => sum + r.sugerenciaProduccion, 0).toLocaleString()} uds
+                                    {filteredRefs.reduce((sum, r) => sum + r.totalPedido, 0).toLocaleString()} uds
                                   </span>
                                 </div>
                               </div>
