@@ -358,9 +358,11 @@ export async function GET(request: Request) {
     // Siigo invoices are actual store sales. Prefer the invoiced SKU/month;
     // manual store records only fill months without invoices, never add both.
     const invoicedStoreMonths = new Set<string>()
-    for (const inv of uniqueInvoices) {
+    // A fully returned invoice still proves this SKU/month was invoiced.
+    // Never replace its zero net units with a gross manual store record.
+    for (const inv of canonicalSource.originalInvoices || canonicalSource.invoices) {
       const store = identificationKeys(inv.customer_identification).map(nit => storeByNit.get(nit)).find(Boolean)
-      if (!store || excludedStoreIds.has(store.id) || inv.salesChannel !== 'tienda') continue
+      if (!store || excludedStoreIds.has(store.id) || inv.date > endDateStr) continue
       for (const item of inv.items || []) {
         if (item.code && item.code !== 'ENVIO') invoicedStoreMonths.add(`${store.id}|${item.code}|${inv.date.slice(0, 7)}`)
       }

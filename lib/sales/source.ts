@@ -96,7 +96,7 @@ export async function loadSalesSource(options?: { netCreditUnits?: boolean }) {
     const gross = items.reduce((sum, item) => sum + (Number(item.total) || Number(item.quantity) * Number(item.price) || 0), 0)
     return [{ ...invoice, total: Math.max(0, invoice.total - Number(invoice.credited_amount || 0)) * (originalGross > 0 ? gross / originalGross : 1), credited_amount: 0, items, salesChannel: classification.channel }]
   })
-  return { orders, invoices, stores, context, nonRetail, ledger, confirmed, historyAudit }
+  return { orders, invoices, originalInvoices: rawInvoices, stores, context, nonRetail, ledger, confirmed, historyAudit }
 }
 export type SalesSource = Awaited<ReturnType<typeof loadSalesSource>>
 export function salesInRange(source: SalesSource, start?: string | null, end?: string | null) {

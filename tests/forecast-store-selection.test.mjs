@@ -570,3 +570,14 @@ test('rotation reserve stays on the selling size and existing supply covers it w
     assert.equal(covered.totalPedido, 0)
   } finally { Object.keys(tables).forEach(key => delete tables[key]); Object.assign(tables, original) }
 })
+
+
+test('fully credited store sales do not reappear through manual fallback', async () => {
+  const original = { ...tables }
+  try {
+    tables.siigo_invoices = [{ ...invoice('returned', '111', 7), credited_amount: 100 }]
+    tables.ventas_terceros = [{ tienda_id: 'a', producto_sku: 'P20', fecha: date, cantidad: 7 }]
+    const result = await calculate('')
+    assert.equal(result.forecast.find(row => row.sku === 'P20').ventasTiendas, 0)
+  } finally { Object.assign(tables, original) }
+})
