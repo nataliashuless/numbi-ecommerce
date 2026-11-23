@@ -6,7 +6,10 @@ import ts from 'typescript'
 let responder, calls
 const api = {}
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../lib/siigo-client.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: api, Date, URL, URLSearchParams, console, setTimeout, fetch: async (url, options) => {
-  if (String(url).includes('sign-in')) return { ok: true, json: async () => ({ access_token: 'fixture-token' }) }
+  if (String(url) === 'https://api.siigo.com/auth') {
+    assert.equal(options.headers['Partner-Id'], 'shuless')
+    return { ok: true, json: async () => ({ access_token: 'fixture-token' }) }
+  }
   calls.push(new URL(url))
   return responder(new URL(url), options)
 }, require(name) {

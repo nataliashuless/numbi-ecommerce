@@ -1,6 +1,6 @@
 import { getSiigoCredentials, getAdminClient } from './auth-helpers'
 
-const AUTH_URL = 'https://services.siigo.com/alliances/api/siigoapi-users/v1/sign-in'
+const AUTH_URL = 'https://api.siigo.com/auth'
 const API_BASE = 'https://api.siigo.com/v1'
 
 let cachedToken: { token: string; expires: number } | null = null
@@ -101,7 +101,7 @@ export async function getSiigoToken(): Promise<string> {
 
   const response = await fetch(AUTH_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Partner-Id': 'shuless' },
     body: JSON.stringify({
       username: credentials.siigo_username,
       access_key: credentials.siigo_access_key,
