@@ -31,6 +31,7 @@ async function createApiClient() {
 export interface AuthUser {
   id: string
   email: string
+  user_metadata?: Record<string, unknown>
 }
 
 export interface AuthResult {
@@ -50,7 +51,7 @@ export async function requireAuth(): Promise<AuthResult> {
   }
 
   return {
-    user: { id: user.id, email: user.email || '' },
+    user: { id: user.id, email: user.email || '', user_metadata: user.user_metadata },
     error: null
   }
 }

@@ -1,3 +1,4 @@
+import { netCreditInvoices, type Credit } from '@/lib/forecast/net-credits'
 import { getAdminClient } from '@/lib/auth-helpers'
 import { canonicalInvoices } from '@/lib/marketing/canonical-source'
 import { classifyMarketingInvoice, historicalStoreEvidence } from '@/lib/marketing/channel-reconciliation'
@@ -47,8 +48,21 @@ async function loadSnapshot() {
   return inFlight
 }
 
-export async function loadSalesSource() {
-  const [orders, invoices, stores, fairs, links, stock] = await loadSnapshot()
+let forecastCredits: { until: number; end: string; rows: Credit[] } | undefined
+let creditsInFlight: Promise<Credit[]> | undefined
+async function verifiedForecastCredits(end: string) {
+  if (forecastCredits && forecastCredits.until > Date.now() && forecastCredits.end === end) return forecastCredits.rows
+  const { listAccountingDocuments } = await import('@/lib/siigo-client')
+  if (!creditsInFlight) creditsInFlight = listAccountingDocuments('credit-notes', '2023-01-01', end).then(rows => {
+    forecastCredits = { until: Date.now() + 60 * 60 * 1000, end, rows }
+    return rows
+  }).finally(() => { creditsInFlight = undefined })
+  return creditsInFlight
+}
+export async function loadSalesSource(options?: { netCreditUnits?: boolean }) {
+  const [orders, rawInvoices, stores, fairs, links, stock] = await loadSnapshot()
+  const invoices = options?.netCreditUnits
+    ? netCreditInvoices(rawInvoices, await verifiedForecastCredits(isoDateInTimeZone(new Date()))) : rawInvoices
   const retail = new Set(stock.filter(row => row.account_group_id === 339).map(row => row.product_code?.trim()))
   const nonRetail = new Set(stock.filter(row => row.account_group_id !== null && row.account_group_id !== 339).map(row => row.product_code?.trim()).filter((code): code is string => Boolean(code) && !retail.has(code)))
   const context = {

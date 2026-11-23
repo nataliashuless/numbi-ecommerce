@@ -1,3 +1,4 @@
+import * as netCredits from '../lib/forecast/net-credits.ts'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -101,6 +102,7 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../app/api/market
   if (name === 'next/server') return { NextResponse: { json: (value, options) => ({ ...value, status: options?.status || 200 }) } }
   if (name === '@/lib/auth-helpers') return { requireAuth: async () => ({}), getAdminClient: () => db }
   if (name === '@/lib/marketing/historical-orders') return { HISTORICAL_ORDER_MISSING_DATES: [] }
+  if (name === '@/lib/forecast/net-credits') return netCredits
   if (name.startsWith('@/lib/marketing/')) return load(name.split('/').at(-1))
   return load(name)
 } })
@@ -304,6 +306,7 @@ const sharedSource = {}
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../lib/sales/source.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: sharedSource, Date, console, require(name) {
   if (name === 'next/cache') return { unstable_cache: fn => fn }
   if (name === '@/lib/auth-helpers') return { getAdminClient: () => db }
+  if (name === '@/lib/forecast/net-credits') return netCredits
   if (name.startsWith('@/lib/marketing/')) return load(name.split('/').at(-1))
   return load(name)
 } })
@@ -313,7 +316,8 @@ function reportingRoute(path) {
     if (name === '@/lib/sales/reconciliation-status') return auditPublicationStatus
   if (name === 'next/server') return { NextResponse: { json: (value, options) => ({ ...value, status: options?.status || 200 }) } }
     if (name === '@/lib/auth-helpers') return { requireAuth: async () => ({}), getAdminClient: () => db, getShopifyCredentials: async () => null }
-    if (name.startsWith('@/lib/marketing/')) return load(name.split('/').at(-1))
+    if (name === '@/lib/forecast/net-credits') return netCredits
+  if (name.startsWith('@/lib/marketing/')) return load(name.split('/').at(-1))
     if (name === '@/lib/sales/source') return sharedSource
     if (name === '@/lib/sales/accounting-reconciliation') return { reconcileAccounting: () => ({}) }
     if (name === '@/lib/siigo-client') return { listAccountingDocuments: async () => [] }

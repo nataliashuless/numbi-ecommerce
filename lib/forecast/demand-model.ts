@@ -354,13 +354,14 @@ export function forecastSalesWithRecentFallback(values: number[], channel: numbe
     recentForecast: projected.map((value, i) => sources[i].startsWith('año anterior') ? 0 : value) }
 }
 
-export type PurchaseDemandMethod = 'ma3' | 'wma3' | 'annual'
+export type PurchaseDemandMethod = 'ma3' | 'wma3' | 'annual' | 'seasonal'
 export const PURCHASE_METHOD_LABELS: Record<PurchaseDemandMethod, string> = {
   ma3: 'promedio últimos 3 meses', wma3: 'promedio ponderado últimos 3 meses',
-  annual: 'año anterior × crecimiento observado',
+  annual: 'año anterior × crecimiento observado', seasonal: 'año anterior sin crecimiento',
 }
 
 function purchaseProjection(method: PurchaseDemandMethod, values: number[], channel: number[], months: number) {
+  if (method === 'seasonal') return Array.from({ length: months }, (_, i) => Math.max(0, values[values.length - 12 + i % 12] ?? mean(values.slice(-3))))
   return method === 'annual' ? forecastObservedGrowth(values, channel, months).values : forecastMonths(values, method, months)
 }
 
@@ -381,7 +382,7 @@ function selectPurchaseCandidate(values: number[], channel: number[]) {
   const annualOrigins = origins.filter(origin => annualOriginAvailable(values, channel, origin))
   const annualEligible = annualOrigins.length >= 3
   const sharedOrigins = annualEligible ? annualOrigins : origins
-  const names: PurchaseDemandMethod[] = annualEligible ? ['ma3', 'wma3', 'annual'] : ['ma3', 'wma3']
+  const names: PurchaseDemandMethod[] = annualEligible ? ['ma3', 'wma3', 'annual', 'seasonal'] : ['ma3', 'wma3']
   const candidates = names.map(method => {
     const actual: number[] = [], predicted: number[] = []
     for (const origin of sharedOrigins) {

@@ -397,8 +397,8 @@ test('purchase selector preserves proven annual seasonality on identical candida
   assert.equal(selection.method, 'annual')
   assert.equal(selection.evidence, true)
   assert.match(selection.confirmation, /confirmada/)
-  assert.deepEqual(selection.candidates.map(row => row.origins), [12, 12, 12])
-  assert.deepEqual(selection.candidates.map(row => row.observations), [48, 48, 48])
+  assert.deepEqual(selection.candidates.map(row => row.origins), [12, 12, 12, 12])
+  assert.deepEqual(selection.candidates.map(row => row.observations), [48, 48, 48, 48])
   assert.deepEqual(forecastSelectedSales(h, c, 3).values, [10, 10, 10])
 })
 

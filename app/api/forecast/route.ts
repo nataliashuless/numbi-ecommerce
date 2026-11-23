@@ -1,3 +1,4 @@
+import { forecastPolicy, FIRM_STORE_NIT } from '@/lib/forecast/policy'
 import { loadSalesSource, reportingInvoices } from '@/lib/sales/source'
 import { NextResponse } from 'next/server'
 import { businessDateBogota, buildForecastPeriods, nextMonthlyOrder } from '@/lib/forecast/calendar'
@@ -153,20 +154,23 @@ function identificationKeys(value: string | null): string[] {
   return keys
 }
 
+export const maxDuration = 300
+
 export async function GET(request: Request) {
-  const { error } = await requireAuth()
+  const { user, error } = await requireAuth()
   if (error) return error
 
   const { searchParams } = new URL(request.url)
-  const diasAnalisis = parseInt(searchParams.get('dias') || '60')
+  const policy = forecastPolicy(user?.user_metadata?.forecastPolicy)
+  const diasAnalisis = Math.min(365, Math.max(1, parseInt(searchParams.get('dias') || '90') || 90))
   const requestedLeadTime = Number.parseInt(searchParams.get('lead_time') || '', 10)
-  const leadTimeBusinessDays = Number.isFinite(requestedLeadTime)
+  const leadTimeBusinessDays = user ? policy.leadTime : Number.isFinite(requestedLeadTime)
     ? Math.min(365, Math.max(1, requestedLeadTime))
     : DEFAULT_PRODUCTION_LEAD_BUSINESS_DAYS
-  const incluirEva = searchParams.get('incluir_eva') === 'true'
+  const incluirEva = user ? policy.includeEva && policy.evaYear === new Intl.DateTimeFormat('en', { timeZone: 'America/Bogota', year: 'numeric' }).format(new Date()) : searchParams.get('incluir_eva') === 'true'
   const requestedSafety = Number(searchParams.get('stock_seguridad') || '14')
-  const stockSeguridad = Number.isFinite(requestedSafety) ? Math.min(60, Math.max(0, requestedSafety)) : 14
-  const reservaRotacion = searchParams.get('reserva_rotacion') === 'true'
+  const stockSeguridad = user ? policy.reserveDays : Number.isFinite(requestedSafety) ? Math.min(14, Math.max(0, requestedSafety)) : 14
+  const reservaRotacion = user ? true : searchParams.get('reserva_rotacion') === 'true'
 
   const supabase = getAdminClient()
 
@@ -293,8 +297,8 @@ export async function GET(request: Request) {
     if (tiendasError) throw tiendasError
     const allStores = (tiendaNitsRaw || []) as Store[]
     const availableStores = allStores.filter(store => store.activa !== false)
-    const excludedStoreIds = new Set((searchParams.get('excluir_tiendas') || '').split(',').filter(Boolean))
-    for (const store of allStores) if (store.activa === false) excludedStoreIds.add(store.id)
+    const excludedStoreIds = new Set(user ? policy.excludedStores : (searchParams.get('excluir_tiendas') || '').split(',').filter(Boolean))
+    for (const store of allStores) if (store.activa === false || identificationKeys(store.siigo_customer_identification).includes(FIRM_STORE_NIT)) excludedStoreIds.add(store.id)
     const stores = availableStores.filter(store => !excludedStoreIds.has(store.id))
     const storeByNit = new Map<string, Store>()
     for (const store of allStores) {
@@ -339,7 +343,7 @@ export async function GET(request: Request) {
       credited_amount: number | null
       assigned_feria_id: string | null
     }
-    const canonicalSource = await loadSalesSource()
+    const canonicalSource = await loadSalesSource({ netCreditUnits: true })
     async function fetchInvoices(from: string, to: string): Promise<Invoice[]> {
       return reportingInvoices(canonicalSource, from, to)
     }
@@ -547,6 +551,12 @@ export async function GET(request: Request) {
     const newReferenceFallback = comparableMonthlyLevels.length
       ? comparableMonthlyLevels[Math.floor((comparableMonthlyLevels.length - 1) * 0.25)]
       : 0
+    const locationAudit: Array<{ sku: string; referencia: string; talla: string; canal: string; mes: string; demanda: number; reposicion: number; stockInicial: number | null; haceUnAno: number | null; haceDosAnos: number | null }> = []
+    function recordLocation(sku: string, canal: string, mes: string, demanda: number, reposicion: number, stockInicial: number | null, history: number[]) {
+      const info = parseProductName(stockBySku.get(sku)?.product_name || '')
+      const past = (years: number) => { const index = monthSequence.indexOf(`${Number(mes.slice(0, 4)) - years}${mes.slice(4)}`); const first = history.findIndex(n => n > 0); return index >= 0 && first >= 0 && index >= first ? history[index] ?? null : null }
+      locationAudit.push({ sku, referencia: info.reference, talla: info.size || '', canal, mes, demanda, reposicion, stockInicial, haceUnAno: past(1), haceDosAnos: past(2) })
+    }
     const auditRows: Array<{ referencia: string; canal: string; modelo: string; seleccion?: ReturnType<typeof forecastSelectedSales>['selection']; mesesHistoria: number; meses: string[]; fuentes: string[]; demandaSinComparable?: number[]; vendidoMes?: number; proyeccionCompleta?: number[]; demanda: number[]; reserva: number; evidencia: string; historial: Array<{ mes: string; pares: number }> }> = []
     const validation = { previousAbsoluteError: 0, actualUnits: 0, selectedAbsoluteError: 0, baselineAbsoluteError: 0, observations: 0, seriesEvaluadas: 0, seriesSinEvaluar: 0 }
     const validationByChannel = {
@@ -676,6 +686,7 @@ export async function GET(request: Request) {
         const period = planningPeriods[periodIndex]
         const quantity = directPeriodDemand[periodIndex]
         for (const [sku, units] of allocateToSkus(skus, quantity, directProfile)) {
+          recordLocation(sku, directChannel, period.month, units, units, null, onlineMonthly[directChannel].get(sku) || [])
           addForecastDemand(sku, units)
           const periodEnd = period.demandDate.toISOString().slice(0, 10)
           const periodStart = period.futureIndex == null ? endDateStr : `${period.month}-01`
@@ -786,6 +797,12 @@ export async function GET(request: Request) {
             safetyAllocation.get(sku) || 0,
             initialStock,
           )
+          let localStock = Math.max(0, initialStock)
+          for (let i = 0; i < planningPeriods.length; i++) {
+            const demand = (demandBySku.get(sku) || [])[i] || 0
+            recordLocation(sku, store.nombre, planningPeriods[i].month, demand, replenishments[i] || 0, localStock, storeSkuMonthly.get(store.id)?.get(sku) || [])
+            localStock = Math.max(0, localStock + (replenishments[i] || 0) - demand)
+          }
           const baseReplenishments = monthlyStoreReplenishments(demandBySku.get(sku) || [], 0, initialStock)
           const baseNeeds = needsWithoutReserve.get(sku) || []
           baseReplenishments.forEach((quantity, index) => baseNeeds.push({
@@ -1179,6 +1196,8 @@ export async function GET(request: Request) {
         ...stores.filter(store => store.siigo_warehouse_id != null).map(store => ({ canal: store.nombre, ...observedGrowth(storeHistories.get(store.id) || []) })),
       ].map(row => ({ ...row, mesesActuales: monthSequence.slice(-3), mesesComparables: monthSequence.length >= 15 ? monthSequence.slice(-15, -12) : [] })),
       auditoria: auditRows,
+      detalleUbicaciones: locationAudit,
+      politica: { ...policy, notasCredito: "Cantidades netas por producto, corregidas en el mes de la factura original; consulta Siigo con vigencia máxima de una hora" },
       validacion: {
         ...validation,
         horizonteMeses: 4,

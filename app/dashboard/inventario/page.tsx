@@ -163,6 +163,9 @@ interface ForecastReference {
 }
 
 interface ForecastData {
+  politica?: { notasCredito: string }
+  detalleUbicaciones?: Array<{ sku: string; referencia: string; talla: string; canal: string; mes: string; demanda: number; reposicion: number; stockInicial: number | null; haceUnAno: number | null; haceDosAnos: number | null }>
+
   feriaEva?: { incluida: boolean; demandaHistoricaComparable: number; demandaIncluida: number; supuesto: string }
   crecimientoObservado?: Array<{ canal: string; recent: number; previous: number; factor: number; observed: boolean; mesesActuales: string[]; mesesComparables: string[] }>
   validacion?: { revisionReferencias?: Array<{ referencia: string; produccion: number; error: number | null; errorAnterior?: number | null; errorBase: number | null; canalesEvaluados: number; canalesSinEvaluar: number }>; porCanal?: Array<{ canal: string; series: number; error: number | null; errorBase: number | null }>; horizonteMeses: number; errorAnterior?: number | null; errorModelo: number | null; errorBase: number | null; seriesEvaluadas: number; seriesSinEvaluar: number; observations: number; alcance: string }
@@ -382,10 +385,14 @@ export default function InventarioPage() {
     setForecastLoading(true)
     try {
       setStoreSelectionError(null)
-      const saved: unknown = JSON.parse(localStorage.getItem('shuless.forecast.excludedStores') || '[]')
-      const excluded = Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string') : []
-      const eva = localStorage.getItem('shuless.forecast.eva.' + new Intl.DateTimeFormat('en', { timeZone: 'America/Bogota', year: 'numeric' }).format(new Date())) === 'true'
-      const res = await fetch(`/api/forecast?incluir_eva=${eva}&dias=${diasAnalisis}&lead_time=${leadTime}&stock_seguridad=${stockSeguridad}&reserva_rotacion=true&excluir_tiendas=${encodeURIComponent(excluded.join(','))}`)
+      const settingsResponse = await fetch('/api/forecast/settings')
+      if (!settingsResponse.ok) throw new Error('No se pudieron leer las reglas de la cuenta')
+      const policy = await settingsResponse.json()
+      setLeadTime(String(policy.leadTime))
+      setStockSeguridad(String(policy.reserveDays))
+      const sync = await fetch('/api/siigo/sync-invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: true }) })
+      if (!sync.ok) throw new Error('No se pudieron actualizar las ventas de Siigo. Reintenta antes de comprar.')
+      const res = await fetch(`/api/forecast?dias=${diasAnalisis}`)
       if (!res.ok) {
         const failure = await res.json().catch(() => null)
         throw new Error(failure?.error || 'Error al cargar forecast')
@@ -402,21 +409,20 @@ export default function InventarioPage() {
     }
   }
 
-  async function changeEvaAttendance(included: boolean) {
-    try {
-      const year = new Intl.DateTimeFormat('en', { timeZone: 'America/Bogota', year: 'numeric' }).format(new Date())
-      localStorage.setItem('shuless.forecast.eva.' + year, String(included))
-      await fetchForecast()
-    } catch { setStoreSelectionError('No se pudo guardar la selección de EVA en este navegador.') }
+  async function saveForecastPolicy(included?: boolean) {
+    const response = await fetch('/api/forecast/settings')
+    if (!response.ok) throw new Error('No se pudieron leer las reglas de la cuenta')
+    const policy = await response.json()
+    const result = await fetch('/api/forecast/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...policy, excludedStores: excludedStoreIds,
+      ...(included === undefined ? {} : { includeEva: included, evaYear: new Intl.DateTimeFormat('en', { timeZone: 'America/Bogota', year: 'numeric' }).format(new Date()) }) }) })
+    if (!result.ok) throw new Error('No se pudo guardar en la cuenta; el cálculo no se ha cambiado.')
+    await fetchForecast()
   }
-
+  async function changeEvaAttendance(included: boolean) {
+    try { await saveForecastPolicy(included) } catch (error) { setStoreSelectionError(error instanceof Error ? error.message : 'Error al guardar') }
+  }
   async function applyStoreSelection() {
-    try {
-      localStorage.setItem('shuless.forecast.excludedStores', JSON.stringify(excludedStoreIds))
-      await fetchForecast()
-    } catch {
-      setStoreSelectionError('No se pudo guardar la selección en este navegador. Habilita el almacenamiento y vuelve a intentar.')
-    }
+    try { await saveForecastPolicy() } catch (error) { setStoreSelectionError(error instanceof Error ? error.message : 'Error al guardar') }
   }
 
   function downloadForecastExcel() {
@@ -592,6 +598,13 @@ export default function InventarioPage() {
       'Sesgo selección (%)': Number((candidate.bias * 100).toFixed(1)), Cortes: candidate.origins,
       Alcance: 'Errores internos de selección; la mejora se verifica aparte en Validación por referencia usando cortes externos sin datos futuros',
     })))), 'Métodos comparados')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((forecastData.detalleUbicaciones || []).map(row => ({
+      SKU: row.sku, Referencia: row.referencia, Talla: row.talla, Canal: row.canal, Mes: row.mes,
+      'Demanda período': row.demanda, 'Necesidad desde bodega': row.reposicion,
+      'Stock tienda al inicio (supone reposiciones previas cumplidas)': row.stockInicial ?? 'Bodega compartida con ventas directas',
+      'Mismo mes año anterior (mes completo)': row.haceUnAno ?? 'Sin comparable',
+      'Mismo mes hace 2 años (mes completo)': row.haceDosAnos ?? 'Sin comparable',
+    }))), 'Plan por talla y tienda')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(parametros), 'Parámetros')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(forecastData.forecast.filter(v => (v.faltanteAntesLlegada || 0) > 0).map(v => ({ Referencia: v.producto, Talla: v.size, SKU: v.sku, Faltante: v.faltanteAntesLlegada, Desde: v.primeraFechaFaltante, 'Llegada producción nueva': forecastData.cobertura?.fechaLlegadaProduccion }))), 'Faltantes antes de llegada')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(envios), 'Enviar a tiendas')
@@ -1206,7 +1219,7 @@ export default function InventarioPage() {
                 <Card className="mb-6">
                   <CardHeader><CardTitle>Tiendas incluidas en el forecast</CardTitle></CardHeader>
                   <CardContent>
-                    <p className="text-sm text-[#545454] mb-3">Marca las tiendas que quieres incluir en el forecast de producción. La selección se guarda en este navegador. El inventario físico seguirá visible.</p>
+                    <p className="text-sm text-[#545454] mb-3">Marca las tiendas que quieres incluir en el forecast de producción. La selección se guarda en tu cuenta y se comparte entre dispositivos. Travesuras permanece excluida por venta en firme. El inventario físico seguirá visible.</p>
                     <div className="flex gap-2 mb-3">
                       <Button variant="outline" onClick={() => setExcludedStoreIds([])}>Seleccionar todas</Button>
                       <Button variant="outline" onClick={() => setExcludedStoreIds((forecastData.tiendasForecast || []).map(store => store.id))}>Desmarcar todas</Button>
@@ -1214,7 +1227,7 @@ export default function InventarioPage() {
                     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       {(forecastData.tiendasForecast || []).map(store => (
                         <label key={store.id} className="flex items-start gap-2 p-3 rounded border cursor-pointer">
-                          <input type="checkbox" className="mt-1" checked={!excludedStoreIds.includes(store.id)} onChange={event => setExcludedStoreIds(previous => event.target.checked ? previous.filter(id => id !== store.id) : [...previous, store.id])} />
+                          <input type="checkbox" className="mt-1" disabled={store.id === "f6b22b8b-cbcc-4dfe-b13f-31f551e79cce"} checked={!excludedStoreIds.includes(store.id)} onChange={event => setExcludedStoreIds(previous => event.target.checked ? previous.filter(id => id !== store.id) : [...previous, store.id])} />
                           <span>{store.nombre}{!store.tieneBodega && <span className="block text-xs text-amber-700">Pendiente de vincular bodega: no se calcula su reposición.</span>}</span>
                         </label>
                       ))}
@@ -1230,14 +1243,24 @@ export default function InventarioPage() {
                 <Card className="mb-6"><CardHeader><CardTitle>Asistencia a Feria EVA</CardTitle></CardHeader><CardContent className="space-y-2">
                   <label className="flex items-center gap-3"><input type="checkbox" checked={forecastData.feriaEva?.incluida === true} disabled={forecastLoading} onChange={event => changeEvaAttendance(event.target.checked)} />Sí asistiremos a EVA: incluir sus ventas previstas</label>
                   <p className="text-sm font-medium">{forecastData.feriaEva?.incluida ? `EVA incluida: ${forecastData.feriaEva.demandaIncluida} pares de demanda adicional antes de descontar inventario y pedidos.` : 'No asistiremos a EVA: sus ventas no se incluyen en la demanda prevista.'}</p>
-                  <p className="text-xs text-[#545454]">La selección se guarda para este año en este navegador. Otras ferias siguen excluidas. {forecastData.feriaEva?.supuesto}</p>
+                  <p className="text-xs text-[#545454]">La asistencia se guarda en tu cuenta para este año. Otras ferias siguen excluidas. {forecastData.feriaEva?.supuesto}</p>
                   {forecastData.feriaEva?.incluida && forecastData.feriaEva.demandaHistoricaComparable === 0 && <p className="text-sm text-amber-700">No hay ventas EVA identificadas para comparar dentro del período. No se inventa demanda para la feria.</p>}
                 </CardContent></Card>
 
                 {forecastData.validacion && <Card className="mb-6">
                   <CardHeader><CardTitle>Comprobación del forecast</CardTitle></CardHeader>
                   <CardContent className="space-y-3 text-sm">
-                    <p>Base de demanda: se comparan promedio de tres meses, promedio con más peso en meses recientes y año anterior ajustado por crecimiento. La elección se hace por referencia y canal/tienda, probando los mismos períodos de cuatro meses.</p>
+                    <p className="font-medium">Reglas permanentes: pedido mensual · 52 días hábiles · reserva hasta 14 días · Travesuras excluida. Preferencias guardadas en tu cuenta.</p>
+                    <p>{forecastData.politica?.notasCredito}</p>
+                    <details className="mt-4 rounded border p-3">
+                      <summary className="cursor-pointer font-medium">Plan mensual por talla y tienda, con comparación estacional</summary>
+                      <p className="my-2">Incluye los meses anteriores a la llegada, como enero. Compara meses completos históricos con la demanda del período cubierto; una diferencia no significa que debas pedir automáticamente el valor más alto. El stock de tienda proyectado supone que se cumplen las reposiciones anteriores; los faltantes de bodega se muestran por separado.</p>
+                      <input aria-label="Buscar talla o referencia en plan mensual" className="border rounded p-2 my-2" placeholder="Referencia o SKU, por ejemplo WC-1398" value={forecastSearchTerm} onChange={e => setForecastSearchTerm(e.target.value)} />
+                      <div className="overflow-auto max-h-96"><table className="w-full text-sm"><thead><tr><th>Referencia / talla</th><th>Canal</th><th>Mes</th><th>Demanda</th><th>Necesidad desde bodega</th><th>Stock tienda al inicio</th><th>Año anterior</th><th>Hace 2 años</th></tr></thead><tbody>
+                        {(forecastData.detalleUbicaciones || []).filter(row => !forecastSearchTerm || `${row.referencia} ${row.talla} ${row.sku}`.toLowerCase().includes(forecastSearchTerm.toLowerCase())).map((row, i) => <tr key={`${row.sku}-${row.canal}-${row.mes}-${i}`} className="border-t"><td className="p-2">{row.referencia} {row.talla}</td><td>{row.canal}</td><td>{row.mes}</td><td>{row.demanda}</td><td>{row.reposicion}</td><td>{row.stockInicial ?? 'Bodega compartida'}</td><td>{row.haceUnAno ?? 'Sin comparable'}</td><td>{row.haceDosAnos ?? 'Sin comparable'}</td></tr>)}
+                      </tbody></table></div>
+                    </details>
+                    <p>Base de demanda: se comparan promedio de tres meses, promedio con más peso en meses recientes, mismo mes del año anterior sin crecimiento y año anterior ajustado por crecimiento. La elección se hace por referencia y canal/tienda, probando los mismos períodos de cuatro meses.</p>
                     <p>Se mantiene el promedio sencillo salvo que otro método reduzca el error al menos un 10 % y no empeore materialmente la tendencia a estimar de más o de menos. Esa ventaja también debe confirmarse en cuatro meses posteriores a una elección hecha sin conocerlos. Se requieren al menos tres cortes históricos; sin evidencia suficiente se usa el promedio reciente como provisional. Los nuevos usan sus ventas actuales; antes de siete días no se extrapola el ritmo.</p>
                     <p className="rounded border border-blue-200 bg-blue-50 p-3">Control de inventario: el año anterior se usa solo cuando gana la comparación histórica. No se añade un aumento extra por campañas. Las tallas se distribuyen según ventas registradas, sin inventar ventas por falta de stock. El faltante final se redondea al par más cercano: puede dejar una fracción de demanda estimada sin cubrir.</p>
                     <details><summary className="cursor-pointer font-medium">Demanda basada en ventas recientes</summary>
@@ -1255,7 +1278,7 @@ export default function InventarioPage() {
                     <p>{forecastData.validacion.seriesEvaluadas} combinaciones de referencia y canal evaluadas; {forecastData.validacion.seriesSinEvaluar} sin validación individual suficiente.</p>
                     <p>Reserva por talla y canal/tienda según su variación de ventas, con límite de {forecastData.parametros.stockSeguridad} días de ventas reales recientes. El límite se redondea hacia abajo: no se añade un par mínimo a tallas lentas. Se descuenta el inventario disponible antes de pedir la reserva. No es una garantía de disponibilidad.</p>
                     {forecastData.resumen.totalProduccionSinReserva != null && <p className="rounded bg-amber-50 p-3 font-medium">Desglose del pedido mensual: {forecastData.resumen.totalProduccionSinReserva} pares para cubrir la demanda sin reserva + {forecastData.resumen.totalProduccionPorReserva} pares adicionales por reserva de seguridad = {forecastData.resumen.totalProducirSugerido} pares. Ambos cálculos descuentan stock y pedidos según talla y fecha de llegada.</p>}
-                    <p className="text-[#545454]">{forecastData.validacion.alcance} Las facturas de Siigo son ventas reales de las tiendas. Las ventas del mes en curso se descuentan de la demanda pendiente, sin volver a descontarlas del stock. La sugerencia es una estimación, no una garantía de ventas.</p>
+                    <p className="text-[#545454]">{forecastData.validacion.alcance} Las ventas facturadas se concilian con las notas crédito por producto. Las devoluciones corrigen el mes de la factura original para estimar demanda. Las ventas del mes en curso se descuentan de la demanda pendiente, sin volver a descontarlas del stock. La sugerencia es una estimación, no una garantía de ventas.</p>
                     {seasonalReview.length > 0 && <div className="rounded border border-amber-300 p-3">
                       <p className="font-medium">Cambios frente a la misma referencia el año pasado</p>
                       <p className="mb-2">Estas referencias tuvieron ventas directas mayores el mismo mes del año pasado. La proyección actual usa el método seleccionado por referencia y canal. Son ventas mensuales, antes de descontar inventario.</p>
@@ -1435,6 +1458,7 @@ export default function InventarioPage() {
                           type="number"
                           min="1"
                           value={leadTime}
+                          disabled
                           onChange={(e) => setLeadTime(e.target.value)}
                           placeholder="52"
                         />
@@ -1447,6 +1471,7 @@ export default function InventarioPage() {
                           type="number"
                           min="0"
                           value={stockSeguridad}
+                          disabled
                           onChange={(e) => setStockSeguridad(e.target.value)}
                           placeholder="14"
                         />
